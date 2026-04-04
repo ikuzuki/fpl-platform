@@ -1,0 +1,176 @@
+"""Collector for the official FPL API.
+
+FPL API is public, no auth required. Base URL: https://fantasy.premierleague.com/api
+"""
+
+import logging
+from datetime import UTC, datetime
+
+import httpx
+
+from fpl_lib.clients.s3 import S3Client
+from fpl_lib.core.responses import CollectionResponse
+
+logger = logging.getLogger(__name__)
+
+FPL_BASE_URL = "https://fantasy.premierleague.com/api"
+
+
+class FPLAPICollector:
+    """Collects data from the official FPL API and writes raw JSON to S3."""
+
+    def __init__(self, s3_client: S3Client, output_bucket: str) -> None:
+        self.s3_client = s3_client
+        self.output_bucket = output_bucket
+
+    async def collect_bootstrap(
+        self, season: str, *, force: bool = False
+    ) -> CollectionResponse:
+        """Collect bootstrap-static data (all players, teams, gameweeks).
+
+        Args:
+            season: Season identifier, e.g. "2025-26".
+            force: If True, overwrite existing data.
+
+        Returns:
+            CollectionResponse with records_collected = number of player elements.
+        """
+        prefix = f"raw/fpl-api/season={season}/bootstrap/"
+        if not force and self._output_exists(prefix):
+            logger.info("Bootstrap data already exists for season=%s, skipping", season)
+            return CollectionResponse(
+                status="success", records_collected=0, output_path=prefix
+            )
+
+        data = await self._fetch(f"{FPL_BASE_URL}/bootstrap-static/")
+        timestamp = datetime.now(UTC).isoformat()
+        key = f"{prefix}{timestamp}.json"
+        self.s3_client.put_json(self.output_bucket, key, data)
+
+        records = len(data.get("elements", []))
+        logger.info("Collected bootstrap: %d players for season=%s", records, season)
+        return CollectionResponse(
+            status="success", records_collected=records, output_path=key
+        )
+
+    async def collect_fixtures(
+        self, season: str, *, force: bool = False
+    ) -> CollectionResponse:
+        """Collect all fixtures for the season.
+
+        Args:
+            season: Season identifier, e.g. "2025-26".
+            force: If True, overwrite existing data.
+
+        Returns:
+            CollectionResponse with records_collected = number of fixtures.
+        """
+        prefix = f"raw/fpl-api/season={season}/fixtures/"
+        if not force and self._output_exists(prefix):
+            logger.info("Fixtures data already exists for season=%s, skipping", season)
+            return CollectionResponse(
+                status="success", records_collected=0, output_path=prefix
+            )
+
+        data = await self._fetch(f"{FPL_BASE_URL}/fixtures/")
+        timestamp = datetime.now(UTC).isoformat()
+        key = f"{prefix}{timestamp}.json"
+        self.s3_client.put_json(self.output_bucket, key, data)
+
+        records = len(data) if isinstance(data, list) else 0
+        logger.info("Collected fixtures: %d for season=%s", records, season)
+        return CollectionResponse(
+            status="success", records_collected=records, output_path=key
+        )
+
+    async def collect_gameweek_live(
+        self, season: str, gameweek: int, *, force: bool = False
+    ) -> CollectionResponse:
+        """Collect live gameweek data.
+
+        Args:
+            season: Season identifier, e.g. "2025-26".
+            gameweek: Gameweek number (1-38).
+            force: If True, overwrite existing data.
+
+        Returns:
+            CollectionResponse with records_collected = number of player entries.
+        """
+        prefix = f"raw/fpl-api/season={season}/gameweek={gameweek:02d}/"
+        if not force and self._output_exists(prefix):
+            logger.info(
+                "Gameweek live data already exists for season=%s gw=%d, skipping",
+                season,
+                gameweek,
+            )
+            return CollectionResponse(
+                status="success", records_collected=0, output_path=prefix
+            )
+
+        data = await self._fetch(f"{FPL_BASE_URL}/event/{gameweek}/live/")
+        timestamp = datetime.now(UTC).isoformat()
+        key = f"{prefix}{timestamp}.json"
+        self.s3_client.put_json(self.output_bucket, key, data)
+
+        records = len(data.get("elements", []))
+        logger.info(
+            "Collected gameweek live: %d players for season=%s gw=%d",
+            records,
+            season,
+            gameweek,
+        )
+        return CollectionResponse(
+            status="success", records_collected=records, output_path=key
+        )
+
+    async def collect_player_history(
+        self, player_id: int, season: str, *, force: bool = False
+    ) -> CollectionResponse:
+        """Collect detailed history for a single player.
+
+        Args:
+            player_id: FPL player element ID.
+            season: Season identifier, e.g. "2025-26".
+            force: If True, overwrite existing data.
+
+        Returns:
+            CollectionResponse with records_collected = number of history entries.
+        """
+        prefix = f"raw/fpl-api/season={season}/players/{player_id}/"
+        if not force and self._output_exists(prefix):
+            logger.info(
+                "Player history already exists for player=%d season=%s, skipping",
+                player_id,
+                season,
+            )
+            return CollectionResponse(
+                status="success", records_collected=0, output_path=prefix
+            )
+
+        data = await self._fetch(f"{FPL_BASE_URL}/element-summary/{player_id}/")
+        timestamp = datetime.now(UTC).isoformat()
+        key = f"{prefix}{timestamp}.json"
+        self.s3_client.put_json(self.output_bucket, key, data)
+
+        records = len(data.get("history", []))
+        logger.info(
+            "Collected player history: %d entries for player=%d season=%s",
+            records,
+            player_id,
+            season,
+        )
+        return CollectionResponse(
+            status="success", records_collected=records, output_path=key
+        )
+
+    def _output_exists(self, prefix: str) -> bool:
+        """Check if any objects exist under the given S3 prefix."""
+        existing = self.s3_client.list_objects(self.output_bucket, prefix)
+        return len(existing) > 0
+
+    async def _fetch(self, url: str) -> dict | list:
+        """Fetch JSON from the FPL API."""
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            return response.json()
