@@ -72,9 +72,11 @@ jobs:
       - name: Install dependencies
         if: matrix.changed == 'true'
         run: |
+          if [ "${{ matrix.name }}" != "libs" ]; then
+            uv pip install --system -e ./libs
+          fi
           cd ${{ matrix.path }}
           uv pip install --system -e ".[dev]"
-          uv pip install --system -e ../../libs
 
       - name: Lint
         if: matrix.changed == 'true'
