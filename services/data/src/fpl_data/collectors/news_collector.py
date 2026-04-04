@@ -1,4 +1,4 @@
-"""Collector for football news from RSS feeds and NewsAPI.
+"""Collector for football news from RSS feeds.
 
 Collects broadly — the LLM enrichment layer filters for FPL relevance later.
 """
@@ -8,14 +8,11 @@ import logging
 from datetime import UTC, datetime
 
 import feedparser
-import httpx
 
 from fpl_lib.clients.s3 import S3Client
 from fpl_lib.core.responses import CollectionResponse
 
 logger = logging.getLogger(__name__)
-
-NEWSAPI_BASE_URL = "https://newsapi.org/v2/everything"
 
 RSS_FEEDS: dict[str, str] = {
     "bbc_football": "https://feeds.bbci.co.uk/sport/football/rss.xml",
@@ -25,7 +22,7 @@ RSS_FEEDS: dict[str, str] = {
 
 
 class NewsCollector:
-    """Collects football news from RSS feeds and NewsAPI."""
+    """Collects football news from RSS feeds."""
 
     def __init__(self, s3_client: S3Client, output_bucket: str) -> None:
         self.s3_client = s3_client
@@ -78,74 +75,6 @@ class NewsCollector:
         self.s3_client.put_json(self.output_bucket, key, jsonl)
 
         logger.info("Collected %d RSS articles for date=%s", len(articles), date)
-        return CollectionResponse(
-            status="success", records_collected=len(articles), output_path=key
-        )
-
-    async def collect_newsapi(
-        self, query: str, date: str, api_key: str, *, force: bool = False
-    ) -> CollectionResponse:
-        """Collect articles from NewsAPI.
-
-        Args:
-            query: Search query (e.g. "Premier League transfer").
-            date: Date string in YYYY-MM-DD format.
-            api_key: NewsAPI API key.
-            force: If True, overwrite existing data.
-
-        Returns:
-            CollectionResponse with records_collected = number of articles.
-        """
-        key = f"raw/news/date={date}/newsapi_articles.jsonl"
-        if not force and self.s3_client.object_exists(self.output_bucket, key):
-            logger.info("NewsAPI articles already exist for date=%s, skipping", date)
-            return CollectionResponse(status="success", records_collected=0, output_path=key)
-
-        collected_at = datetime.now(UTC).isoformat()
-
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            try:
-                response = await client.get(
-                    NEWSAPI_BASE_URL,
-                    params={
-                        "q": query,
-                        "from": date,
-                        "to": date,
-                        "language": "en",
-                        "sortBy": "relevancy",
-                        "pageSize": 100,
-                        "apiKey": api_key,
-                    },
-                )
-                if response.status_code == 429:
-                    logger.warning("NewsAPI rate limit hit for date=%s", date)
-                    return CollectionResponse(
-                        status="partial", records_collected=0, output_path=key
-                    )
-                response.raise_for_status()
-            except httpx.HTTPStatusError:
-                logger.exception("NewsAPI request failed for date=%s", date)
-                raise
-
-        data = response.json()
-        raw_articles = data.get("articles", [])
-
-        articles = [
-            {
-                "title": a.get("title", ""),
-                "summary": a.get("description", ""),
-                "link": a.get("url", ""),
-                "published": a.get("publishedAt", ""),
-                "source": a.get("source", {}).get("name", "newsapi"),
-                "collected_at": collected_at,
-            }
-            for a in raw_articles
-        ]
-
-        jsonl = "\n".join(json.dumps(a) for a in articles)
-        self.s3_client.put_json(self.output_bucket, key, jsonl)
-
-        logger.info("Collected %d NewsAPI articles for date=%s", len(articles), date)
         return CollectionResponse(
             status="success", records_collected=len(articles), output_path=key
         )
