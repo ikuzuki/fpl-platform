@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- News collector (`NewsCollector`) with RSS feed parsing (BBC, Sky Sports, Guardian) and NewsAPI integration
+- Date-based filtering for RSS entries using `published_parsed` time struct
+- NewsAPI 429 rate limit handling (returns partial status instead of crashing)
+- 8 unit tests for news collector with mocked feedparser and httpx
 - Understat collector (`UnderstatCollector`) using POST API for xG/xA stats — league-level and per-player collection
 - Rate limiting (1.5s sleep) for Understat requests
 - Season format conversion (`2025-26` → `2025` for Understat API)
