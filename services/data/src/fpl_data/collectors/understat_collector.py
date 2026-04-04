@@ -48,12 +48,8 @@ class UnderstatCollector:
         """
         prefix = f"raw/understat/season={season}/league_stats/"
         if not force and self._output_exists(prefix):
-            logger.info(
-                "Understat league stats already exist for season=%s, skipping", season
-            )
-            return CollectionResponse(
-                status="success", records_collected=0, output_path=prefix
-            )
+            logger.info("Understat league stats already exist for season=%s, skipping", season)
+            return CollectionResponse(status="success", records_collected=0, output_path=prefix)
 
         understat_year = _season_to_understat_year(season)
         data = await self._fetch_player_stats(league, understat_year)
@@ -68,9 +64,7 @@ class UnderstatCollector:
             records,
             season,
         )
-        return CollectionResponse(
-            status="success", records_collected=records, output_path=key
-        )
+        return CollectionResponse(status="success", records_collected=records, output_path=key)
 
     async def collect_player_stats(
         self,
@@ -94,27 +88,21 @@ class UnderstatCollector:
         Returns:
             CollectionResponse with records_collected = 1 if found, 0 if not.
         """
-        prefix = (
-            f"raw/understat/season={season}/players/{understat_player_id}/"
-        )
+        prefix = f"raw/understat/season={season}/players/{understat_player_id}/"
         if not force and self._output_exists(prefix):
             logger.info(
                 "Understat player stats already exist for player=%d season=%s, skipping",
                 understat_player_id,
                 season,
             )
-            return CollectionResponse(
-                status="success", records_collected=0, output_path=prefix
-            )
+            return CollectionResponse(status="success", records_collected=0, output_path=prefix)
 
         await asyncio.sleep(1.5)  # Rate limit — Understat is a community resource
 
         understat_year = _season_to_understat_year(season)
         all_players = await self._fetch_player_stats(league, understat_year)
 
-        player_data = [
-            p for p in all_players if str(p.get("id")) == str(understat_player_id)
-        ]
+        player_data = [p for p in all_players if str(p.get("id")) == str(understat_player_id)]
 
         if not player_data:
             logger.warning(
@@ -123,9 +111,7 @@ class UnderstatCollector:
                 league,
                 season,
             )
-            return CollectionResponse(
-                status="partial", records_collected=0, output_path=prefix
-            )
+            return CollectionResponse(status="partial", records_collected=0, output_path=prefix)
 
         timestamp = datetime.now(UTC).isoformat()
         key = f"{prefix}{timestamp}.json"
@@ -137,9 +123,7 @@ class UnderstatCollector:
             player_data[0].get("player_name", "unknown"),
             season,
         )
-        return CollectionResponse(
-            status="success", records_collected=1, output_path=key
-        )
+        return CollectionResponse(status="success", records_collected=1, output_path=key)
 
     async def _fetch_player_stats(self, league: str, year: str) -> list[dict]:
         """Fetch all player stats for a league/season from Understat.

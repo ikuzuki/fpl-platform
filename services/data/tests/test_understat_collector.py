@@ -110,9 +110,7 @@ async def test_collect_league_stats_skips_if_exists(
 ) -> None:
     mock_s3_client.list_objects.return_value = ["existing.json"]
 
-    with patch.object(
-        collector, "_fetch_player_stats", new_callable=AsyncMock
-    ) as mock_fetch:
+    with patch.object(collector, "_fetch_player_stats", new_callable=AsyncMock) as mock_fetch:
         result = await collector.collect_league_stats("2024-25")
 
     mock_fetch.assert_not_called()
@@ -128,12 +126,15 @@ async def test_collect_player_stats_success(
     collector: UnderstatCollector,
     mock_s3_client: MagicMock,
 ) -> None:
-    with patch.object(
-        collector,
-        "_fetch_player_stats",
-        new_callable=AsyncMock,
-        return_value=SAMPLE_PLAYERS_RESPONSE["players"],
-    ), patch("asyncio.sleep", new_callable=AsyncMock):
+    with (
+        patch.object(
+            collector,
+            "_fetch_player_stats",
+            new_callable=AsyncMock,
+            return_value=SAMPLE_PLAYERS_RESPONSE["players"],
+        ),
+        patch("asyncio.sleep", new_callable=AsyncMock),
+    ):
         result = await collector.collect_player_stats(1250, "2024-25")
 
     assert result.status == "success"
@@ -150,12 +151,15 @@ async def test_collect_player_stats_not_found(
     collector: UnderstatCollector,
     mock_s3_client: MagicMock,
 ) -> None:
-    with patch.object(
-        collector,
-        "_fetch_player_stats",
-        new_callable=AsyncMock,
-        return_value=SAMPLE_PLAYERS_RESPONSE["players"],
-    ), patch("asyncio.sleep", new_callable=AsyncMock):
+    with (
+        patch.object(
+            collector,
+            "_fetch_player_stats",
+            new_callable=AsyncMock,
+            return_value=SAMPLE_PLAYERS_RESPONSE["players"],
+        ),
+        patch("asyncio.sleep", new_callable=AsyncMock),
+    ):
         result = await collector.collect_player_stats(9999, "2024-25")
 
     assert result.status == "partial"
@@ -168,12 +172,15 @@ async def test_collect_player_stats_not_found(
 async def test_collect_player_stats_rate_limits(
     collector: UnderstatCollector,
 ) -> None:
-    with patch.object(
-        collector,
-        "_fetch_player_stats",
-        new_callable=AsyncMock,
-        return_value=SAMPLE_PLAYERS_RESPONSE["players"],
-    ), patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+    with (
+        patch.object(
+            collector,
+            "_fetch_player_stats",
+            new_callable=AsyncMock,
+            return_value=SAMPLE_PLAYERS_RESPONSE["players"],
+        ),
+        patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+    ):
         await collector.collect_player_stats(1250, "2024-25")
 
     mock_sleep.assert_called_once_with(1.5)
@@ -187,9 +194,7 @@ async def test_collect_player_stats_skips_if_exists(
 ) -> None:
     mock_s3_client.list_objects.return_value = ["existing.json"]
 
-    with patch.object(
-        collector, "_fetch_player_stats", new_callable=AsyncMock
-    ) as mock_fetch:
+    with patch.object(collector, "_fetch_player_stats", new_callable=AsyncMock) as mock_fetch:
         result = await collector.collect_player_stats(1250, "2024-25")
 
     mock_fetch.assert_not_called()
@@ -209,9 +214,7 @@ async def test_fetch_player_stats_success(
         json=SAMPLE_PLAYERS_RESPONSE,
         request=httpx.Request("POST", "https://understat.com/main/getPlayersStats/"),
     )
-    with patch(
-        "httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response
-    ):
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response):
         result = await collector._fetch_player_stats("EPL", "2024")
 
     assert len(result) == 2
