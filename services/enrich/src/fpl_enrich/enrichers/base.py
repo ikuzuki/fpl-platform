@@ -7,6 +7,7 @@ from collections.abc import Iterator
 from typing import Any
 
 import anthropic
+from langfuse import observe
 
 logger = logging.getLogger(__name__)
 
@@ -65,11 +66,20 @@ class FPLEnricher(ABC):
         self._log_summary()
         return results
 
+    @observe(name="enricher_batch_call")
     def _call_llm(self, batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Send a batch of items to the Anthropic API and parse the JSON response."""
         user_content = "\n".join(f"I{i + 1}: {json.dumps(item)}" for i, item in enumerate(batch))
 
         system_prompt = self._get_system_prompt().format(batch_size=len(batch))
+
+        logger.info(
+            "%s: calling %s with batch_size=%d, prompt_version=%s",
+            self.__class__.__name__,
+            self.MODEL,
+            len(batch),
+            self.prompt_version,
+        )
 
         response = self.client.messages.create(
             model=self.MODEL,

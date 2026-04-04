@@ -6,6 +6,7 @@ from typing import Any
 import anthropic
 import boto3
 import pyarrow as pa
+from langfuse import observe
 
 from fpl_enrich.enrichers.fixture_outlook import FixtureOutlookEnricher
 from fpl_enrich.enrichers.injury_signal import InjurySignalEnricher
@@ -80,6 +81,21 @@ def _read_cached_summaries(
     return table.to_pydict()
 
 
+def _init_langfuse(region: str = "eu-west-2") -> None:
+    """Initialise Langfuse with keys from Secrets Manager."""
+    import os
+
+    if not os.environ.get("LANGFUSE_PUBLIC_KEY"):
+        os.environ["LANGFUSE_PUBLIC_KEY"] = _get_secret(
+            "/fpl-platform/dev/langfuse-public-key", region
+        )
+    if not os.environ.get("LANGFUSE_SECRET_KEY"):
+        os.environ["LANGFUSE_SECRET_KEY"] = _get_secret(
+            "/fpl-platform/dev/langfuse-secret-key", region
+        )
+
+
+@observe(name="enrich_gameweek")
 async def main(
     season: str,
     gameweek: int,
@@ -88,6 +104,7 @@ async def main(
     prompt_version: str = "v1",
 ) -> dict[str, Any]:
     """Run all enrichers on clean player data and write results to S3."""
+    logger.info("Starting enrichment for %s GW%d", season, gameweek)
     s3_client = S3Client()
 
     # Read clean player data
@@ -168,6 +185,7 @@ async def main(
 
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """AWS Lambda entry point for enrichment."""
+    _init_langfuse()
     return RunHandler(
         main_func=main,
         required_main_params=["season", "gameweek"],
