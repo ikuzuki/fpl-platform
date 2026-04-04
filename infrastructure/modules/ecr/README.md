@@ -1,6 +1,6 @@
 # ECR Module
 
-Creates an ECR repository with immutable tags, scan on push, and a lifecycle policy to retain the last 10 images.
+Creates an ECR repository with configurable tag mutability, scan on push, and a lifecycle policy to retain the last 10 images.
 
 ## Usage
 
@@ -18,6 +18,7 @@ module "data_repo" {
 |------|-------------|------|---------|
 | name | Repository name | string | - |
 | environment | Deployment environment | string | - |
+| image_tag_mutability | Tag mutability (MUTABLE for dev, IMMUTABLE for prod) | string | "MUTABLE" |
 
 ## Outputs
 

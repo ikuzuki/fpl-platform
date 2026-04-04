@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Langfuse observability: `@observe` decorators on `_call_llm` and enrichment handler for LLM call tracing
+- `EnrichSettings` config class extending `FPLSettings` with Langfuse and Anthropic credentials
 - Four concrete enrichers: PlayerSummaryEnricher, InjurySignalEnricher, SentimentEnricher, FixtureOutlookEnricher
 - Pydantic output models for all enricher outputs (structured validation)
 - Enrichment Lambda handler with Secrets Manager integration, cost tracking, and fallback handling
@@ -24,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - S3 data lake module: added raw/ prefix expiration at 90 days
 
 ### Fixed
+- ECR module: tag mutability now configurable (default MUTABLE) — fixes deploy failure where `:latest` push was rejected by IMMUTABLE policy
 - S3 data lake lifecycle: transition days (30) now less than expiration days (90) to satisfy AWS API constraint
 - S3 data lake lifecycle rules now conditional (`enable_data_lake_lifecycle`) so non-data-lake buckets skip raw/dlq rules
 - ECR repo naming order matches deploy.yml convention (`fpl-{name}-{env}` not `fpl-{env}-{name}`)
