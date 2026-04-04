@@ -89,7 +89,11 @@ jobs:
         if: matrix.changed == 'true'
         run: |
           cd ${{ matrix.path }}
-          pytest --cov --cov-report=xml
+          if find tests -name "test_*.py" -type f | grep -q .; then
+            pytest --cov --cov-report=xml
+          else
+            echo "No tests found, skipping"
+          fi
 
   terraform-plan:
     needs: detect-changes

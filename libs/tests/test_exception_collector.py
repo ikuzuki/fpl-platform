@@ -18,7 +18,10 @@ class TestExceptionCollector:
         assert collector.warnings == []
 
     def test_collects_errors_and_raises_on_exit(self) -> None:
-        with pytest.raises(CollectedError, match="2 error"), ExceptionCollector("test op") as collector:
+        with (
+            pytest.raises(CollectedError, match="2 error"),
+            ExceptionCollector("test op") as collector,
+        ):
             collector.add_error("first error")
             collector.add_error("second error")
 
