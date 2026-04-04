@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git *)",
+      "Bash(pytest *)",
+      "Bash(make *)",
+      "Bash(ruff *)",
+      "Bash(mypy *)",
+      "Bash(terraform *)",
+      "Bash(dbt *)",
+      "Bash(python -m *)",
+      "Bash(docker *)",
+      "Bash(uv *)"
+    ]
+  }
+}

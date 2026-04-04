@@ -1,0 +1,112 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      libs: ${{ steps.filter.outputs.libs }}
+      data: ${{ steps.filter.outputs.data }}
+      enrich: ${{ steps.filter.outputs.enrich }}
+      etl: ${{ steps.filter.outputs.etl }}
+      agent: ${{ steps.filter.outputs.agent }}
+      infra: ${{ steps.filter.outputs.infra }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            libs:
+              - 'libs/**'
+            data:
+              - 'services/data/**'
+              - 'libs/**'
+            enrich:
+              - 'services/enrich/**'
+              - 'libs/**'
+            etl:
+              - 'services/etl/**'
+            agent:
+              - 'services/agent/**'
+              - 'libs/**'
+            infra:
+              - 'infrastructure/**'
+
+  lint-and-test:
+    needs: detect-changes
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: libs
+            path: libs
+            changed: ${{ needs.detect-changes.outputs.libs }}
+          - name: data
+            path: services/data
+            changed: ${{ needs.detect-changes.outputs.data }}
+          - name: enrich
+            path: services/enrich
+            changed: ${{ needs.detect-changes.outputs.enrich }}
+          - name: agent
+            path: services/agent
+            changed: ${{ needs.detect-changes.outputs.agent }}
+    steps:
+      - uses: actions/checkout@v4
+        if: matrix.changed == 'true'
+
+      - name: Set up Python
+        if: matrix.changed == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        if: matrix.changed == 'true'
+        run: pip install uv
+
+      - name: Install dependencies
+        if: matrix.changed == 'true'
+        run: |
+          cd ${{ matrix.path }}
+          uv pip install --system -e ".[dev]"
+          uv pip install --system -e ../../libs
+
+      - name: Lint
+        if: matrix.changed == 'true'
+        run: |
+          cd ${{ matrix.path }}
+          ruff check .
+          ruff format --check .
+
+      - name: Test
+        if: matrix.changed == 'true'
+        run: |
+          cd ${{ matrix.path }}
+          pytest --cov --cov-report=xml
+
+  terraform-plan:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_CICD_ROLE_ARN }}
+          aws-region: eu-west-2
+
+      - name: Terraform Plan
+        run: |
+          cd infrastructure/environments/dev
+          terraform init
+          terraform plan
