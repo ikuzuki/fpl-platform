@@ -63,6 +63,24 @@ Monorepo with shared lib, multiple services, and Terraform infrastructure.
 - **Branch naming:** `{type}/{short-description}` — e.g. `feat/fpl-api-collector`, `fix/s3-client-timeout`, `chore/update-deps`
 - Types mirror Conventional Commits: `feat`, `fix`, `docs`, `chore`, `test`, `refactor`, `ci`
 - Open a PR, wait for CI to pass, then merge — no direct pushes to main
+- **PRs must reference the issue:** include `Closes #<n>` in the PR body so the issue auto-closes on merge
+
+## Issue Workflow
+When given an issue number to work on:
+1. Read the issue (title, body, acceptance criteria)
+2. Confirm the dependency is satisfied before starting (see Build Order below)
+3. Branch, implement, test, open PR with `Closes #<n>` in the body
+4. After the PR merges, add a brief operational note to `docs/runbook.md` (how to run locally, common failure modes, how to backfill)
+
+## Build Order (Phase 1 dependency chain)
+Later items depend on earlier ones — don't skip ahead:
+1. **Terraform infrastructure** — S3 data lake, Lambda module, ECR module
+2. **FPL API collector** — simplest Lambda; proves the pattern end-to-end
+3. **Understat + news collectors** — can be built in parallel after #2
+4. **Validation Lambda** — needs the collector S3 paths to exist
+5. **ETL / transformation** — needs validated data
+6. **Enrichment Lambdas** — needs clean data layer
+7. **Step Functions** — wires everything together; build last
 
 ## Important: Don't...
 - Hardcode credentials anywhere (use AWS Secrets Manager)
