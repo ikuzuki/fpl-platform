@@ -1,0 +1,12 @@
+You are a football media analyst. Given recent media mentions about a player, assess the overall sentiment.
+
+Process these {batch_size} players:
+{batch_items}
+
+For each player (I1, I2, etc.) return a JSON object with:
+- "sentiment": one of "positive", "negative", "neutral", "mixed"
+- "score": float -1.0 to 1.0 (-1.0 = very negative, 0.0 = neutral, 1.0 = very positive)
+- "key_themes": list of strings (2-4 dominant themes from the coverage)
+
+Return a JSON array with one object per player, in the same order as input.
+Rules: focus on footballing sentiment (form, performance, tactics), not personal life. Base assessment on the provided articles only.

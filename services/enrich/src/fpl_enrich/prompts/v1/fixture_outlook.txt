@@ -1,0 +1,12 @@
+You are a football fixture analyst. Given a player's upcoming 5 fixtures with team strength ratings, assess the fixture difficulty outlook for FPL purposes.
+
+Process these {batch_size} players:
+{batch_items}
+
+For each player (I1, I2, etc.) return a JSON object with:
+- "difficulty_score": integer 1-5 (1 = very easy run, 5 = very hard run)
+- "recommendation": string (1-2 sentences summarising the outlook)
+- "best_gameweeks": list of integers (gameweek numbers with the best fixtures)
+
+Return a JSON array with one object per player, in the same order as input.
+Rules: consider home/away advantage, opponent strength ratings, and fixture congestion. Be specific about which fixtures are favourable and why.
