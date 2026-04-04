@@ -67,9 +67,7 @@ class FPLEnricher(ABC):
 
     def _call_llm(self, batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Send a batch of items to the Anthropic API and parse the JSON response."""
-        user_content = "\n".join(
-            f"I{i + 1}: {json.dumps(item)}" for i, item in enumerate(batch)
-        )
+        user_content = "\n".join(f"I{i + 1}: {json.dumps(item)}" for i, item in enumerate(batch))
 
         response = self.client.messages.create(
             model=self.MODEL,
@@ -85,9 +83,7 @@ class FPLEnricher(ABC):
         parsed: list[dict[str, Any]] = json.loads(raw_text)
 
         if len(parsed) != len(batch):
-            raise ValueError(
-                f"Output count mismatch: expected {len(batch)}, got {len(parsed)}"
-            )
+            raise ValueError(f"Output count mismatch: expected {len(batch)}, got {len(parsed)}")
 
         return parsed
 
@@ -109,8 +105,7 @@ class FPLEnricher(ABC):
         """Log processing summary with valid/invalid counts and token usage."""
         total = self.valid_count + self.invalid_count
         logger.info(
-            "%s: processed %d items — %d valid, %d invalid "
-            "(tokens: %d in, %d out)",
+            "%s: processed %d items — %d valid, %d invalid (tokens: %d in, %d out)",
             self.__class__.__name__,
             total,
             self.valid_count,
