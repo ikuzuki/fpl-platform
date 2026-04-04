@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Four concrete enrichers: PlayerSummaryEnricher, InjurySignalEnricher, SentimentEnricher, FixtureOutlookEnricher
+- Pydantic output models for all enricher outputs (structured validation)
+- Enrichment Lambda handler with Secrets Manager integration, cost tracking, and fallback handling
 - FPLEnricher abstract base class with batch processing, LLM call, output validation, and token tracking
 - Prompt loader utility (`load_prompt()`) for versioned prompt templates
 - Four v1 prompt templates: player_summary, injury_signal, sentiment, fixture_outlook

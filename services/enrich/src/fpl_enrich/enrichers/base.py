@@ -81,7 +81,14 @@ class FPLEnricher(ABC):
         self.total_input_tokens += response.usage.input_tokens
         self.total_output_tokens += response.usage.output_tokens
 
-        raw_text = response.content[0].text
+        raw_text = response.content[0].text.strip()
+
+        # Strip markdown code fences if the LLM wraps the JSON
+        if raw_text.startswith("```"):
+            raw_text = raw_text.split("\n", 1)[1]  # remove opening ```json
+            raw_text = raw_text.rsplit("```", 1)[0]  # remove closing ```
+            raw_text = raw_text.strip()
+
         parsed: list[dict[str, Any]] = json.loads(raw_text)
 
         if len(parsed) != len(batch):
