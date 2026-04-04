@@ -1,8 +1,10 @@
 .PHONY: install lint format test test-unit test-integration test-service clean check
 
 install:
-	uv pip install --system -e ".[dev]"
-	uv pip install --system -e libs/
+	pip install -e ".[dev]"
+	pip install -e libs/
+	pip install -e services/data/
+	pip install -e services/enrich/
 	pre-commit install
 
 lint:
