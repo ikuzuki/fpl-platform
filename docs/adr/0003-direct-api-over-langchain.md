@@ -3,25 +3,47 @@
 ## Status
 Accepted
 
+## Date
+2026-04-04
+
 ## Context
-The enrichment pipeline makes structured LLM calls (player summaries, injury signals, sentiment, fixture outlook). LangChain is the most popular Python framework for LLM orchestration and offers chains, output parsers, and retry logic out of the box. We needed to decide whether to use it or call the Anthropic API directly.
+The enrichment pipeline makes structured LLM calls (player summaries, injury signals, sentiment, fixture outlook). Each call sends a batch of items and expects a JSON array back. We needed to decide whether to use a framework or call the API directly.
+
+## Options Considered
+
+### 1. Direct `anthropic` Python SDK (chosen)
+Call `client.messages.create()` directly. Build our own batching (`FPLEnricher` ABC), validation (Pydantic), and retry logic.
+
+### 2. LangChain (rejected)
+Use LangChain's chains, output parsers, and retry decorators. Provides `ChatAnthropic`, `PydanticOutputParser`, and `RunnableWithRetry` out of the box.
+
+**Rejected because:**
+- Our enrichment calls are simple: system prompt + user message → JSON array. LangChain's chain abstraction adds indirection without simplifying this pattern.
+- LangChain wraps prompts with its own formatting — we need exact control over prompt content for versioning (see ADR-0005) and cost tracking
+- LangChain pulls ~20 transitive dependencies, increasing Lambda container size and cold start time
+- Debugging LangChain's chain-of-responsibility stack is harder than debugging a direct API call
+- Token counting is straightforward from `response.usage` — LangChain's callback system is heavier machinery for the same result
+
+### 3. LiteLLM (rejected)
+Lightweight proxy that normalises different LLM provider APIs behind one interface.
+
+**Rejected because:** We only use Anthropic. Multi-provider abstraction adds a layer with no current benefit. If we added OpenAI later, LiteLLM would be worth revisiting.
 
 ## Decision
-Use the `anthropic` Python SDK directly for all LLM calls. No LangChain anywhere in the pipeline.
+Use the `anthropic` Python SDK directly for all enrichment pipeline LLM calls.
 
 ## Consequences
 **Easier:**
-- Full control over prompt formatting, batching, and retry logic — no fighting framework abstractions
-- Simpler dependency tree — `anthropic` is one package vs LangChain's 20+ transitive dependencies
+- Full control over prompt formatting, batching, and retry logic
+- Simpler dependency tree — `anthropic` is one package
 - Token counting and cost tracking are straightforward from `response.usage`
 - Easier to debug — no hidden prompt wrapping or chain-of-responsibility indirection
-- Structured JSON output validated with Pydantic directly, not LangChain's output parsers
 - Smaller Lambda container images (fewer deps = faster cold starts)
 
 **Harder:**
-- We built our own batching (`FPLEnricher` base class) and retry logic instead of using LangChain's built-in
-- If we add new LLM providers, we'd need to write our own abstraction (LangChain provides this)
-- No built-in support for chains or multi-step reasoning (not needed for our enrichment use case)
+- We built our own batching (`FPLEnricher` base class) and retry logic (~100 lines of code)
+- If we add new LLM providers, we'd need to write our own abstraction
+- No built-in chain composition (not needed for batch enrichment)
 
-## Notes
-The LangGraph agent (`services/agent/`) is a separate concern — it uses LangGraph for the agentic recommendation graph, which is a different pattern from the batch enrichment pipeline.
+## Related
+- The LangGraph agent (`services/agent/`) uses LangGraph for agentic orchestration — a different pattern where the framework earns its place. LangGraph provides state machines, tool calling, and human-in-the-loop, which would be significant to rebuild from scratch. The distinction: batch enrichment is a simple request-response pattern; agentic recommendations need stateful multi-step reasoning.
