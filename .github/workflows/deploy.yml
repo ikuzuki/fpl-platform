@@ -1,0 +1,120 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      data: ${{ steps.filter.outputs.data }}
+      enrich: ${{ steps.filter.outputs.enrich }}
+      agent: ${{ steps.filter.outputs.agent }}
+      infra: ${{ steps.filter.outputs.infra }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            data:
+              - 'services/data/**'
+              - 'libs/**'
+            enrich:
+              - 'services/enrich/**'
+              - 'libs/**'
+            agent:
+              - 'services/agent/**'
+              - 'libs/**'
+            infra:
+              - 'infrastructure/**'
+
+  terraform-apply:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_CICD_ROLE_ARN }}
+          aws-region: eu-west-2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Apply
+        run: |
+          cd infrastructure/environments/dev
+          terraform init
+          terraform apply -auto-approve
+
+  build-and-deploy:
+    needs: detect-changes
+    if: |
+      needs.detect-changes.outputs.data == 'true' ||
+      needs.detect-changes.outputs.enrich == 'true' ||
+      needs.detect-changes.outputs.agent == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: data
+            changed: ${{ needs.detect-changes.outputs.data }}
+            lambda_function: fpl-api-collector-dev
+          - name: enrich
+            changed: ${{ needs.detect-changes.outputs.enrich }}
+            lambda_function: fpl-enricher-dev
+          - name: agent
+            changed: ${{ needs.detect-changes.outputs.agent }}
+            lambda_function: fpl-agent-dev
+    steps:
+      - uses: actions/checkout@v4
+        if: matrix.changed == 'true'
+
+      - name: Configure AWS credentials
+        if: matrix.changed == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_CICD_ROLE_ARN }}
+          aws-region: eu-west-2
+
+      - name: Login to ECR
+        if: matrix.changed == 'true'
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        if: matrix.changed == 'true'
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build \
+            --build-arg SERVICE=${{ matrix.name }} \
+            -t $ECR_REGISTRY/fpl-${{ matrix.name }}-dev:$IMAGE_TAG \
+            -t $ECR_REGISTRY/fpl-${{ matrix.name }}-dev:latest \
+            -f services/${{ matrix.name }}/Dockerfile .
+          docker push $ECR_REGISTRY/fpl-${{ matrix.name }}-dev:$IMAGE_TAG
+          docker push $ECR_REGISTRY/fpl-${{ matrix.name }}-dev:latest
+
+      - name: Update Lambda function
+        if: matrix.changed == 'true'
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ matrix.lambda_function }} \
+            --image-uri $ECR_REGISTRY/fpl-${{ matrix.name }}-dev:$IMAGE_TAG \
+            --region eu-west-2
