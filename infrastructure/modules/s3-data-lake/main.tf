@@ -1,5 +1,5 @@
 resource "aws_s3_bucket" "data_lake" {
-  bucket = "${var.project}-data-lake-${var.environment}"
+  bucket = "${var.project}-${var.name}-${var.environment}"
 }
 
 resource "aws_s3_bucket_versioning" "data_lake" {
@@ -43,6 +43,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "data_lake" {
     transition {
       days          = 90
       storage_class = "STANDARD_IA"
+    }
+
+    expiration {
+      days = 90
     }
   }
 

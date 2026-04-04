@@ -24,3 +24,9 @@ variable "lambda_arns" {
   type        = list(string)
   default     = []
 }
+
+variable "log_retention_days" {
+  description = "CloudWatch log group retention in days"
+  type        = number
+  default     = 30
+}

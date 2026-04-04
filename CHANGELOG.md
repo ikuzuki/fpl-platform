@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Dev environment Terraform resources — ECR repo, S3 data lake + cost reports buckets, SNS pipeline alerts, Secrets Manager (Anthropic API key, Langfuse keys), shared Lambda IAM role
+- Lambda module: optional `execution_role_arn` for shared external role support
+- S3 data lake module: configurable `name` variable for multi-bucket reuse
+- Step Functions module: CloudWatch log group with execution logging
+
+### Changed
+- Lambda module: log retention 14d → 30d, default memory 256 → 512 MB
+- S3 data lake module: added raw/ prefix expiration at 90 days
+
 ## [0.1.0] - 2026-04-04
 
 ### Added

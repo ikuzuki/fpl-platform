@@ -15,10 +15,10 @@ output "invoke_arn" {
 
 output "role_arn" {
   description = "ARN of the Lambda execution role"
-  value       = aws_iam_role.lambda.arn
+  value       = var.execution_role_arn != null ? var.execution_role_arn : aws_iam_role.lambda[0].arn
 }
 
 output "role_name" {
-  description = "Name of the Lambda execution role"
-  value       = aws_iam_role.lambda.name
+  description = "Name of the Lambda execution role (null when using external role)"
+  value       = var.execution_role_arn != null ? null : aws_iam_role.lambda[0].name
 }

@@ -25,6 +25,7 @@ module "data_lake" {
 |------|-------------|------|---------|
 | project | Project name | string | "fpl" |
 | environment | Deployment environment | string | - |
+| name | Bucket purpose name (e.g. 'data-lake', 'cost-reports') | string | "data-lake" |
 
 ## Outputs
 
