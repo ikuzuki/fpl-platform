@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- FPLEnricher abstract base class with batch processing, LLM call, output validation, and token tracking
+- Prompt loader utility (`load_prompt()`) for versioned prompt templates
+- Four v1 prompt templates: player_summary, injury_signal, sentiment, fixture_outlook
 - Dev environment Terraform resources — ECR repo, S3 data lake + cost reports buckets, SNS pipeline alerts, Secrets Manager (Anthropic API key, Langfuse keys), shared Lambda IAM role
 - Lambda module: optional `execution_role_arn` for shared external role support
 - S3 data lake module: configurable `name` variable for multi-bucket reuse
