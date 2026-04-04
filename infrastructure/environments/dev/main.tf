@@ -184,6 +184,174 @@ resource "aws_iam_role_policy" "lambda_logs" {
   })
 }
 
+# -----------------------------------------------------------------------------
+# Lambda Functions
+# -----------------------------------------------------------------------------
+module "lambda_fpl_collector" {
+  source             = "../../modules/lambda"
+  name               = "fpl-api-collector"
+  environment        = var.environment
+  image_uri          = "${module.ecr_data.repository_url}:latest"
+  execution_role_arn = aws_iam_role.lambda_standard.arn
+  timeout            = 300
+  memory_size        = 512
+  environment_variables = {
+    ENV              = var.environment
+    DATA_LAKE_BUCKET = module.data_lake.bucket_name
+  }
+}
+
+module "lambda_understat_collector" {
+  source             = "../../modules/lambda"
+  name               = "understat-collector"
+  environment        = var.environment
+  image_uri          = "${module.ecr_data.repository_url}:latest"
+  execution_role_arn = aws_iam_role.lambda_standard.arn
+  timeout            = 300
+  memory_size        = 512
+  environment_variables = {
+    ENV              = var.environment
+    DATA_LAKE_BUCKET = module.data_lake.bucket_name
+  }
+}
+
+module "lambda_news_collector" {
+  source             = "../../modules/lambda"
+  name               = "news-collector"
+  environment        = var.environment
+  image_uri          = "${module.ecr_data.repository_url}:latest"
+  execution_role_arn = aws_iam_role.lambda_standard.arn
+  timeout            = 300
+  memory_size        = 512
+  environment_variables = {
+    ENV              = var.environment
+    DATA_LAKE_BUCKET = module.data_lake.bucket_name
+  }
+}
+
+module "lambda_validator" {
+  source             = "../../modules/lambda"
+  name               = "validator"
+  environment        = var.environment
+  image_uri          = "${module.ecr_data.repository_url}:latest"
+  execution_role_arn = aws_iam_role.lambda_standard.arn
+  timeout            = 300
+  memory_size        = 512
+  environment_variables = {
+    ENV              = var.environment
+    DATA_LAKE_BUCKET = module.data_lake.bucket_name
+  }
+}
+
+module "lambda_transform" {
+  source             = "../../modules/lambda"
+  name               = "transform"
+  environment        = var.environment
+  image_uri          = "${module.ecr_data.repository_url}:latest"
+  execution_role_arn = aws_iam_role.lambda_standard.arn
+  timeout            = 300
+  memory_size        = 1024
+  environment_variables = {
+    ENV              = var.environment
+    DATA_LAKE_BUCKET = module.data_lake.bucket_name
+  }
+}
+
+module "lambda_enricher" {
+  source             = "../../modules/lambda"
+  name               = "enricher"
+  environment        = var.environment
+  image_uri          = "${module.ecr_enrich.repository_url}:latest"
+  execution_role_arn = aws_iam_role.lambda_standard.arn
+  timeout            = 600
+  memory_size        = 1024
+  environment_variables = {
+    ENV              = var.environment
+    DATA_LAKE_BUCKET = module.data_lake.bucket_name
+  }
+}
+
+# -----------------------------------------------------------------------------
+# Step Functions Pipeline
+# -----------------------------------------------------------------------------
+module "pipeline" {
+  source      = "../../modules/step-function"
+  name        = "collection-pipeline"
+  environment = var.environment
+
+  definition = templatefile("../../step_function_definitions/fpl-collection-pipeline.json.tpl", {
+    lambda_arn_fpl_collector       = module.lambda_fpl_collector.function_arn
+    lambda_arn_understat_collector = module.lambda_understat_collector.function_arn
+    lambda_arn_news_collector      = module.lambda_news_collector.function_arn
+    lambda_arn_validator           = module.lambda_validator.function_arn
+    lambda_arn_transform           = module.lambda_transform.function_arn
+    lambda_arn_enricher            = module.lambda_enricher.function_arn
+  })
+
+  lambda_arns = [
+    module.lambda_fpl_collector.function_arn,
+    module.lambda_understat_collector.function_arn,
+    module.lambda_news_collector.function_arn,
+    module.lambda_validator.function_arn,
+    module.lambda_transform.function_arn,
+    module.lambda_enricher.function_arn,
+  ]
+}
+
+# -----------------------------------------------------------------------------
+# EventBridge Schedule — Tuesday 8am UTC (after Monday GW deadline)
+# -----------------------------------------------------------------------------
+resource "aws_cloudwatch_event_rule" "weekly_pipeline" {
+  name                = "fpl-weekly-pipeline-${var.environment}"
+  description         = "Trigger FPL pipeline every Tuesday at 8am UTC"
+  schedule_expression = "cron(0 8 ? * TUE *)"
+}
+
+resource "aws_cloudwatch_event_target" "pipeline_target" {
+  rule     = aws_cloudwatch_event_rule.weekly_pipeline.name
+  arn      = module.pipeline.state_machine_arn
+  role_arn = aws_iam_role.eventbridge_sfn.arn
+
+  input = jsonencode({
+    season   = "2025-26"
+    gameweek = 1
+    force    = false
+  })
+}
+
+resource "aws_iam_role" "eventbridge_sfn" {
+  name = "fpl-eventbridge-sfn-${var.environment}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "events.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "eventbridge_sfn_start" {
+  name = "fpl-eventbridge-start-sfn-${var.environment}"
+  role = aws_iam_role.eventbridge_sfn.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["states:StartExecution"]
+        Resource = module.pipeline.state_machine_arn
+      }
+    ]
+  })
+}
+
 resource "aws_iam_role_policy" "lambda_sns" {
   name = "fpl-lambda-sns-${var.environment}"
   role = aws_iam_role.lambda_standard.id
