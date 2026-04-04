@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Player data transformer (`flatten_player_data`) — selects 30+ key columns from 105 raw fields, casts types, adds metadata
+- Deduplication utility for clean data
+- Transformation Lambda handler with idempotency (skip if output exists, `force=True` to override)
+- Clean Parquet output with zstd compression and `schema_version` metadata at `clean/players/season={season}/gameweek={gw}/`
+- New column detection: logs warning when raw API adds unexpected fields
+- 10 unit tests for transformer, deduplication, and handler
 - Data validation engine with schema-driven checks (column presence, not-null, uniqueness, value ranges)
 - Raw-data validation schemas (`PLAYER_EXPECTATIONS`, `FIXTURE_EXPECTATIONS`) using FPL API column names
 - Validation Lambda handler with DLQ writing for failed records
