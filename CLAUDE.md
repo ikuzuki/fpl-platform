@@ -15,6 +15,14 @@ Monorepo with shared lib, multiple services, and Terraform infrastructure.
 - `web/` — Portfolio site + Streamlit dashboard
 - `docs/adr/` — Architecture Decision Records
 
+## Python Environment
+- **Venv location:** `venv/` (project root)
+- **Activate before any Python command:** `source /c/Users/IsseiKuzuki/fpl-platform/venv/Scripts/activate`
+- Shell state does not persist between tool calls — prefix every `pytest`, `make`, `pip`, or `python` command with the activate command above
+- Install new packages with `pip install` while venv is active — they go into `venv/` automatically
+- If adding a permanent dependency, also add it to the relevant `pyproject.toml`
+- Use `--index-url https://pypi.org/simple/` if pip defaults to a private index
+
 ## Build & Test Commands
 - Install all deps: `make install`
 - Lint: `make lint` (runs ruff check + mypy)
