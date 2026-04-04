@@ -69,10 +69,12 @@ class FPLEnricher(ABC):
         """Send a batch of items to the Anthropic API and parse the JSON response."""
         user_content = "\n".join(f"I{i + 1}: {json.dumps(item)}" for i, item in enumerate(batch))
 
+        system_prompt = self._get_system_prompt().format(batch_size=len(batch))
+
         response = self.client.messages.create(
             model=self.MODEL,
             max_tokens=4096,
-            system=self._get_system_prompt(),
+            system=system_prompt,
             messages=[{"role": "user", "content": user_content}],
         )
 
