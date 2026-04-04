@@ -107,6 +107,9 @@ jobs:
           role-to-assume: ${{ secrets.AWS_CICD_ROLE_ARN }}
           aws-region: eu-west-2
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
       - name: Terraform Plan
         run: |
           cd infrastructure/environments/dev
