@@ -58,8 +58,15 @@ Monorepo with shared lib, multiple services, and Terraform infrastructure.
 - Mock external services (S3, APIs, LLMs) in unit tests
 - Integration tests hit real APIs (marked slow, not run in CI by default)
 
+## Git Workflow
+- **Always branch off main** — never commit directly to main (branch protection is enforced)
+- **Branch naming:** `{type}/{short-description}` — e.g. `feat/fpl-api-collector`, `fix/s3-client-timeout`, `chore/update-deps`
+- Types mirror Conventional Commits: `feat`, `fix`, `docs`, `chore`, `test`, `refactor`, `ci`
+- Open a PR, wait for CI to pass, then merge — no direct pushes to main
+
 ## Important: Don't...
 - Hardcode credentials anywhere (use AWS Secrets Manager)
 - Skip type hints on public functions
 - Merge to main without PR + passing checks
+- Push directly to main (branch protection will flag it)
 - Use LangChain for the pipeline (direct API calls — see ADR-0003)
