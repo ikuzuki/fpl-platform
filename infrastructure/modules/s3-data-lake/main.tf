@@ -30,6 +30,7 @@ resource "aws_s3_bucket_public_access_block" "data_lake" {
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "data_lake" {
+  count  = var.enable_data_lake_lifecycle ? 1 : 0
   bucket = aws_s3_bucket.data_lake.id
 
   rule {
@@ -41,7 +42,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "data_lake" {
     }
 
     transition {
-      days          = 90
+      days          = 30
       storage_class = "STANDARD_IA"
     }
 

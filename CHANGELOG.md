@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Lambda module: log retention 14d → 30d, default memory 256 → 512 MB
 - S3 data lake module: added raw/ prefix expiration at 90 days
 
+### Fixed
+- S3 data lake lifecycle: transition days (30) now less than expiration days (90) to satisfy AWS API constraint
+- S3 data lake lifecycle rules now conditional (`enable_data_lake_lifecycle`) so non-data-lake buckets skip raw/dlq rules
+- ECR repo naming order matches deploy.yml convention (`fpl-{name}-{env}` not `fpl-{env}-{name}`)
+- Dev environment now creates 3 ECR repos (data, enrich, agent) matching the per-service deploy matrix
+
 ## [0.1.0] - 2026-04-04
 
 ### Added
