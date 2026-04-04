@@ -9,7 +9,7 @@ Accepted
 ## Context
 The FPL platform consists of multiple services (data pipeline, LLM enrichment, recommendation agent, streaming, ETL) plus shared infrastructure, a shared Python library, and web frontends. We needed to decide how to organise the code.
 
-This is a solo portfolio project designed to demonstrate end-to-end data + ML engineering. Hiring managers and reviewers will clone and explore it. The shared library (`fpl_lib`) changes frequently during early development as patterns stabilise.
+This is a personal project I want to share publicly. Anyone exploring it should be able to clone one repo and understand the full system. The shared library (`fpl_lib`) changes frequently during early development as patterns stabilise.
 
 ## Options Considered
 
@@ -21,7 +21,7 @@ Separate repos per service (`fpl-data`, `fpl-enrich`, `fpl-agent`, `fpl-infra`, 
 
 **Rejected because:**
 - Publishing `fpl_lib` as a package adds friction during early development when the shared interface is still evolving — every change requires a version bump, publish, and pin update across consumers
-- Reviewers would need to clone 6+ repos to understand the full system
+- Anyone exploring the project would need to clone 6+ repos to understand the full system
 - Cross-repo CI coordination (ensuring compatible versions) adds complexity with no team to justify it
 
 ### 3. Polyrepo with git submodules (rejected)
@@ -34,11 +34,11 @@ Use a single monorepo with clear directory separation. CI path filtering ensures
 
 ## Consequences
 **Easier:**
-- One clone to explore the full system — critical for a portfolio project reviewed by hiring managers
+- One clone to explore the full system — anyone can understand the project without jumping between repos
 - Shared code (`libs/fpl_lib/`) is directly importable without publishing packages
 - Unified commit history showing iterative progress across all components
 - Single CI config, single project board, single set of branch protections
-- `dorny/paths-filter` pattern is proven (used at Intech) and keeps CI fast despite monorepo scale
+- `dorny/paths-filter` pattern is proven and keeps CI fast despite monorepo scale
 
 **Harder:**
 - If this grew into a team project, the monorepo could become unwieldy without tooling (Nx, Turborepo)
