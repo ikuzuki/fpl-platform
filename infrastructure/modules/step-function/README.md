@@ -22,6 +22,7 @@ module "pipeline" {
 | environment | Deployment environment | string | - |
 | definition | ASL definition (JSON) | string | - |
 | lambda_arns | Lambda ARNs to invoke | list(string) | [] |
+| log_retention_days | CloudWatch log retention in days | number | 30 |
 
 ## Outputs
 
@@ -30,3 +31,4 @@ module "pipeline" {
 | state_machine_arn | State machine ARN |
 | state_machine_name | State machine name |
 | role_arn | Execution role ARN |
+| log_group_arn | CloudWatch log group ARN |

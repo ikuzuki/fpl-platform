@@ -28,7 +28,13 @@ variable "timeout" {
 variable "memory_size" {
   description = "Lambda memory size in MB"
   type        = number
-  default     = 256
+  default     = 512
+}
+
+variable "execution_role_arn" {
+  description = "Optional external IAM role ARN. When provided, the module skips creating its own role."
+  type        = string
+  default     = null
 }
 
 variable "environment_variables" {
