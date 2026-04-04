@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Lambda module: optional `execution_role_arn` for shared external role support
 - S3 data lake module: configurable `name` variable for multi-bucket reuse
 - Step Functions module: CloudWatch log group with execution logging
+- ADR-0003: Direct Anthropic API over LangChain
+- ADR-0004: Tiered LLM model selection and batch processing (Haiku vs Sonnet, batch sizes)
+- ADR-0005: Prompt versioning by directory
+- ADR-0006: S3 prefix-based idempotency
+- ADR-0007: Container images for Lambda over zip packages
 
 ### Changed
 - Lambda module: log retention 14d → 30d, default memory 256 → 512 MB
