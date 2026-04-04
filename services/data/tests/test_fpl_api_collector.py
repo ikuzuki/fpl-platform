@@ -80,9 +80,7 @@ async def test_collect_bootstrap_success(
     mock_s3_client: MagicMock,
     bootstrap_response: dict,
 ) -> None:
-    with patch.object(
-        collector, "_fetch", new_callable=AsyncMock, return_value=bootstrap_response
-    ):
+    with patch.object(collector, "_fetch", new_callable=AsyncMock, return_value=bootstrap_response):
         result = await collector.collect_bootstrap("2025-26")
 
     assert result.status == "success"
@@ -97,7 +95,9 @@ async def test_collect_bootstrap_skips_if_exists(
     collector: FPLAPICollector,
     mock_s3_client: MagicMock,
 ) -> None:
-    mock_s3_client.list_objects.return_value = ["raw/fpl-api/season=2025-26/bootstrap/existing.json"]
+    mock_s3_client.list_objects.return_value = [
+        "raw/fpl-api/season=2025-26/bootstrap/existing.json"
+    ]
 
     with patch.object(collector, "_fetch", new_callable=AsyncMock) as mock_fetch:
         result = await collector.collect_bootstrap("2025-26")
@@ -114,11 +114,11 @@ async def test_collect_bootstrap_force_overwrites(
     mock_s3_client: MagicMock,
     bootstrap_response: dict,
 ) -> None:
-    mock_s3_client.list_objects.return_value = ["raw/fpl-api/season=2025-26/bootstrap/existing.json"]
+    mock_s3_client.list_objects.return_value = [
+        "raw/fpl-api/season=2025-26/bootstrap/existing.json"
+    ]
 
-    with patch.object(
-        collector, "_fetch", new_callable=AsyncMock, return_value=bootstrap_response
-    ):
+    with patch.object(collector, "_fetch", new_callable=AsyncMock, return_value=bootstrap_response):
         result = await collector.collect_bootstrap("2025-26", force=True)
 
     assert result.records_collected == 3
@@ -152,9 +152,7 @@ async def test_collect_fixtures_success(
     mock_s3_client: MagicMock,
     fixtures_response: list,
 ) -> None:
-    with patch.object(
-        collector, "_fetch", new_callable=AsyncMock, return_value=fixtures_response
-    ):
+    with patch.object(collector, "_fetch", new_callable=AsyncMock, return_value=fixtures_response):
         result = await collector.collect_fixtures("2025-26")
 
     assert result.status == "success"

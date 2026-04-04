@@ -47,9 +47,7 @@ async def main(
         elif endpoint == "fixtures":
             resp = await collector.collect_fixtures(season, force=force)
         elif endpoint == "live":
-            resp = await collector.collect_gameweek_live(
-                season, gameweek, force=force
-            )
+            resp = await collector.collect_gameweek_live(season, gameweek, force=force)
         else:
             logger.warning("Unknown endpoint: %s, skipping", endpoint)
             continue

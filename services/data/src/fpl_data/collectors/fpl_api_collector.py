@@ -23,9 +23,7 @@ class FPLAPICollector:
         self.s3_client = s3_client
         self.output_bucket = output_bucket
 
-    async def collect_bootstrap(
-        self, season: str, *, force: bool = False
-    ) -> CollectionResponse:
+    async def collect_bootstrap(self, season: str, *, force: bool = False) -> CollectionResponse:
         """Collect bootstrap-static data (all players, teams, gameweeks).
 
         Args:
@@ -38,9 +36,7 @@ class FPLAPICollector:
         prefix = f"raw/fpl-api/season={season}/bootstrap/"
         if not force and self._output_exists(prefix):
             logger.info("Bootstrap data already exists for season=%s, skipping", season)
-            return CollectionResponse(
-                status="success", records_collected=0, output_path=prefix
-            )
+            return CollectionResponse(status="success", records_collected=0, output_path=prefix)
 
         data = await self._fetch(f"{FPL_BASE_URL}/bootstrap-static/")
         timestamp = datetime.now(UTC).isoformat()
@@ -49,13 +45,9 @@ class FPLAPICollector:
 
         records = len(data.get("elements", []))
         logger.info("Collected bootstrap: %d players for season=%s", records, season)
-        return CollectionResponse(
-            status="success", records_collected=records, output_path=key
-        )
+        return CollectionResponse(status="success", records_collected=records, output_path=key)
 
-    async def collect_fixtures(
-        self, season: str, *, force: bool = False
-    ) -> CollectionResponse:
+    async def collect_fixtures(self, season: str, *, force: bool = False) -> CollectionResponse:
         """Collect all fixtures for the season.
 
         Args:
@@ -68,9 +60,7 @@ class FPLAPICollector:
         prefix = f"raw/fpl-api/season={season}/fixtures/"
         if not force and self._output_exists(prefix):
             logger.info("Fixtures data already exists for season=%s, skipping", season)
-            return CollectionResponse(
-                status="success", records_collected=0, output_path=prefix
-            )
+            return CollectionResponse(status="success", records_collected=0, output_path=prefix)
 
         data = await self._fetch(f"{FPL_BASE_URL}/fixtures/")
         timestamp = datetime.now(UTC).isoformat()
@@ -79,9 +69,7 @@ class FPLAPICollector:
 
         records = len(data) if isinstance(data, list) else 0
         logger.info("Collected fixtures: %d for season=%s", records, season)
-        return CollectionResponse(
-            status="success", records_collected=records, output_path=key
-        )
+        return CollectionResponse(status="success", records_collected=records, output_path=key)
 
     async def collect_gameweek_live(
         self, season: str, gameweek: int, *, force: bool = False
@@ -103,9 +91,7 @@ class FPLAPICollector:
                 season,
                 gameweek,
             )
-            return CollectionResponse(
-                status="success", records_collected=0, output_path=prefix
-            )
+            return CollectionResponse(status="success", records_collected=0, output_path=prefix)
 
         data = await self._fetch(f"{FPL_BASE_URL}/event/{gameweek}/live/")
         timestamp = datetime.now(UTC).isoformat()
@@ -119,9 +105,7 @@ class FPLAPICollector:
             season,
             gameweek,
         )
-        return CollectionResponse(
-            status="success", records_collected=records, output_path=key
-        )
+        return CollectionResponse(status="success", records_collected=records, output_path=key)
 
     async def collect_player_history(
         self, player_id: int, season: str, *, force: bool = False
@@ -143,9 +127,7 @@ class FPLAPICollector:
                 player_id,
                 season,
             )
-            return CollectionResponse(
-                status="success", records_collected=0, output_path=prefix
-            )
+            return CollectionResponse(status="success", records_collected=0, output_path=prefix)
 
         data = await self._fetch(f"{FPL_BASE_URL}/element-summary/{player_id}/")
         timestamp = datetime.now(UTC).isoformat()
@@ -159,9 +141,7 @@ class FPLAPICollector:
             player_id,
             season,
         )
-        return CollectionResponse(
-            status="success", records_collected=records, output_path=key
-        )
+        return CollectionResponse(status="success", records_collected=records, output_path=key)
 
     def _output_exists(self, prefix: str) -> bool:
         """Check if any objects exist under the given S3 prefix."""
