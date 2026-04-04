@@ -32,6 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ADR-0005: Prompt versioning by directory
 - ADR-0006: S3 prefix-based idempotency
 - ADR-0007: Container images for Lambda over zip packages
+- ADR-0008: S3 data lake layer design (raw/clean/enriched/curated, Hive partitioning, Parquet+zstd)
+- ADR-0009: Langfuse for LLM observability
+
+### Changed
+- ADR-0001 through ADR-0007: added dates, Options Considered sections, project-specific context, and addressed edge cases
 
 ### Changed
 - Lambda module: log retention 14d → 30d, default memory 256 → 512 MB
