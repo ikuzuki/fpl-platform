@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Data validation engine with schema-driven checks (column presence, not-null, uniqueness, value ranges)
+- Raw-data validation schemas (`PLAYER_EXPECTATIONS`, `FIXTURE_EXPECTATIONS`) using FPL API column names
+- Validation Lambda handler with DLQ writing for failed records
+- 10 unit tests for validation engine, handler, and DLQ
 - News collector (`NewsCollector`) with RSS feed parsing (BBC, Sky Sports, Guardian)
 - Date-based filtering for RSS entries using `published_parsed` time struct
 - 4 unit tests for news collector with mocked feedparser
