@@ -31,11 +31,23 @@ provider "aws" {
 }
 
 # -----------------------------------------------------------------------------
-# ECR Repository
+# ECR Repositories (one per service — matches deploy.yml naming: fpl-{name}-dev)
 # -----------------------------------------------------------------------------
-module "ecr" {
+module "ecr_data" {
   source      = "../../modules/ecr"
-  name        = "platform"
+  name        = "data"
+  environment = var.environment
+}
+
+module "ecr_enrich" {
+  source      = "../../modules/ecr"
+  name        = "enrich"
+  environment = var.environment
+}
+
+module "ecr_agent" {
+  source      = "../../modules/ecr"
+  name        = "agent"
   environment = var.environment
 }
 
@@ -48,9 +60,10 @@ module "data_lake" {
 }
 
 module "cost_reports" {
-  source      = "../../modules/s3-data-lake"
-  name        = "cost-reports"
-  environment = var.environment
+  source                     = "../../modules/s3-data-lake"
+  name                       = "cost-reports"
+  environment                = var.environment
+  enable_data_lake_lifecycle = false
 }
 
 # -----------------------------------------------------------------------------

@@ -26,6 +26,7 @@ module "data_lake" {
 | project | Project name | string | "fpl" |
 | environment | Deployment environment | string | - |
 | name | Bucket purpose name (e.g. 'data-lake', 'cost-reports') | string | "data-lake" |
+| enable_data_lake_lifecycle | Enable raw/dlq lifecycle rules | bool | true |
 
 ## Outputs
 

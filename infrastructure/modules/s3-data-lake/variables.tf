@@ -14,3 +14,9 @@ variable "name" {
   type        = string
   default     = "data-lake"
 }
+
+variable "enable_data_lake_lifecycle" {
+  description = "Enable raw/ transition/expiration and dlq/ expiration lifecycle rules. Set to false for non-data-lake buckets."
+  type        = bool
+  default     = true
+}
