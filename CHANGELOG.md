@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Understat collector (`UnderstatCollector`) using POST API for xG/xA stats — league-level and per-player collection
+- Rate limiting (1.5s sleep) for Understat requests
+- Season format conversion (`2025-26` → `2025` for Understat API)
+- 10 unit tests for Understat collector with mocked httpx
 - Four concrete enrichers: PlayerSummaryEnricher, InjurySignalEnricher, SentimentEnricher, FixtureOutlookEnricher
 - Pydantic output models for all enricher outputs (structured validation)
 - Enrichment Lambda handler with Secrets Manager integration, cost tracking, and fallback handling
