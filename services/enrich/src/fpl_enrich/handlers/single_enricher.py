@@ -7,7 +7,7 @@ Designed to be invoked in parallel via Step Functions Parallel state.
 
 import json
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import anthropic
@@ -83,26 +83,43 @@ def _load_players(
     return players
 
 
-def _load_news_articles(s3_client: S3Client, bucket: str) -> list[dict[str, Any]]:
-    """Load recent news articles from S3. Returns list of article dicts."""
-    today = datetime.now(UTC).strftime("%Y-%m-%d")
-    key = f"raw/news/date={today}/rss_articles.jsonl"
+NEWS_WINDOW_DAYS = 7
 
-    if not s3_client.object_exists(bucket, key):
-        logger.warning("No news articles found at %s", key)
-        return []
 
-    raw = s3_client.read_json(bucket, key)
-    if isinstance(raw, str):
-        # JSONL format — parse each line
-        articles = [json.loads(line) for line in raw.strip().split("\n") if line.strip()]
-    elif isinstance(raw, list):
-        articles = raw
-    else:
-        logger.warning("Unexpected news format: %s", type(raw))
-        return []
+def _load_news_articles(
+    s3_client: S3Client, bucket: str, window_days: int = NEWS_WINDOW_DAYS
+) -> list[dict[str, Any]]:
+    """Load news articles from the last N days.
 
-    logger.info("Loaded %d news articles", len(articles))
+    The pipeline may run days after articles were collected (e.g. Tuesday
+    pipeline for a Saturday gameweek), so we load a rolling window rather
+    than just today's articles.
+    """
+    articles: list[dict[str, Any]] = []
+    today = datetime.now(UTC)
+
+    for days_ago in range(window_days):
+        date_str = (today - timedelta(days=days_ago)).strftime("%Y-%m-%d")
+        key = f"raw/news/date={date_str}/rss_articles.jsonl"
+
+        if not s3_client.object_exists(bucket, key):
+            continue
+
+        raw = s3_client.read_json(bucket, key)
+        if isinstance(raw, str):
+            day_articles = [json.loads(line) for line in raw.strip().split("\n") if line.strip()]
+        elif isinstance(raw, list):
+            day_articles = raw
+        else:
+            continue
+
+        articles.extend(day_articles)
+
+    logger.info(
+        "Loaded %d news articles from last %d days",
+        len(articles),
+        window_days,
+    )
     return articles
 
 
