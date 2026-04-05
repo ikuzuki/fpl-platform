@@ -141,11 +141,13 @@ export function AboutPage() {
               <div className="flex-1">
                 <h3 className="text-xl font-bold">Issei Kuzuki</h3>
                 <p className="text-sm text-[var(--muted-foreground)] mt-1 leading-relaxed">
-                  Data and software engineer building at the intersection of cloud
+                  Data and software engineer specialising in cloud
                   infrastructure, data pipelines, and AI-powered applications.
-                  This project combines a genuine FPL obsession with a desire to
-                  demonstrate full-stack depth — from Terraform modules to
-                  React components, with LLM enrichment in between.
+                  FPL Pulse is a full-stack personal project built end-to-end
+                  with Terraform-managed AWS infrastructure, Python data
+                  pipelines, and React that turned a Fantasy Premier
+                  League obsession into a demonstration of production
+                  engineering principles.
                 </p>
                 <div className="flex gap-3 mt-4">
                   <a
@@ -169,7 +171,7 @@ export function AboutPage() {
                     <ExternalLink className="h-3 w-3" />
                   </a>
                   <a
-                    href="mailto:ikuzuki@gmail.com"
+                    href="mailto:ikuzuki0@gmail.com"
                     className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
                   >
                     <Mail className="h-4 w-4" />
