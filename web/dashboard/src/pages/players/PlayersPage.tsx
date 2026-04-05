@@ -13,7 +13,6 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronUp,
-  Sparkles,
   TrendingUp,
   TrendingDown,
   Minus,
@@ -35,6 +34,7 @@ import {
   playerTier,
   cn,
 } from "@/lib/utils";
+import { MetricIcons } from "@/components/icons/FplIcons";
 import { PlayerDetail } from "./PlayerDetail";
 import { XgScatter } from "./XgScatter";
 import { OwnershipBubble } from "./OwnershipBubble";
@@ -266,7 +266,7 @@ export function PlayersPage() {
           <Card className="md:col-span-2 border-l-4 border-l-[var(--accent)] bg-[var(--ai-bg)] border-[var(--ai-border)]">
             <CardContent className="pt-4">
               <div className="flex items-center gap-2 mb-2">
-                <Sparkles className="h-4 w-4 text-[var(--accent)]" />
+                <MetricIcons.AiInsight size={18} />
                 <span className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">
                   AI Pick of the Week
                 </span>

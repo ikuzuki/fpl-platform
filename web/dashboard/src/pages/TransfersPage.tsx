@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { ChevronDown, Sparkles, AlertTriangle, Newspaper, Calendar } from "lucide-react";
+import { ChevronDown, AlertTriangle, Newspaper, Calendar } from "lucide-react";
+import { MetricIcons } from "@/components/icons/FplIcons";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 import type { TransferPick, PlayerDashboard } from "@/lib/types";
@@ -232,7 +233,7 @@ function TransferCard({
                 {detail.llm_summary && (
                   <div className="rounded-lg border border-[var(--ai-border)] bg-[var(--ai-bg)] p-3">
                     <div className="flex items-center gap-1.5 mb-1.5">
-                      <Sparkles className="h-3.5 w-3.5 text-[var(--accent)]" />
+                      <MetricIcons.AiInsight size={15} />
                       <span className="text-xs font-semibold text-[var(--accent)]">AI Assessment</span>
                     </div>
                     <p className="text-sm text-[var(--muted-foreground)] leading-relaxed">{detail.llm_summary}</p>

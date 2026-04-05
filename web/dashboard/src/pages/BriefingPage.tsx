@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
 import {
-  Sparkles,
   TrendingUp,
   TrendingDown,
   AlertTriangle,
@@ -8,6 +7,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { MetricIcons } from "@/components/icons/FplIcons";
 import { useApi } from "@/lib/useApi";
 import type { GameweekBriefing } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
@@ -70,7 +70,7 @@ export function BriefingPage() {
           </p>
         </div>
         <Badge className="bg-[var(--ai-bg)] text-[var(--accent)] border border-[var(--ai-border)]">
-          <Sparkles className="h-3 w-3 mr-1" />
+          <MetricIcons.AiInsight size={14} className="mr-0.5" />
           AI-Powered
         </Badge>
       </div>

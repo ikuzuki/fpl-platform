@@ -1,19 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { Moon, Sun, Menu, X } from "lucide-react";
+import { Moon, Sun, Menu, X, Crown, Target, ArrowRightLeft } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { PulseLogo, NavIcons } from "@/components/icons/FplIcons";
 
-const links = [
-  { to: "/", label: "Briefing" },
-  { to: "/players", label: "Players" },
-  { to: "/fixtures", label: "Fixtures" },
-  { to: "/transfers", label: "Transfers" },
-  { to: "/teams", label: "Teams" },
-  { to: "/trends", label: "Trends" },
-  { to: "/captain", label: "Captain" },
-  { to: "/differentials", label: "Differentials" },
-  { to: "/planner", label: "Planner" },
+const links: { to: string; label: string; icon: ReactNode }[] = [
+  { to: "/", label: "Briefing", icon: <NavIcons.Briefing size={16} /> },
+  { to: "/players", label: "Players", icon: <NavIcons.Players size={16} /> },
+  { to: "/fixtures", label: "Fixtures", icon: <NavIcons.Fixtures size={16} /> },
+  { to: "/transfers", label: "Transfers", icon: <NavIcons.Transfers size={16} /> },
+  { to: "/teams", label: "Teams", icon: <NavIcons.Teams size={16} /> },
+  { to: "/trends", label: "Trends", icon: <NavIcons.Trends size={16} /> },
+  { to: "/captain", label: "Captain", icon: <Crown className="h-4 w-4" /> },
+  { to: "/differentials", label: "Differentials", icon: <Target className="h-4 w-4" /> },
+  { to: "/planner", label: "Planner", icon: <ArrowRightLeft className="h-4 w-4" /> },
 ];
 
 export function Layout() {
@@ -45,23 +46,27 @@ export function Layout() {
       <header className="sticky top-0 z-50 border-b border-[var(--border)] bg-[var(--card)]/80 backdrop-blur-sm">
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
           <div className="flex items-center gap-8">
-            <span className="text-lg font-bold tracking-tight">
-              <span className="text-[var(--accent)]">FPL</span> Analytics
-            </span>
-            <nav className="hidden md:flex gap-1" aria-label="Main navigation">
+            <NavLink to="/" className="flex items-center gap-2.5">
+              <PulseLogo size={28} />
+              <span className="text-lg font-bold tracking-tight">
+                <span className="text-[var(--accent)]">FPL</span> Pulse
+              </span>
+            </NavLink>
+            <nav className="hidden lg:flex gap-0.5" aria-label="Main navigation">
               {links.map((link) => (
                 <NavLink
                   key={link.to}
                   to={link.to}
                   className={({ isActive }) =>
                     cn(
-                      "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                      "rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors flex items-center gap-1.5",
                       isActive
                         ? "bg-[var(--accent)] text-[var(--accent-foreground)]"
                         : "text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--muted)]",
                     )
                   }
                 >
+                  {link.icon}
                   {link.label}
                 </NavLink>
               ))}
@@ -77,7 +82,7 @@ export function Layout() {
             </button>
             <button
               onClick={() => setMenuOpen(!menuOpen)}
-              className="md:hidden rounded-md p-2 text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+              className="lg:hidden rounded-md p-2 text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
               aria-label={menuOpen ? "Close menu" : "Open menu"}
               aria-expanded={menuOpen}
             >
@@ -86,7 +91,7 @@ export function Layout() {
           </div>
         </div>
         {menuOpen && (
-          <nav className="md:hidden border-t border-[var(--border)] bg-[var(--card)] px-6 py-3 space-y-1" aria-label="Mobile navigation">
+          <nav className="lg:hidden border-t border-[var(--border)] bg-[var(--card)] px-6 py-3 space-y-1" aria-label="Mobile navigation">
             {links.map((link) => (
               <NavLink
                 key={link.to}
@@ -94,13 +99,14 @@ export function Layout() {
                 onClick={() => setMenuOpen(false)}
                 className={({ isActive }) =>
                   cn(
-                    "block rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                    "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                     isActive
                       ? "bg-[var(--accent)] text-[var(--accent-foreground)]"
                       : "text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--muted)]",
                   )
                 }
               >
+                {link.icon}
                 {link.label}
               </NavLink>
             ))}
@@ -111,10 +117,13 @@ export function Layout() {
         <Outlet />
       </main>
       <footer className="border-t border-[var(--border)] py-4 text-center text-xs text-[var(--muted-foreground)]">
-        {footerInfo
-          ? `Last updated: GW${footerInfo.gameweek}, ${footerInfo.season}`
-          : "Data refreshed weekly via automated pipeline"}{" "}
-        &middot; Powered by Claude AI enrichment
+        <span className="inline-flex items-center gap-1.5">
+          <PulseLogo size={14} />
+          {footerInfo
+            ? `Last updated: GW${footerInfo.gameweek}, ${footerInfo.season}`
+            : "Data refreshed weekly via automated pipeline"}{" "}
+          &middot; Powered by Claude AI enrichment
+        </span>
       </footer>
     </div>
   );

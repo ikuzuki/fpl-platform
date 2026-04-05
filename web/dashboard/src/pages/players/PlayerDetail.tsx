@@ -5,10 +5,10 @@ import {
   Radar,
   ResponsiveContainer,
 } from "recharts";
-import { Sparkles } from "lucide-react";
 import type { PlayerDashboard } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { formatNumber, fdrClass, cn } from "@/lib/utils";
+import { MetricIcons, StatusIcons } from "@/components/icons/FplIcons";
 import { ScoreWaterfall } from "./ScoreWaterfall";
 
 function StatRow({ label, value }: { label: string; value: string | number }) {
@@ -39,7 +39,7 @@ export function PlayerDetail({ player }: { player: PlayerDashboard }) {
       <div className="md:col-span-4">
         <div className="rounded-lg border border-[var(--ai-border)] bg-[var(--ai-bg)] p-4">
           <div className="flex items-center gap-2 mb-3">
-            <Sparkles className="h-4 w-4 text-[var(--accent)]" />
+            <MetricIcons.AiInsight size={18} />
             <h4 className="font-semibold text-sm">AI Analysis</h4>
           </div>
           <p className="text-sm text-[var(--muted-foreground)] leading-relaxed">
@@ -56,9 +56,14 @@ export function PlayerDetail({ player }: { player: PlayerDashboard }) {
           )}
           {player.injury_reasoning && (
             <div className="mt-3 pt-3 border-t border-[var(--ai-border)]">
-              <p className="text-xs font-medium text-[var(--muted-foreground)] mb-1">
-                Injury Assessment
-              </p>
+              <div className="flex items-center gap-1.5 mb-1">
+                {player.injury_risk != null && player.injury_risk >= 5
+                  ? <StatusIcons.Injured size={14} />
+                  : <StatusIcons.Doubtful size={14} />}
+                <p className="text-xs font-medium text-[var(--muted-foreground)]">
+                  Injury Assessment
+                </p>
+              </div>
               <p className="text-sm text-[var(--muted-foreground)]">
                 {player.injury_reasoning}
               </p>
