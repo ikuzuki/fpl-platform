@@ -260,7 +260,7 @@
         "prompt_version": "v1"
       },
       "ResultPath": "$.enrichment",
-      "TimeoutSeconds": 600,
+      "TimeoutSeconds": 900,
       "Retry": [
         {
           "ErrorEquals": ["States.TaskFailed"],

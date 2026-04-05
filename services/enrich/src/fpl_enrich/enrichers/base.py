@@ -74,7 +74,7 @@ class FPLEnricher(ABC):
         system_prompt = self._get_system_prompt().format(batch_size=len(batch))
 
         logger.info(
-            "%s: calling %s with batch_size=%d, prompt_version=%s",
+            "[ANTHROPIC] %s: calling %s | batch_size=%d | prompt_version=%s",
             self.__class__.__name__,
             self.MODEL,
             len(batch),
@@ -90,6 +90,14 @@ class FPLEnricher(ABC):
 
         self.total_input_tokens += response.usage.input_tokens
         self.total_output_tokens += response.usage.output_tokens
+
+        logger.info(
+            "[ANTHROPIC] %s: response | input_tokens=%d | output_tokens=%d | stop_reason=%s",
+            self.__class__.__name__,
+            response.usage.input_tokens,
+            response.usage.output_tokens,
+            response.stop_reason,
+        )
 
         raw_text = response.content[0].text.strip()
 
