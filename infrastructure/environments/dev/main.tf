@@ -222,7 +222,7 @@ module "lambda_understat_collector" {
   environment        = var.environment
   image_uri          = "${module.ecr_data.repository_url}:latest"
   execution_role_arn = aws_iam_role.lambda_standard.arn
-  command            = ["fpl_data.handlers.fpl_api_handler.lambda_handler"]
+  command            = ["fpl_data.handlers.understat_handler.lambda_handler"]
   timeout            = 300
   memory_size        = 512
   environment_variables = {
@@ -237,7 +237,7 @@ module "lambda_news_collector" {
   environment        = var.environment
   image_uri          = "${module.ecr_data.repository_url}:latest"
   execution_role_arn = aws_iam_role.lambda_standard.arn
-  command            = ["fpl_data.handlers.fpl_api_handler.lambda_handler"]
+  command            = ["fpl_data.handlers.news_handler.lambda_handler"]
   timeout            = 300
   memory_size        = 512
   environment_variables = {
