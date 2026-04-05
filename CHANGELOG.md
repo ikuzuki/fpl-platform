@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Streamlit dashboard v1 with 4 pages: Player Overview, Player Deep Dive, Injury Watch, Pipeline Health
+- S3 data lake reader with graceful handling when data doesn't exist
+- Player search/filter, form trend colour coding, per-gameweek points chart
+- LLM cost report display and data freshness warning (> 8 days)
 - Step Functions pipeline: 9-state machine (Collect FPL → Understat → News → Validate → Check → Transform → Enrich → Succeed/Fail)
 - 6 Lambda modules in dev environment (fpl-api-collector, understat-collector, news-collector, validator, transform, enricher)
 - EventBridge schedule: Tuesday 8am UTC weekly trigger
