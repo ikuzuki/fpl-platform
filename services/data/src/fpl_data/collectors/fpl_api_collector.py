@@ -3,6 +3,7 @@
 FPL API is public, no auth required. Base URL: https://fantasy.premierleague.com/api
 """
 
+import asyncio
 import logging
 from datetime import UTC, datetime
 
@@ -182,9 +183,12 @@ class FPLAPICollector:
         existing = self.s3_client.list_objects(self.output_bucket, prefix)
         return len(existing) > 0
 
-    async def _fetch(self, url: str) -> dict | list:
-        """Fetch JSON from the FPL API."""
-        logger.info("[FPL API] GET %s", url)
+    async def _fetch(self, url: str, max_retries: int = 5) -> dict | list:
+        """Fetch JSON from the FPL API with exponential backoff.
+
+        Cloudflare may block AWS Lambda IPs on initial attempts but
+        allow retries after a delay.
+        """
         async with httpx.AsyncClient(
             headers={
                 "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
@@ -192,12 +196,31 @@ class FPLAPICollector:
             },
             timeout=30.0,
         ) as client:
-            response = await client.get(url)
-            logger.info(
-                "[FPL API] %s | status=%d | size=%d bytes",
-                url.split("/api/")[-1],
-                response.status_code,
-                len(response.content),
-            )
-            response.raise_for_status()
-            return response.json()
+            for attempt in range(max_retries):
+                logger.info("[FPL API] GET %s (attempt %d/%d)", url, attempt + 1, max_retries)
+                response = await client.get(url)
+                logger.info(
+                    "[FPL API] %s | status=%d | size=%d bytes",
+                    url.split("/api/")[-1],
+                    response.status_code,
+                    len(response.content),
+                )
+
+                if response.status_code == 200:
+                    return response.json()
+
+                if response.status_code == 403 and attempt < max_retries - 1:
+                    wait = 2 ** (attempt + 1)  # 2, 4, 8, 16, 32 seconds
+                    logger.warning(
+                        "[FPL API] 403 Forbidden — retrying in %ds (attempt %d/%d)",
+                        wait,
+                        attempt + 1,
+                        max_retries,
+                    )
+                    await asyncio.sleep(wait)
+                    continue
+
+                response.raise_for_status()
+
+        response.raise_for_status()
+        return response.json()  # unreachable but satisfies type checker
