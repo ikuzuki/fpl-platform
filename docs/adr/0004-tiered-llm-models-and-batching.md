@@ -1,4 +1,4 @@
-# ADR-0004: Tiered LLM Model Selection and Batch Processing
+# ADR-0004: LLM Cost Optimisation — Model Selection, Batching, and Input Filtering
 
 ## Status
 Accepted (updated 2026-04-05)
@@ -7,68 +7,101 @@ Accepted (updated 2026-04-05)
 2026-04-04
 
 ## Context
-The enrichment pipeline runs four enrichers per gameweek across ~700 players. LLM API costs scale with token volume, and different tasks have different complexity requirements. We needed a model selection and batching strategy that balances cost, quality, and latency.
+The enrichment pipeline runs four enrichers per gameweek across 300 players (top by ownership, filtered from ~825 total). LLM API costs scale with token volume, and different tasks have different complexity requirements. We needed a strategy that balances cost, quality, and latency across three dimensions: model selection, batch sizing, and input token efficiency.
 
 ## Options Considered
 
-### 1. Single model for everything (rejected)
+### Model selection
+
+**1. Single model for everything (rejected)**
 Use Sonnet for all enrichers. Simpler code, no model-switching logic.
 
-**Rejected because:** Sonnet at $3/$15 per MTok (in/out) would cost ~$5-8 per gameweek for classification tasks that Haiku handles equally well at $0.25/$1.25 per MTok. Over 38 gameweeks, that's ~$150-300 of unnecessary spend.
+Rejected because: Sonnet at $3/$15 per MTok (in/out) would cost ~$5-8 per gameweek for classification tasks that Haiku handles equally well at $0.25/$1.25 per MTok. Over 38 gameweeks, that's ~$150-300 of unnecessary spend.
 
-### 2. Haiku for everything (rejected)
+**2. Haiku for everything (rejected)**
 Use Haiku for all enrichers including fixture outlook.
 
-**Rejected because:** Fixture outlook requires reasoning about 5-game sequences, team form trends, and schedule difficulty interactions. Testing showed Haiku produced generic recommendations ("moderate difficulty") while Sonnet provided actionable analysis referencing specific fixtures.
+Rejected because: Fixture outlook requires reasoning about 5-game sequences, team form trends, and schedule difficulty interactions. Testing showed Haiku produced generic recommendations ("moderate difficulty") while Sonnet provided actionable analysis referencing specific fixtures.
 
-### 3. Tiered models with task-appropriate batch sizes (chosen)
-Match model capability to task complexity. Batch simple tasks aggressively, keep complex tasks isolated.
+**3. Tiered models — Haiku for classification, Sonnet for reasoning (chosen)**
+Match model capability to task complexity.
+
+### Input token efficiency
+
+**1. Send full player dict to every enricher (rejected)**
+Simple — just serialise the entire player record (~185 tokens, 35+ fields) for every LLM call.
+
+Rejected because: Each enricher only needs 5-17 fields. Sending everything wastes 60-90% of input tokens, increases cost, and adds irrelevant context that can degrade output quality (e.g. sending ICT index data to the sentiment enricher).
+
+**2. Per-enricher `RELEVANT_FIELDS` filter (chosen)**
+Each enricher declares which fields it needs via a class variable. The base class filters the player dict before serialising to JSON, sending only relevant data to the LLM.
 
 ## Decision
-Use Haiku for classification/summarisation and Sonnet for multi-step reasoning. Batch sizes tuned per enricher, favouring larger batches for cost efficiency.
 
-| Enricher | Model | Batch Size | Reasoning |
-|----------|-------|-----------|-----------|
-| Player Summary | claude-haiku-4-5 | 10 | Form summarisation is templated; Haiku handles 10 players per call comfortably |
-| Injury Signal | claude-haiku-4-5 | 10 | Binary classification (risk score 0-10); minimal per-item context |
-| Sentiment | claude-haiku-4-5 | 10 | Simple sentiment scoring from media mentions; bulk-friendly |
-| Fixture Outlook | claude-sonnet-4-6 | 5 | Requires reasoning about fixture runs — batching 5 balances context size with efficiency |
+### Model and batch configuration
 
-All enrichers run concurrently via `asyncio.gather` with a shared `asyncio.Semaphore(5)` to stay within Tier 1 rate limits (50 RPM per model). All calls use `max_tokens=4096` and return structured JSON arrays validated with Pydantic.
+| Enricher | Model | Batch Size | Input Fields | Tokens/player |
+|----------|-------|-----------|--------------|---------------|
+| Player Summary | claude-haiku-4-5 | 10 | stats, form, xG/xA (17 fields) | ~70 |
+| Injury Signal | claude-haiku-4-5 | 10 | status, news, chance_of_playing, news_articles (7 fields) | ~25 + articles |
+| Sentiment | claude-haiku-4-5 | 10 | web_name, team, news_articles (3 fields) | ~10 + articles |
+| Fixture Outlook | claude-sonnet-4-6 | 5 | form, team, upcoming_fixtures (6 fields) | ~25 + fixtures |
 
-## Rate limits (Tier 1)
+### Input filtering pattern
 
-| Model | Requests/min | Input tokens/min | Output tokens/min |
-|-------|-------------|-------------------|-------------------|
-| Haiku | 50 | 50K | 10K |
-| Sonnet | 50 | 30K | 8K |
+```python
+class FPLEnricher(ABC):
+    RELEVANT_FIELDS: list[str] | None = None  # None = send everything
 
-With 350 total API calls per gameweek and 5 max concurrent, the pipeline completes in ~4-5 minutes — well within the 900s Lambda timeout.
+    def _prepare_item(self, item: dict[str, Any]) -> dict[str, Any]:
+        if self.RELEVANT_FIELDS is None:
+            return item
+        return {k: v for k, v in item.items() if k in self.RELEVANT_FIELDS}
+```
 
-## Cost estimate (per gameweek, ~700 players)
+Each enricher overrides `RELEVANT_FIELDS` with exactly the fields its prompt references. This is enforced at the base class level so new enrichers get filtering by default.
 
-Based on v1 prompt templates (~200-250 tokens each) and average player data payload (~150 tokens per item):
+### Rate limiting
+
+Each enricher runs as a separate Lambda (see ADR-0011). Rate control uses dual mechanisms:
+- `asyncio.Semaphore(2)` — caps in-flight requests to avoid concurrent connection 429s
+- `RateLimiter(rpm)` — caps request rate to stay within RPM and output TPM limits
+
+| Lambda | Model | RPM | Rationale |
+|--------|-------|-----|-----------|
+| PlayerSummary | Haiku | 5 | 3 Haiku Lambdas share 50 RPM / 10K output TPM |
+| InjurySignal | Haiku | 5 | |
+| Sentiment | Haiku | 5 | |
+| FixtureOutlook | Sonnet | 15 | Runs alone against its own model limit |
+
+### Player filtering
+
+Only the top 300 players by `selected_by_percent` are enriched. The remaining ~525 players appear in the final Parquet without enrichment columns. This reduces total API calls from ~350 (700 players) to ~150 (300 players).
+
+## Cost estimate (per gameweek, 300 players)
 
 | Enricher | API Calls | Est. Input Tokens | Est. Output Tokens | Est. Cost |
 |----------|-----------|-------------------|--------------------| ----------|
-| Player Summary (Haiku) | ~70 | ~105K | ~50K | ~$0.09 |
-| Injury Signal (Haiku) | ~70 | ~95K | ~35K | ~$0.07 |
-| Sentiment (Haiku) | ~70 | ~95K | ~35K | ~$0.07 |
-| Fixture Outlook (Sonnet) | ~140 | ~175K | ~70K | ~$1.58 |
-| **Total** | **~350** | **~470K** | **~190K** | **~$1.81** |
+| Player Summary (Haiku) | 30 | ~21K | ~15K | ~$0.02 |
+| Injury Signal (Haiku) | 30 | ~8K + articles | ~10K | ~$0.01 |
+| Sentiment (Haiku) | 30 | ~3K + articles | ~10K | ~$0.01 |
+| Fixture Outlook (Sonnet) | 60 | ~15K + fixtures | ~42K | ~$0.68 |
+| **Total** | **~150** | **~50K+** | **~77K** | **~$0.72** |
 
-Fixture outlook dominates cost (~87%). Over a full 38-gameweek season: ~$69. If cost becomes an issue, the first lever is reducing fixture outlook to top-200 players by ownership.
+Fixture outlook on Sonnet still dominates (~94%). Over a full 38-gameweek season: **~$27**.
+
+Previous estimate before input filtering: ~$1.42/GW, ~$54/season. Input filtering saves ~50% on Haiku enrichers.
 
 ## Consequences
 **Easier:**
-- Haiku keeps bulk enrichment cheap (~$0.23 per gameweek for 3 enrichers)
-- Aggressive batching reduces total API calls from ~1,214 (original) to ~350
-- Async concurrency with shared semaphore keeps runtime under 5 minutes
+- Haiku keeps bulk enrichment cheap (~$0.04/GW for 3 enrichers)
+- `RELEVANT_FIELDS` is self-documenting — reading the enricher class tells you exactly what data it uses
+- Aggressive batching reduces total API calls from ~1,214 (original) to ~150
+- Less input noise improves LLM output quality and consistency
 - Cost report per gameweek enables tracking and alerting on spend drift
-- Langfuse tracing attributes cost to each enricher type
 
 **Harder:**
 - Two models means two pricing tiers to track and two potential points of failure
 - Batch size tuning is empirical — too large degrades output quality, too small wastes calls
+- `RELEVANT_FIELDS` must be kept in sync with prompt templates — if a prompt references a field not in the list, the LLM won't see it
 - Model version pinning (`claude-haiku-4-5-20251001`) means manual updates when new versions release
-- Shared semaphore means one slow enricher can partially block others
