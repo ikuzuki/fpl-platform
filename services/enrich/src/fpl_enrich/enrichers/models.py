@@ -25,7 +25,7 @@ class InjurySignalOutput(BaseModel):
 class SentimentOutput(BaseModel):
     """Validated output from the sentiment enricher."""
 
-    sentiment: Literal["positive", "negative", "neutral", "mixed"]
+    sentiment: Literal["very positive", "positive", "neutral", "negative", "very negative", "mixed"]
     score: float = Field(ge=-1.0, le=1.0)
     key_themes: list[str] = []
 
