@@ -165,7 +165,16 @@ class FPLEnricher(ABC):
             response.stop_reason,
         )
 
-        raw_text = response.content[0].text.strip()
+        raw_text = response.content[0].text.strip() if response.content else ""
+
+        if not raw_text:
+            logger.error(
+                "[ANTHROPIC] %s: empty response (stop_reason=%s, content_blocks=%d)",
+                self.__class__.__name__,
+                response.stop_reason,
+                len(response.content),
+            )
+            raise ValueError("LLM returned empty response")
 
         # Strip markdown code fences if the LLM wraps the JSON
         if raw_text.startswith("```"):
@@ -173,7 +182,15 @@ class FPLEnricher(ABC):
             raw_text = raw_text.rsplit("```", 1)[0]  # remove closing ```
             raw_text = raw_text.strip()
 
-        parsed: list[dict[str, Any]] = json.loads(raw_text)
+        try:
+            parsed: list[dict[str, Any]] = json.loads(raw_text)
+        except json.JSONDecodeError:
+            logger.error(
+                "[ANTHROPIC] %s: invalid JSON (first 200 chars): %s",
+                self.__class__.__name__,
+                raw_text[:200],
+            )
+            raise
 
         if len(parsed) != len(batch):
             raise ValueError(f"Output count mismatch: expected {len(batch)}, got {len(parsed)}")
