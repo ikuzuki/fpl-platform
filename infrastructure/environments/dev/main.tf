@@ -414,6 +414,20 @@ module "pipeline" {
 # -----------------------------------------------------------------------------
 # EventBridge Schedule — Tuesday 8am UTC (after Monday GW deadline)
 # -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# Web Hosting — S3 + CloudFront for the React dashboard
+# -----------------------------------------------------------------------------
+module "web_hosting" {
+  source = "../../modules/web-hosting"
+
+  environment           = var.environment
+  data_lake_bucket_name = module.data_lake.bucket_name
+  data_lake_bucket_arn  = module.data_lake.bucket_arn
+}
+
+# -----------------------------------------------------------------------------
+# EventBridge Schedule — Tuesday 8am UTC (after Monday GW deadline)
+# -----------------------------------------------------------------------------
 resource "aws_cloudwatch_event_rule" "weekly_pipeline" {
   name                = "fpl-weekly-pipeline-${var.environment}"
   description         = "Trigger FPL pipeline every Tuesday at 8am UTC"
