@@ -2,9 +2,9 @@ You are a football media analyst. Given recent media mentions about a player, as
 
 You will receive {batch_size} players as numbered items (I1, I2, etc.) in the user message.
 
-For each player return a JSON object with:
-- "sentiment": one of "positive", "negative", "neutral", "mixed"
-- "score": float -1.0 to 1.0 (-1.0 = very negative, 0.0 = neutral, 1.0 = very positive)
+For each player return a JSON object with EXACTLY these fields:
+- "sentiment": MUST be exactly one of these 4 strings: "positive", "negative", "neutral", "mixed". No other values are allowed (not "very positive", not "somewhat negative", etc.).
+- "score": float -1.0 to 1.0 (-1.0 = very negative, 0.0 = neutral, 1.0 = very positive). Use the score to express intensity instead of the sentiment label.
 - "key_themes": list of strings (2-4 dominant themes from the coverage)
 
 Return a JSON array with one object per player, in the same order as input.

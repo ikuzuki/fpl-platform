@@ -133,20 +133,35 @@ async def main(
     logger.info("Starting enrichment for %s GW%d", season, gameweek)
     s3_client = S3Client()
 
-    # Read clean player data
+    # Read clean player data and filter to top 300 by ownership
     clean_key = f"clean/players/season={season}/gameweek={gameweek:02d}/players.parquet"
     table = s3_client.read_parquet(output_bucket, clean_key)
-    players = table.to_pylist()
-    logger.info("Read %d players from %s", len(players), clean_key)
+    all_players = table.to_pylist()
+    logger.info("Read %d total players from %s", len(all_players), clean_key)
+
+    enrichment_limit = 300
+    sorted_players = sorted(
+        all_players,
+        key=lambda p: float(p.get("selected_by_percent", 0)),
+        reverse=True,
+    )
+    players = sorted_players[:enrichment_limit]
+    enriched_ids = {p.get("id") for p in players}
+    logger.info(
+        "Enriching top %d/%d players by ownership (min ownership: %s%%)",
+        len(players),
+        len(all_players),
+        players[-1].get("selected_by_percent", "?") if players else "?",
+    )
 
     # Get API key from Secrets Manager
     api_key = _get_secret("/fpl-platform/dev/anthropic-api-key")
     async_client = anthropic.AsyncAnthropic(api_key=api_key)
 
-    # Shared rate limiter — Tier 1 is 50 RPM / 10K output TPM for Haiku.
-    # With ~700 output tokens per batch, 10K TPM ≈ 14 RPM max.
-    # Target 12 RPM to leave headroom for retries.
-    rate_limiter = RateLimiter(requests_per_minute=12)
+    # Shared rate limiter — Tier 1: 50 RPM / 10K output TPM for Haiku.
+    # At 20 RPM with ~700 output tokens/batch ≈ 14K TPM — occasional 429s
+    # are handled by the SDK's built-in retry with backoff.
+    rate_limiter = RateLimiter(requests_per_minute=20)
 
     # Initialise enrichers with shared client and rate limiter
     summary_enricher = PlayerSummaryEnricher(
@@ -163,56 +178,30 @@ async def main(
     )
     all_enrichers = [summary_enricher, injury_enricher, sentiment_enricher, fixture_enricher]
 
-    # Filter top 200 players by ownership for expensive Sonnet fixture outlook
-    fixture_outlook_limit = 200
-    top_player_ids = {
-        p.get("id")
-        for p in sorted(
-            players,
-            key=lambda p: float(p.get("selected_by_percent", 0)),
-            reverse=True,
-        )[:fixture_outlook_limit]
-    }
-    fixture_players = [p for p in players if p.get("id") in top_player_ids]
-    logger.info(
-        "Fixture outlook: %d/%d players (top by ownership)",
-        len(fixture_players),
-        len(players),
-    )
-
-    # Run Haiku enrichers on all players, Sonnet fixture outlook on top 200 only
+    # Run all 4 enrichers in parallel on the filtered player set
     enricher_tasks = [
-        _run_enricher(summary_enricher, players, s3_client, output_bucket, season, gameweek),
-        _run_enricher(injury_enricher, players, s3_client, output_bucket, season, gameweek),
-        _run_enricher(sentiment_enricher, players, s3_client, output_bucket, season, gameweek),
-        _run_enricher(
-            fixture_enricher, fixture_players, s3_client, output_bucket, season, gameweek
-        ),
+        _run_enricher(enricher, players, s3_client, output_bucket, season, gameweek)
+        for enricher in all_enrichers
     ]
     enricher_outputs = await asyncio.gather(*enricher_tasks)
 
-    # Build lookup for fixture outlook results (indexed by player id)
-    fixture_name, fixture_results = enricher_outputs[3]
-    fixture_by_id: dict[Any, dict[str, Any] | None] = {}
-    for player, result in zip(fixture_players, fixture_results, strict=True):
-        fixture_by_id[player.get("id")] = result
+    results: dict[str, list[dict[str, Any] | None]] = dict(enricher_outputs)
 
-    # Merge enrichment results into player records
+    # Merge enrichment results into enriched player records
     enriched_players = []
     for i, player in enumerate(players):
         enriched = dict(player)
-        # Haiku enrichers — aligned 1:1 with full player list
-        for name, enricher_results in enricher_outputs[:3]:
+        for name, enricher_results in results.items():
             if i < len(enricher_results) and enricher_results[i] is not None:
                 prefix = name.replace("Enricher", "").lower()
                 for key, value in enricher_results[i].items():
                     enriched[f"{prefix}_{key}"] = value
-        # Fixture outlook — lookup by player id (None if not in top 200)
-        fixture_result = fixture_by_id.get(player.get("id"))
-        if fixture_result is not None:
-            for key, value in fixture_result.items():
-                enriched[f"fixtureoutlook_{key}"] = value
         enriched_players.append(enriched)
+
+    # Append unenriched players so the full squad is in the output
+    for player in all_players:
+        if player.get("id") not in enriched_ids:
+            enriched_players.append(dict(player))
 
     # Write enriched Parquet
     enriched_table = pa.Table.from_pylist(enriched_players)
