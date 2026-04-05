@@ -245,26 +245,135 @@
         {
           "Variable": "$.transform.statusCode",
           "NumericEquals": 200,
-          "Next": "EnrichWithLLM"
+          "Next": "EnrichParallel"
         }
       ],
       "Default": "PipelineFailed"
     },
 
-    "EnrichWithLLM": {
+    "EnrichParallel": {
+      "Type": "Parallel",
+      "Comment": "Run all 4 enrichers in parallel — each is an independent Lambda",
+      "ResultPath": "$.enrichment_results",
+      "Branches": [
+        {
+          "StartAt": "EnrichPlayerSummary",
+          "States": {
+            "EnrichPlayerSummary": {
+              "Type": "Task",
+              "Resource": "${lambda_arn_enrich_player_summary}",
+              "Parameters": {
+                "season.$": "$.season",
+                "gameweek.$": "$.gameweek",
+                "prompt_version": "v1"
+              },
+              "TimeoutSeconds": 900,
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.TaskFailed"],
+                  "IntervalSeconds": 60,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2.0
+                }
+              ],
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "EnrichInjurySignal",
+          "States": {
+            "EnrichInjurySignal": {
+              "Type": "Task",
+              "Resource": "${lambda_arn_enrich_injury_signal}",
+              "Parameters": {
+                "season.$": "$.season",
+                "gameweek.$": "$.gameweek",
+                "prompt_version": "v1"
+              },
+              "TimeoutSeconds": 900,
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.TaskFailed"],
+                  "IntervalSeconds": 60,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2.0
+                }
+              ],
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "EnrichSentiment",
+          "States": {
+            "EnrichSentiment": {
+              "Type": "Task",
+              "Resource": "${lambda_arn_enrich_sentiment}",
+              "Parameters": {
+                "season.$": "$.season",
+                "gameweek.$": "$.gameweek",
+                "prompt_version": "v1"
+              },
+              "TimeoutSeconds": 900,
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.TaskFailed"],
+                  "IntervalSeconds": 60,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2.0
+                }
+              ],
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "EnrichFixtureOutlook",
+          "States": {
+            "EnrichFixtureOutlook": {
+              "Type": "Task",
+              "Resource": "${lambda_arn_enrich_fixture_outlook}",
+              "Parameters": {
+                "season.$": "$.season",
+                "gameweek.$": "$.gameweek",
+                "prompt_version": "v1"
+              },
+              "TimeoutSeconds": 900,
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.TaskFailed"],
+                  "IntervalSeconds": 60,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2.0
+                }
+              ],
+              "End": true
+            }
+          }
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "PipelineFailed"
+        }
+      ],
+      "Next": "MergeEnrichments"
+    },
+    "MergeEnrichments": {
       "Type": "Task",
-      "Resource": "${lambda_arn_enricher}",
+      "Resource": "${lambda_arn_merge_enrichments}",
       "Parameters": {
         "season.$": "$.season",
-        "gameweek.$": "$.gameweek",
-        "prompt_version": "v1"
+        "gameweek.$": "$.gameweek"
       },
       "ResultPath": "$.enrichment",
-      "TimeoutSeconds": 900,
       "Retry": [
         {
           "ErrorEquals": ["States.TaskFailed"],
-          "IntervalSeconds": 60,
+          "IntervalSeconds": 10,
           "MaxAttempts": 1,
           "BackoffRate": 1.0
         }

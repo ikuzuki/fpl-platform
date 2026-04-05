@@ -276,15 +276,75 @@ module "lambda_transform" {
   }
 }
 
-module "lambda_enricher" {
+module "lambda_enrich_player_summary" {
   source             = "../../modules/lambda"
-  name               = "enricher"
+  name               = "enrich-player-summary"
   environment        = var.environment
   image_uri          = "${module.ecr_enrich.repository_url}:latest"
   execution_role_arn = aws_iam_role.lambda_standard.arn
-  command            = ["fpl_enrich.handlers.enricher.lambda_handler"]
+  command            = ["fpl_enrich.handlers.single_enricher.player_summary_handler"]
   timeout            = 900
-  memory_size        = 1024
+  memory_size        = 512
+  environment_variables = {
+    ENV              = var.environment
+    DATA_LAKE_BUCKET = module.data_lake.bucket_name
+  }
+}
+
+module "lambda_enrich_injury_signal" {
+  source             = "../../modules/lambda"
+  name               = "enrich-injury-signal"
+  environment        = var.environment
+  image_uri          = "${module.ecr_enrich.repository_url}:latest"
+  execution_role_arn = aws_iam_role.lambda_standard.arn
+  command            = ["fpl_enrich.handlers.single_enricher.injury_signal_handler"]
+  timeout            = 900
+  memory_size        = 512
+  environment_variables = {
+    ENV              = var.environment
+    DATA_LAKE_BUCKET = module.data_lake.bucket_name
+  }
+}
+
+module "lambda_enrich_sentiment" {
+  source             = "../../modules/lambda"
+  name               = "enrich-sentiment"
+  environment        = var.environment
+  image_uri          = "${module.ecr_enrich.repository_url}:latest"
+  execution_role_arn = aws_iam_role.lambda_standard.arn
+  command            = ["fpl_enrich.handlers.single_enricher.sentiment_handler"]
+  timeout            = 900
+  memory_size        = 512
+  environment_variables = {
+    ENV              = var.environment
+    DATA_LAKE_BUCKET = module.data_lake.bucket_name
+  }
+}
+
+module "lambda_enrich_fixture_outlook" {
+  source             = "../../modules/lambda"
+  name               = "enrich-fixture-outlook"
+  environment        = var.environment
+  image_uri          = "${module.ecr_enrich.repository_url}:latest"
+  execution_role_arn = aws_iam_role.lambda_standard.arn
+  command            = ["fpl_enrich.handlers.single_enricher.fixture_outlook_handler"]
+  timeout            = 900
+  memory_size        = 512
+  environment_variables = {
+    ENV              = var.environment
+    DATA_LAKE_BUCKET = module.data_lake.bucket_name
+  }
+}
+
+module "lambda_merge_enrichments" {
+  source             = "../../modules/lambda"
+  name               = "merge-enrichments"
+  environment        = var.environment
+  image_uri          = "${module.ecr_enrich.repository_url}:latest"
+  execution_role_arn = aws_iam_role.lambda_standard.arn
+  command            = ["fpl_enrich.handlers.merge_enrichments.lambda_handler"]
+  timeout            = 120
+  memory_size        = 512
   environment_variables = {
     ENV              = var.environment
     DATA_LAKE_BUCKET = module.data_lake.bucket_name
@@ -300,13 +360,17 @@ module "pipeline" {
   environment = var.environment
 
   definition = templatefile("../../step_function_definitions/fpl-collection-pipeline.json.tpl", {
-    lambda_arn_resolve_gameweek    = module.lambda_resolve_gameweek.function_arn
-    lambda_arn_fpl_collector       = module.lambda_fpl_collector.function_arn
-    lambda_arn_understat_collector = module.lambda_understat_collector.function_arn
-    lambda_arn_news_collector      = module.lambda_news_collector.function_arn
-    lambda_arn_validator           = module.lambda_validator.function_arn
-    lambda_arn_transform           = module.lambda_transform.function_arn
-    lambda_arn_enricher            = module.lambda_enricher.function_arn
+    lambda_arn_resolve_gameweek       = module.lambda_resolve_gameweek.function_arn
+    lambda_arn_fpl_collector          = module.lambda_fpl_collector.function_arn
+    lambda_arn_understat_collector    = module.lambda_understat_collector.function_arn
+    lambda_arn_news_collector         = module.lambda_news_collector.function_arn
+    lambda_arn_validator              = module.lambda_validator.function_arn
+    lambda_arn_transform              = module.lambda_transform.function_arn
+    lambda_arn_enrich_player_summary  = module.lambda_enrich_player_summary.function_arn
+    lambda_arn_enrich_injury_signal   = module.lambda_enrich_injury_signal.function_arn
+    lambda_arn_enrich_sentiment       = module.lambda_enrich_sentiment.function_arn
+    lambda_arn_enrich_fixture_outlook = module.lambda_enrich_fixture_outlook.function_arn
+    lambda_arn_merge_enrichments      = module.lambda_merge_enrichments.function_arn
   })
 
   lambda_arns = [
@@ -316,7 +380,11 @@ module "pipeline" {
     module.lambda_news_collector.function_arn,
     module.lambda_validator.function_arn,
     module.lambda_transform.function_arn,
-    module.lambda_enricher.function_arn,
+    module.lambda_enrich_player_summary.function_arn,
+    module.lambda_enrich_injury_signal.function_arn,
+    module.lambda_enrich_sentiment.function_arn,
+    module.lambda_enrich_fixture_outlook.function_arn,
+    module.lambda_merge_enrichments.function_arn,
   ]
 }
 
