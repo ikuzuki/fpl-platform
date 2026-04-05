@@ -21,6 +21,14 @@ class FixtureOutlookEnricher(FPLEnricher):
 
     BATCH_SIZE = 5
     MODEL = "claude-sonnet-4-6"
+    RELEVANT_FIELDS = [
+        "web_name",
+        "team",
+        "element_type",
+        "form",
+        "points_per_game",
+        "upcoming_fixtures",
+    ]
 
     def _get_system_prompt(self) -> str:
         return load_prompt("fixture_outlook", self.prompt_version)

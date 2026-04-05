@@ -20,6 +20,15 @@ class InjurySignalEnricher(FPLEnricher):
 
     BATCH_SIZE = 10
     MODEL = "claude-haiku-4-5-20251001"
+    RELEVANT_FIELDS = [
+        "web_name",
+        "team",
+        "status",
+        "news",
+        "chance_of_playing_next_round",
+        "minutes",
+        "news_articles",
+    ]
 
     def _get_system_prompt(self) -> str:
         return load_prompt("injury_signal", self.prompt_version)

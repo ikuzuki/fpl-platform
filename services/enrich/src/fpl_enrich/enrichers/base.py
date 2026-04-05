@@ -132,10 +132,21 @@ class FPLEnricher(ABC):
             await self.rate_limiter.acquire()
             return await self._call_llm(batch)
 
+    # Override in subclasses to restrict which fields are sent to the LLM.
+    # None means send everything. Reduces input tokens and cost.
+    RELEVANT_FIELDS: list[str] | None = None
+
+    def _prepare_item(self, item: dict[str, Any]) -> dict[str, Any]:
+        """Filter item to only the fields this enricher needs."""
+        if self.RELEVANT_FIELDS is None:
+            return item
+        return {k: v for k, v in item.items() if k in self.RELEVANT_FIELDS}
+
     @observe(name="enricher_batch_call")
     async def _call_llm(self, batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Send a batch of items to the Anthropic API and parse the JSON response."""
-        user_content = "\n".join(f"I{i + 1}: {json.dumps(item)}" for i, item in enumerate(batch))
+        prepared = [self._prepare_item(item) for item in batch]
+        user_content = "\n".join(f"I{i + 1}: {json.dumps(item)}" for i, item in enumerate(prepared))
 
         system_prompt = self._get_system_prompt().format(batch_size=len(batch))
 
