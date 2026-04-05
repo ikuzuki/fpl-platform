@@ -99,8 +99,8 @@
       "Type": "Choice",
       "Choices": [
         {
-          "Variable": "$.validation.body.records_invalid",
-          "NumericGreaterThan": 0,
+          "Variable": "$.validation.body.status",
+          "StringEquals": "invalid",
           "Next": "PipelineFailed"
         }
       ],
@@ -136,7 +136,8 @@
       "Resource": "${lambda_arn_enricher}",
       "Parameters": {
         "season.$": "$.season",
-        "gameweek.$": "$.gameweek"
+        "gameweek.$": "$.gameweek",
+        "prompt_version": "v1"
       },
       "ResultPath": "$.enrichment",
       "TimeoutSeconds": 600,

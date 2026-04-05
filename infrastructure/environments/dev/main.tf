@@ -312,9 +312,12 @@ resource "aws_cloudwatch_event_target" "pipeline_target" {
   arn      = module.pipeline.state_machine_arn
   role_arn = aws_iam_role.eventbridge_sfn.arn
 
+  # NOTE: season and gameweek must be updated each week via tfvars or
+  # manually via the backfill script. A future improvement would add a
+  # ResolveGameweek Lambda that auto-detects the current GW from the FPL API.
   input = jsonencode({
-    season   = "2025-26"
-    gameweek = 1
+    season   = var.current_season
+    gameweek = var.current_gameweek
     force    = false
   })
 }
