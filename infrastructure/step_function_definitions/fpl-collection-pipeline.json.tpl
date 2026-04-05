@@ -1,7 +1,19 @@
 {
   "Comment": "FPL data collection, validation, transformation, and enrichment pipeline",
-  "StartAt": "ResolveGameweek",
+  "StartAt": "CheckInputMode",
   "States": {
+    "CheckInputMode": {
+      "Type": "Choice",
+      "Comment": "If gameweek is provided (backfill), skip resolution. Otherwise resolve from FPL API.",
+      "Choices": [
+        {
+          "Variable": "$.gameweek",
+          "NumericGreaterThan": 0,
+          "Next": "CollectFPLData"
+        }
+      ],
+      "Default": "ResolveGameweek"
+    },
     "ResolveGameweek": {
       "Type": "Task",
       "Resource": "${lambda_arn_resolve_gameweek}",
@@ -37,9 +49,9 @@
           "Next": "PipelineSkipped"
         }
       ],
-      "Default": "PrepareInput"
+      "Default": "PrepareResolvedInput"
     },
-    "PrepareInput": {
+    "PrepareResolvedInput": {
       "Type": "Pass",
       "Comment": "Flatten resolved gameweek into top-level state for downstream steps",
       "Parameters": {
