@@ -133,7 +133,8 @@ async def main(
     row_counts: dict[str, int] = {}
 
     for name, rows in datasets.items():
-        key = f"curated/{name}/season={season}/gameweek={gameweek:02d}/{name}.parquet"
+        # Write Parquet (analytics)
+        parquet_key = f"curated/{name}/season={season}/gameweek={gameweek:02d}/{name}.parquet"
         table = pa.Table.from_pylist(rows)
         table = table.replace_schema_metadata(
             {
@@ -141,10 +142,15 @@ async def main(
                 b"schema_version": SCHEMA_VERSION.encode(),
             }
         )
-        s3_client.write_parquet(output_bucket, key, table)
-        output_paths.append(f"s3://{output_bucket}/{key}")
+        s3_client.write_parquet(output_bucket, parquet_key, table)
+        output_paths.append(f"s3://{output_bucket}/{parquet_key}")
         row_counts[name] = len(rows)
-        logger.info("Wrote %d rows to %s", len(rows), key)
+        logger.info("Wrote %d rows to %s", len(rows), parquet_key)
+
+        # Write JSON (dashboard consumption)
+        json_key = f"public/api/v1/{name}.json"
+        s3_client.put_json(output_bucket, json_key, rows)
+        logger.info("Wrote %d rows to %s", len(rows), json_key)
 
     return CurationResult(
         status="success",
