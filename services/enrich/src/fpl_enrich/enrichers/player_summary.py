@@ -20,6 +20,25 @@ class PlayerSummaryEnricher(FPLEnricher):
 
     BATCH_SIZE = 10
     MODEL = "claude-haiku-4-5-20251001"
+    RELEVANT_FIELDS = [
+        "web_name",
+        "team",
+        "element_type",
+        "total_points",
+        "minutes",
+        "goals_scored",
+        "assists",
+        "clean_sheets",
+        "bonus",
+        "form",
+        "points_per_game",
+        "expected_goals",
+        "expected_assists",
+        "expected_goal_involvements",
+        "understat_xg",
+        "understat_xa",
+        "understat_npxg",
+    ]
 
     def __init__(self, *args: Any, window_size: int = 5, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)

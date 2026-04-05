@@ -10,6 +10,7 @@ from fpl_data.transformers.player_transformer import (
     COLUMN_MAP,
     deduplicate,
     flatten_player_data,
+    join_understat,
 )
 
 
@@ -202,7 +203,11 @@ def test_transform_overwrites_with_force_flag() -> None:
     raw = _make_raw_bootstrap()
     mock_s3 = MagicMock()
     mock_s3.object_exists.return_value = True
-    mock_s3.list_objects.return_value = ["raw/fpl-api/season=2025-26/bootstrap/2025.json"]
+    mock_s3.list_objects.side_effect = lambda bucket, prefix: (
+        ["raw/fpl-api/season=2025-26/bootstrap/2025.json"]
+        if "bootstrap" in prefix
+        else []  # No Understat data
+    )
     mock_s3.read_json.return_value = raw
 
     with patch("fpl_data.handlers.transform.S3Client", return_value=mock_s3):
@@ -211,3 +216,57 @@ def test_transform_overwrites_with_force_flag() -> None:
     assert result["status"] == "valid"
     assert result["records_valid"] == 2
     mock_s3.write_parquet.assert_called_once()
+
+
+@pytest.mark.unit
+class TestJoinUnderstat:
+    def test_joins_by_full_name(self) -> None:
+        raw = _make_raw_bootstrap()
+        df = flatten_player_data(raw, "2025-26")
+        understat = [
+            {
+                "player_name": "Mohamed Salah",
+                "xG": "15.5",
+                "xA": "8.2",
+                "npxG": "12.1",
+                "npg": "14",
+                "shots": "80",
+                "key_passes": "45",
+                "xGChain": "20.0",
+                "xGBuildup": "10.0",
+            },
+        ]
+        result = join_understat(df, understat)
+
+        assert "understat_xg" in result.columns
+        salah = result[result["web_name"] == "Salah"].iloc[0]
+        assert salah["understat_xg"] == pytest.approx(15.5)
+        assert salah["understat_xa"] == pytest.approx(8.2)
+
+    def test_unmatched_players_get_nan(self) -> None:
+        raw = _make_raw_bootstrap()
+        df = flatten_player_data(raw, "2025-26")
+        understat = [
+            {
+                "player_name": "Unknown Player",
+                "xG": "5.0",
+                "xA": "2.0",
+                "npxG": "4.0",
+                "npg": "3",
+                "shots": "20",
+                "key_passes": "10",
+                "xGChain": "6.0",
+                "xGBuildup": "3.0",
+            },
+        ]
+        result = join_understat(df, understat)
+
+        assert result["understat_xg"].isna().all()
+
+    def test_empty_understat_returns_unchanged(self) -> None:
+        raw = _make_raw_bootstrap()
+        df = flatten_player_data(raw, "2025-26")
+        result = join_understat(df, [])
+
+        assert "understat_xg" not in result.columns
+        assert len(result) == len(df)

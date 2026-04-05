@@ -20,6 +20,11 @@ class SentimentEnricher(FPLEnricher):
 
     BATCH_SIZE = 10
     MODEL = "claude-haiku-4-5-20251001"
+    RELEVANT_FIELDS = [
+        "web_name",
+        "team",
+        "news_articles",
+    ]
 
     def _get_system_prompt(self) -> str:
         return load_prompt("sentiment", self.prompt_version)

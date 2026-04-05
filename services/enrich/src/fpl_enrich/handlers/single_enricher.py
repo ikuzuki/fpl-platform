@@ -5,7 +5,9 @@ writes the enricher-specific output to S3, and returns a cost summary.
 Designed to be invoked in parallel via Step Functions Parallel state.
 """
 
+import json
 import logging
+from datetime import UTC, datetime
 from typing import Any
 
 import anthropic
@@ -81,6 +83,124 @@ def _load_players(
     return players
 
 
+def _load_news_articles(s3_client: S3Client, bucket: str) -> list[dict[str, Any]]:
+    """Load recent news articles from S3. Returns list of article dicts."""
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
+    key = f"raw/news/date={today}/rss_articles.jsonl"
+
+    if not s3_client.object_exists(bucket, key):
+        logger.warning("No news articles found at %s", key)
+        return []
+
+    raw = s3_client.read_json(bucket, key)
+    if isinstance(raw, str):
+        # JSONL format — parse each line
+        articles = [json.loads(line) for line in raw.strip().split("\n") if line.strip()]
+    elif isinstance(raw, list):
+        articles = raw
+    else:
+        logger.warning("Unexpected news format: %s", type(raw))
+        return []
+
+    logger.info("Loaded %d news articles", len(articles))
+    return articles
+
+
+def _attach_news_to_players(
+    players: list[dict[str, Any]], articles: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Attach relevant news articles to each player by name matching."""
+    for player in players:
+        name_lower = player.get("web_name", "").lower()
+        full_name = (player.get("first_name", "") + " " + player.get("second_name", "")).lower()
+
+        matched = []
+        for article in articles:
+            text = (article.get("title", "") + " " + article.get("summary", "")).lower()
+            if name_lower in text or full_name in text:
+                matched.append(
+                    {
+                        "title": article.get("title", ""),
+                        "summary": article.get("summary", ""),
+                        "source": article.get("source", ""),
+                    }
+                )
+
+        player["news_articles"] = matched
+
+    matched_count = sum(1 for p in players if p["news_articles"])
+    logger.info(
+        "News attached: %d/%d players have articles",
+        matched_count,
+        len(players),
+    )
+    return players
+
+
+def _load_fixtures(s3_client: S3Client, bucket: str, season: str) -> list[dict[str, Any]]:
+    """Load fixture data from raw FPL API."""
+    prefix = f"raw/fpl-api/season={season}/fixtures/"
+    keys = s3_client.list_objects(bucket, prefix)
+    if not keys:
+        logger.warning("No fixture data found at %s", prefix)
+        return []
+
+    latest = sorted(keys)[-1]
+    data = s3_client.read_json(bucket, latest)
+    fixtures = data if isinstance(data, list) else []
+    logger.info("Loaded %d fixtures", len(fixtures))
+    return fixtures
+
+
+def _attach_fixtures_to_players(
+    players: list[dict[str, Any]],
+    fixtures: list[dict[str, Any]],
+    gameweek: int,
+    window: int = 5,
+) -> list[dict[str, Any]]:
+    """Attach upcoming fixtures (next N gameweeks) to each player."""
+    upcoming = [
+        f
+        for f in fixtures
+        if f.get("event") is not None and gameweek < f["event"] <= gameweek + window
+    ]
+
+    for player in players:
+        team_id = player.get("team")
+        player_fixtures = []
+        for f in upcoming:
+            if f.get("team_h") == team_id:
+                player_fixtures.append(
+                    {
+                        "gameweek": f["event"],
+                        "opponent": f["team_a"],
+                        "is_home": True,
+                        "difficulty": f.get("team_h_difficulty", 3),
+                    }
+                )
+            elif f.get("team_a") == team_id:
+                player_fixtures.append(
+                    {
+                        "gameweek": f["event"],
+                        "opponent": f["team_h"],
+                        "is_home": False,
+                        "difficulty": f.get("team_a_difficulty", 3),
+                    }
+                )
+
+        player["upcoming_fixtures"] = sorted(player_fixtures, key=lambda x: x["gameweek"])
+
+    with_fixtures = sum(1 for p in players if p["upcoming_fixtures"])
+    logger.info(
+        "Fixtures attached: %d/%d players have upcoming fixtures (GW%d-%d)",
+        with_fixtures,
+        len(players),
+        gameweek + 1,
+        gameweek + window,
+    )
+    return players
+
+
 def _calculate_single_cost(enricher: Any) -> dict[str, Any]:
     """Build cost report for a single enricher."""
     model = enricher.MODEL
@@ -98,13 +218,13 @@ def _calculate_single_cost(enricher: Any) -> dict[str, Any]:
 async def _run_single_enricher(
     enricher_name: str,
     enricher: Any,
+    players: list[dict[str, Any]],
     season: str,
     gameweek: int,
     bucket: str,
 ) -> dict[str, Any]:
-    """Run one enricher end-to-end: load data, enrich, write output."""
+    """Run one enricher on pre-loaded player data, write output."""
     s3_client = S3Client()
-    players = _load_players(s3_client, bucket, season, gameweek)
 
     results = await enricher.apply(players)
 
@@ -143,14 +263,19 @@ async def player_summary_main(
     output_bucket: str = "fpl-data-lake-dev",
     prompt_version: str = "v1",
 ) -> dict[str, Any]:
-    """Run player summary enricher."""
+    """Run player summary enricher. Uses clean player stats only."""
+    s3_client = S3Client()
+    players = _load_players(s3_client, output_bucket, season, gameweek)
+
     api_key = _get_secret("/fpl-platform/dev/anthropic-api-key")
     client = anthropic.AsyncAnthropic(api_key=api_key)
     rate_limiter = RateLimiter(requests_per_minute=HAIKU_RPM)
     enricher = PlayerSummaryEnricher(
         anthropic_client=client, prompt_version=prompt_version, rate_limiter=rate_limiter
     )
-    return await _run_single_enricher("player_summary", enricher, season, gameweek, output_bucket)
+    return await _run_single_enricher(
+        "player_summary", enricher, players, season, gameweek, output_bucket
+    )
 
 
 @observe(name="enrich_injury_signal")
@@ -160,14 +285,21 @@ async def injury_signal_main(
     output_bucket: str = "fpl-data-lake-dev",
     prompt_version: str = "v1",
 ) -> dict[str, Any]:
-    """Run injury signal enricher."""
+    """Run injury signal enricher. Attaches news articles to each player."""
+    s3_client = S3Client()
+    players = _load_players(s3_client, output_bucket, season, gameweek)
+    articles = _load_news_articles(s3_client, output_bucket)
+    players = _attach_news_to_players(players, articles)
+
     api_key = _get_secret("/fpl-platform/dev/anthropic-api-key")
     client = anthropic.AsyncAnthropic(api_key=api_key)
     rate_limiter = RateLimiter(requests_per_minute=HAIKU_RPM)
     enricher = InjurySignalEnricher(
         anthropic_client=client, prompt_version=prompt_version, rate_limiter=rate_limiter
     )
-    return await _run_single_enricher("injury_signal", enricher, season, gameweek, output_bucket)
+    return await _run_single_enricher(
+        "injury_signal", enricher, players, season, gameweek, output_bucket
+    )
 
 
 @observe(name="enrich_sentiment")
@@ -177,14 +309,21 @@ async def sentiment_main(
     output_bucket: str = "fpl-data-lake-dev",
     prompt_version: str = "v1",
 ) -> dict[str, Any]:
-    """Run sentiment enricher."""
+    """Run sentiment enricher. Attaches news articles to each player."""
+    s3_client = S3Client()
+    players = _load_players(s3_client, output_bucket, season, gameweek)
+    articles = _load_news_articles(s3_client, output_bucket)
+    players = _attach_news_to_players(players, articles)
+
     api_key = _get_secret("/fpl-platform/dev/anthropic-api-key")
     client = anthropic.AsyncAnthropic(api_key=api_key)
     rate_limiter = RateLimiter(requests_per_minute=HAIKU_RPM)
     enricher = SentimentEnricher(
         anthropic_client=client, prompt_version=prompt_version, rate_limiter=rate_limiter
     )
-    return await _run_single_enricher("sentiment", enricher, season, gameweek, output_bucket)
+    return await _run_single_enricher(
+        "sentiment", enricher, players, season, gameweek, output_bucket
+    )
 
 
 @observe(name="enrich_fixture_outlook")
@@ -194,14 +333,21 @@ async def fixture_outlook_main(
     output_bucket: str = "fpl-data-lake-dev",
     prompt_version: str = "v1",
 ) -> dict[str, Any]:
-    """Run fixture outlook enricher."""
+    """Run fixture outlook enricher. Attaches upcoming fixtures to each player."""
+    s3_client = S3Client()
+    players = _load_players(s3_client, output_bucket, season, gameweek)
+    fixtures = _load_fixtures(s3_client, output_bucket, season)
+    players = _attach_fixtures_to_players(players, fixtures, gameweek)
+
     api_key = _get_secret("/fpl-platform/dev/anthropic-api-key")
     client = anthropic.AsyncAnthropic(api_key=api_key)
     rate_limiter = RateLimiter(requests_per_minute=SONNET_RPM)
     enricher = FixtureOutlookEnricher(
         anthropic_client=client, prompt_version=prompt_version, rate_limiter=rate_limiter
     )
-    return await _run_single_enricher("fixture_outlook", enricher, season, gameweek, output_bucket)
+    return await _run_single_enricher(
+        "fixture_outlook", enricher, players, season, gameweek, output_bucket
+    )
 
 
 # --- Lambda entry points ----------------------------------------------------

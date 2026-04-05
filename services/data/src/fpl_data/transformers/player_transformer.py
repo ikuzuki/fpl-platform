@@ -1,7 +1,9 @@
 """Transform raw FPL bootstrap data into clean Parquet format."""
 
 import logging
+import unicodedata
 from datetime import UTC, datetime
+from typing import Any
 
 import pandas as pd
 
@@ -119,6 +121,93 @@ def flatten_player_data(raw: dict, season: str) -> pd.DataFrame:
     df["collected_at"] = datetime.now(UTC).isoformat()
 
     return df
+
+
+def _normalise_name(name: str) -> str:
+    """Normalise a player name for fuzzy matching.
+
+    Strips accents, lowercases, and removes hyphens/apostrophes.
+    """
+    nfkd = unicodedata.normalize("NFKD", name)
+    ascii_name = nfkd.encode("ascii", "ignore").decode("ascii")
+    return ascii_name.lower().replace("-", " ").replace("'", "").strip()
+
+
+# Understat columns to join into clean player data
+UNDERSTAT_COLUMNS = ["xG", "xA", "npxG", "npg", "shots", "key_passes", "xGChain", "xGBuildup"]
+UNDERSTAT_RENAME = {
+    "xG": "understat_xg",
+    "xA": "understat_xa",
+    "npxG": "understat_npxg",
+    "npg": "understat_npg",
+    "shots": "understat_shots",
+    "key_passes": "understat_key_passes",
+    "xGChain": "understat_xg_chain",
+    "xGBuildup": "understat_xg_buildup",
+}
+
+
+def join_understat(df: pd.DataFrame, understat_data: list[dict[str, Any]]) -> pd.DataFrame:
+    """Join Understat xG/xA stats into the clean player DataFrame.
+
+    Matches on normalised full name (first_name + second_name) against
+    Understat player_name. Falls back to web_name match.
+
+    Args:
+        df: Clean FPL player DataFrame (must have first_name, second_name, web_name).
+        understat_data: Raw Understat league stats list of dicts.
+
+    Returns:
+        DataFrame with Understat columns added (NaN for unmatched players).
+    """
+    if not understat_data:
+        logger.warning("No Understat data to join — skipping")
+        return df
+
+    us_df = pd.DataFrame(understat_data)
+
+    # Cast Understat numeric strings to float
+    for col in UNDERSTAT_COLUMNS:
+        if col in us_df.columns:
+            us_df[col] = pd.to_numeric(us_df[col], errors="coerce")
+
+    # Build normalised name lookup from Understat
+    us_df["_us_name_norm"] = us_df["player_name"].apply(_normalise_name)
+
+    # Build normalised names from FPL
+    df["_fpl_full_norm"] = (df["first_name"] + " " + df["second_name"]).apply(_normalise_name)
+    df["_fpl_web_norm"] = df["web_name"].apply(_normalise_name)
+
+    # Merge on full name first
+    us_lookup = us_df.set_index("_us_name_norm")[UNDERSTAT_COLUMNS]
+    us_lookup = us_lookup[~us_lookup.index.duplicated(keep="first")]
+
+    merged = df.join(us_lookup, on="_fpl_full_norm", how="left")
+
+    # Fall back to web_name for unmatched rows
+    unmatched = merged[UNDERSTAT_COLUMNS[0]].isna()
+    if unmatched.any():
+        fallback = df.loc[unmatched, "_fpl_web_norm"]
+        for idx, web_norm in fallback.items():
+            if web_norm in us_lookup.index:
+                for col in UNDERSTAT_COLUMNS:
+                    merged.at[idx, col] = us_lookup.at[web_norm, col]
+
+    # Rename to understat_ prefixed columns
+    merged = merged.rename(columns=UNDERSTAT_RENAME)
+
+    matched = merged["understat_xg"].notna().sum()
+    logger.info(
+        "Understat join: %d/%d players matched (%.0f%%)",
+        matched,
+        len(df),
+        100 * matched / len(df) if len(df) > 0 else 0,
+    )
+
+    # Clean up temp columns
+    merged = merged.drop(columns=["_fpl_full_norm", "_fpl_web_norm"])
+
+    return merged
 
 
 def deduplicate(df: pd.DataFrame, key_columns: list[str]) -> pd.DataFrame:

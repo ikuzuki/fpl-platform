@@ -5,7 +5,11 @@ from typing import Any
 
 import pyarrow as pa
 
-from fpl_data.transformers.player_transformer import deduplicate, flatten_player_data
+from fpl_data.transformers.player_transformer import (
+    deduplicate,
+    flatten_player_data,
+    join_understat,
+)
 from fpl_lib.clients.s3 import S3Client
 from fpl_lib.core.responses import ValidationResult
 from fpl_lib.core.run_handler import RunHandler
@@ -16,7 +20,7 @@ REQUIRED_PARAMS = ["season", "gameweek"]
 OPTIONAL_PARAMS = ["output_bucket", "force"]
 
 DEFAULT_BUCKET = "fpl-data-lake-dev"
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"
 
 
 async def main(
@@ -69,6 +73,16 @@ async def main(
         ).model_dump()
 
     df = deduplicate(df, ["id"])
+
+    # Join Understat xG/xA data if available
+    understat_prefix = f"raw/understat/season={season}/league_stats/"
+    understat_keys = s3_client.list_objects(output_bucket, understat_prefix)
+    if understat_keys:
+        latest_us = sorted(understat_keys)[-1]
+        understat_data = s3_client.read_json(output_bucket, latest_us)
+        df = join_understat(df, understat_data)
+    else:
+        logger.warning("No Understat data found at %s", understat_prefix)
 
     # Write Parquet with schema version metadata
     table = pa.Table.from_pandas(df)
