@@ -83,7 +83,13 @@ class FPLAPICollector:
 
         Returns:
             CollectionResponse with records_collected = number of player entries.
+
+        Raises:
+            ValueError: If the gameweek has not finished yet.
         """
+        # Guard: reject future/unfinished gameweeks
+        await self._validate_gameweek_finished(gameweek)
+
         prefix = f"raw/fpl-api/season={season}/gameweek={gameweek:02d}/"
         if not force and self._output_exists(prefix):
             logger.info(
@@ -142,6 +148,27 @@ class FPLAPICollector:
             season,
         )
         return CollectionResponse(status="success", records_collected=records, output_path=key)
+
+    async def _validate_gameweek_finished(self, gameweek: int) -> None:
+        """Check that the requested gameweek has finished.
+
+        Raises:
+            ValueError: If the gameweek has not finished yet.
+        """
+        data = await self._fetch(f"{FPL_BASE_URL}/bootstrap-static/")
+        events = data.get("events", [])
+
+        for event in events:
+            if event["id"] == gameweek:
+                if not event.get("finished"):
+                    raise ValueError(
+                        f"Gameweek {gameweek} has not finished yet "
+                        f"(is_current={event.get('is_current')}, "
+                        f"finished={event.get('finished')})"
+                    )
+                return
+
+        raise ValueError(f"Gameweek {gameweek} not found in FPL API events")
 
     def _output_exists(self, prefix: str) -> bool:
         """Check if any objects exist under the given S3 prefix."""

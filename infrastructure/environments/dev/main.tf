@@ -201,6 +201,19 @@ module "lambda_fpl_collector" {
   }
 }
 
+module "lambda_resolve_gameweek" {
+  source             = "../../modules/lambda"
+  name               = "resolve-gameweek"
+  environment        = var.environment
+  image_uri          = "${module.ecr_data.repository_url}:latest"
+  execution_role_arn = aws_iam_role.lambda_standard.arn
+  timeout            = 30
+  memory_size        = 256
+  environment_variables = {
+    ENV = var.environment
+  }
+}
+
 module "lambda_understat_collector" {
   source             = "../../modules/lambda"
   name               = "understat-collector"
@@ -280,6 +293,7 @@ module "pipeline" {
   environment = var.environment
 
   definition = templatefile("../../step_function_definitions/fpl-collection-pipeline.json.tpl", {
+    lambda_arn_resolve_gameweek    = module.lambda_resolve_gameweek.function_arn
     lambda_arn_fpl_collector       = module.lambda_fpl_collector.function_arn
     lambda_arn_understat_collector = module.lambda_understat_collector.function_arn
     lambda_arn_news_collector      = module.lambda_news_collector.function_arn
@@ -289,6 +303,7 @@ module "pipeline" {
   })
 
   lambda_arns = [
+    module.lambda_resolve_gameweek.function_arn,
     module.lambda_fpl_collector.function_arn,
     module.lambda_understat_collector.function_arn,
     module.lambda_news_collector.function_arn,
@@ -312,13 +327,14 @@ resource "aws_cloudwatch_event_target" "pipeline_target" {
   arn      = module.pipeline.state_machine_arn
   role_arn = aws_iam_role.eventbridge_sfn.arn
 
-  # NOTE: season and gameweek must be updated each week via tfvars or
-  # manually via the backfill script. A future improvement would add a
-  # ResolveGameweek Lambda that auto-detects the current GW from the FPL API.
+  # ResolveGameweek (first pipeline step) auto-detects the latest finished
+  # gameweek from the FPL API. last_processed_gw=0 means "process whatever
+  # is latest". The pipeline exits cleanly via PipelineSkipped if there's
+  # nothing new to process.
   input = jsonencode({
-    season   = var.current_season
-    gameweek = var.current_gameweek
-    force    = false
+    season            = "2025-26"
+    last_processed_gw = 0
+    force             = false
   })
 }
 
