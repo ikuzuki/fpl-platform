@@ -7,14 +7,14 @@ import { PulseLogo, NavIcons } from "@/components/icons/FplIcons";
 
 const links: { to: string; label: string; icon: ReactNode }[] = [
   { to: "/", label: "Briefing", icon: <NavIcons.Briefing size={16} /> },
-  { to: "/players", label: "Players", icon: <NavIcons.Players size={16} /> },
-  { to: "/fixtures", label: "Fixtures", icon: <NavIcons.Fixtures size={16} /> },
+  { to: "/captain", label: "Captain", icon: <Crown className="h-4 w-4" /> },
   { to: "/transfers", label: "Transfers", icon: <NavIcons.Transfers size={16} /> },
+  { to: "/planner", label: "Planner", icon: <ArrowRightLeft className="h-4 w-4" /> },
+  { to: "/players", label: "Players", icon: <NavIcons.Players size={16} /> },
+  { to: "/differentials", label: "Differentials", icon: <Target className="h-4 w-4" /> },
+  { to: "/fixtures", label: "Fixtures", icon: <NavIcons.Fixtures size={16} /> },
   { to: "/teams", label: "Teams", icon: <NavIcons.Teams size={16} /> },
   { to: "/trends", label: "Trends", icon: <NavIcons.Trends size={16} /> },
-  { to: "/captain", label: "Captain", icon: <Crown className="h-4 w-4" /> },
-  { to: "/differentials", label: "Differentials", icon: <Target className="h-4 w-4" /> },
-  { to: "/planner", label: "Planner", icon: <ArrowRightLeft className="h-4 w-4" /> },
 ];
 
 export function Layout() {

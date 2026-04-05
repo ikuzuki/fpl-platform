@@ -347,10 +347,10 @@ export function BriefingPage() {
       {/* Navigation links */}
       <div className="grid gap-3 md:grid-cols-4">
         {[
-          { to: "/players", label: "Player Rankings", desc: "Full 300-player table" },
-          { to: "/fixtures", label: "Fixture Ticker", desc: "FDR heatmap grid" },
-          { to: "/transfers", label: "Transfer Hub", desc: "Buy/sell recommendations" },
           { to: "/captain", label: "Captain Picker", desc: "Weekly captaincy matrix" },
+          { to: "/transfers", label: "Transfer Hub", desc: "Buy/sell recommendations" },
+          { to: "/planner", label: "Transfer Planner", desc: "Side-by-side comparison" },
+          { to: "/differentials", label: "Differentials", desc: "Low-ownership gems" },
         ].map((link) => (
           <Link
             key={link.to}
