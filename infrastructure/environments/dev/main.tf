@@ -193,6 +193,7 @@ module "lambda_fpl_collector" {
   environment        = var.environment
   image_uri          = "${module.ecr_data.repository_url}:latest"
   execution_role_arn = aws_iam_role.lambda_standard.arn
+  command            = ["fpl_data.handlers.fpl_api_handler.lambda_handler"]
   timeout            = 300
   memory_size        = 512
   environment_variables = {
@@ -207,6 +208,7 @@ module "lambda_resolve_gameweek" {
   environment        = var.environment
   image_uri          = "${module.ecr_data.repository_url}:latest"
   execution_role_arn = aws_iam_role.lambda_standard.arn
+  command            = ["fpl_data.handlers.resolve_gameweek.lambda_handler"]
   timeout            = 30
   memory_size        = 256
   environment_variables = {
@@ -220,6 +222,7 @@ module "lambda_understat_collector" {
   environment        = var.environment
   image_uri          = "${module.ecr_data.repository_url}:latest"
   execution_role_arn = aws_iam_role.lambda_standard.arn
+  command            = ["fpl_data.handlers.understat_handler.lambda_handler"]
   timeout            = 300
   memory_size        = 512
   environment_variables = {
@@ -234,6 +237,7 @@ module "lambda_news_collector" {
   environment        = var.environment
   image_uri          = "${module.ecr_data.repository_url}:latest"
   execution_role_arn = aws_iam_role.lambda_standard.arn
+  command            = ["fpl_data.handlers.news_handler.lambda_handler"]
   timeout            = 300
   memory_size        = 512
   environment_variables = {
@@ -248,6 +252,7 @@ module "lambda_validator" {
   environment        = var.environment
   image_uri          = "${module.ecr_data.repository_url}:latest"
   execution_role_arn = aws_iam_role.lambda_standard.arn
+  command            = ["fpl_data.handlers.validator.lambda_handler"]
   timeout            = 300
   memory_size        = 512
   environment_variables = {
@@ -262,6 +267,7 @@ module "lambda_transform" {
   environment        = var.environment
   image_uri          = "${module.ecr_data.repository_url}:latest"
   execution_role_arn = aws_iam_role.lambda_standard.arn
+  command            = ["fpl_data.handlers.transform.lambda_handler"]
   timeout            = 300
   memory_size        = 1024
   environment_variables = {
@@ -276,6 +282,7 @@ module "lambda_enricher" {
   environment        = var.environment
   image_uri          = "${module.ecr_enrich.repository_url}:latest"
   execution_role_arn = aws_iam_role.lambda_standard.arn
+  command            = ["fpl_enrich.handlers.enricher.lambda_handler"]
   timeout            = 600
   memory_size        = 1024
   environment_variables = {
