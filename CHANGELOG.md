@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- React dashboard (`web/dashboard/`) with 4 pages: Player Rankings, Fixture Ticker, Transfer Hub, Team Strength
+- Static JSON output from CurateData Lambda for dashboard consumption (`public/api/v1/*.json`)
+- ADR-0007: Static dashboard architecture (React SPA + pre-generated JSON on CloudFront)
 - Architecture docs: system overview, data lake layers, LLM enrichment flow (Mermaid diagrams, render on GitHub)
 - Merged `docs/diagrams/` into `docs/architecture/`
 - Curate service (`services/curate/`) — derives 4 dashboard-ready datasets from enriched data
