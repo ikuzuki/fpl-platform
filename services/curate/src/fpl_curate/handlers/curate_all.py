@@ -8,6 +8,7 @@ import pyarrow as pa
 from fpl_curate.config import get_curate_settings
 from fpl_curate.curators.fixture_ticker import build_fixture_ticker, build_team_map
 from fpl_curate.curators.player_dashboard import build_player_dashboard
+from fpl_curate.curators.player_history import build_player_history
 from fpl_curate.curators.team_strength import build_team_strength
 from fpl_curate.curators.transfer_picks import build_transfer_picks
 from fpl_lib.clients.s3 import S3Client
@@ -151,6 +152,24 @@ async def main(
         json_key = f"public/api/v1/{name}.json"
         s3_client.put_json(output_bucket, json_key, rows)
         logger.info("Wrote %d rows to %s", len(rows), json_key)
+
+    # --- Update player history (upsert by gameweek) ---
+    history_key = "public/api/v1/player_history.json"
+    try:
+        existing_history: list[dict[str, Any]] = s3_client.read_json(output_bucket, history_key)
+    except Exception:
+        existing_history = []
+        logger.info("No existing player history found, starting fresh")
+
+    history_rows = build_player_history(
+        dashboard_rows=dashboard_rows,
+        existing_history=existing_history,
+        season=season,
+        gameweek=gameweek,
+    )
+    s3_client.put_json(output_bucket, history_key, history_rows)
+    row_counts["player_history"] = len(history_rows)
+    output_paths.append(f"s3://{output_bucket}/{history_key}")
 
     return CurationResult(
         status="success",
