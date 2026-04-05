@@ -9,23 +9,23 @@
         <!-- ================ STAGE OVERLAY BOXES (behind everything) ================ -->
 
         <mxCell id="stage-routing" value="&lt;b&gt;ROUTING&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#dddddd;strokeWidth=2;verticalAlign=top;align=left;fontSize=13;fontColor=#aaaaaa;spacingTop=5;spacingLeft=10;opacity=50;" vertex="1" parent="1">
-          <mxGeometry x="200" y="85" width="830" height="330" as="geometry" />
+          <mxGeometry x="100" y="85" width="1100" height="330" as="geometry" />
         </mxCell>
 
         <mxCell id="stage-collection" value="&lt;b&gt;COLLECTION&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eef6ff;strokeColor=#b8d4f0;strokeWidth=2;verticalAlign=top;align=left;fontSize=13;fontColor=#7fadd4;spacingTop=5;spacingLeft=10;opacity=50;" vertex="1" parent="1">
-          <mxGeometry x="200" y="425" width="830" height="230" as="geometry" />
+          <mxGeometry x="100" y="425" width="1100" height="230" as="geometry" />
         </mxCell>
 
         <mxCell id="stage-validation" value="&lt;b&gt;VALIDATION &amp;amp; TRANSFORMATION&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0faf0;strokeColor=#b8dab8;strokeWidth=2;verticalAlign=top;align=left;fontSize=13;fontColor=#7cb87c;spacingTop=5;spacingLeft=10;opacity=50;" vertex="1" parent="1">
-          <mxGeometry x="200" y="665" width="830" height="410" as="geometry" />
+          <mxGeometry x="100" y="665" width="1100" height="410" as="geometry" />
         </mxCell>
 
         <mxCell id="stage-enrichment" value="&lt;b&gt;LLM ENRICHMENT&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff8ee;strokeColor=#e6d5a8;strokeWidth=2;verticalAlign=top;align=left;fontSize=13;fontColor=#c4a855;spacingTop=5;spacingLeft=10;opacity=50;" vertex="1" parent="1">
-          <mxGeometry x="200" y="1085" width="830" height="485" as="geometry" />
+          <mxGeometry x="100" y="1085" width="1100" height="485" as="geometry" />
         </mxCell>
 
         <mxCell id="stage-output" value="&lt;b&gt;OUTPUT&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f0f5;strokeColor=#d4c4d4;strokeWidth=2;verticalAlign=top;align=left;fontSize=13;fontColor=#a88fa8;spacingTop=5;spacingLeft=10;opacity=50;" vertex="1" parent="1">
-          <mxGeometry x="200" y="1575" width="830" height="270" as="geometry" />
+          <mxGeometry x="100" y="1575" width="1100" height="270" as="geometry" />
         </mxCell>
 
         <!-- TITLE -->
@@ -277,13 +277,14 @@
         <mxCell id="a-check-fail" value="error" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#b85450;strokeWidth=1;dashed=1;endArrow=classic;fontSize=9;fontColor=#b85450;" edge="1" parent="1" source="check-enrich" target="failed">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="a-val-fail" value="invalid" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#b85450;strokeWidth=1;dashed=1;endArrow=classic;fontSize=9;fontColor=#b85450;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" edge="1" parent="1" source="check-val" target="failed">
-          <mxGeometry relative="1" as="geometry">
-            <Array as="points">
-              <mxPoint x="950" y="803" />
-              <mxPoint x="950" y="1718" />
-            </Array>
-          </mxGeometry>
+        <mxCell id="note-catch" value="&lt;i&gt;All Task and Parallel states have&lt;br&gt;Catch → PipelineFailed&lt;/i&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=9;fontColor=#b85450;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="990" y="1700" width="180" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="failed-val" value="&lt;b&gt;Failed&lt;/b&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="420" y="785" width="80" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="a-val-fail" value="invalid" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#b85450;strokeWidth=1;dashed=1;endArrow=classic;fontSize=9;fontColor=#b85450;" edge="1" parent="1" source="check-val" target="failed-val">
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
         <!-- Downstream -->
