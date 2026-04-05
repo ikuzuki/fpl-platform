@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 # Cost rates per million tokens (USD)
 COST_RATES: dict[str, dict[str, float]] = {
     "claude-haiku-4-5-20251001": {"input": 0.25, "output": 1.25},
-    "claude-sonnet-4-6-20250514": {"input": 3.0, "output": 15.0},
+    "claude-sonnet-4-6": {"input": 3.0, "output": 15.0},
 }
 
 
@@ -143,8 +143,10 @@ async def main(
     api_key = _get_secret("/fpl-platform/dev/anthropic-api-key")
     async_client = anthropic.AsyncAnthropic(api_key=api_key)
 
-    # Shared rate limiter — Tier 1 is 50 RPM, target 40 RPM to leave headroom
-    rate_limiter = RateLimiter(requests_per_minute=40)
+    # Shared rate limiter — Tier 1 is 50 RPM / 10K output TPM for Haiku.
+    # With ~700 output tokens per batch, 10K TPM ≈ 14 RPM max.
+    # Target 12 RPM to leave headroom for retries.
+    rate_limiter = RateLimiter(requests_per_minute=12)
 
     # Initialise enrichers with shared client and rate limiter
     summary_enricher = PlayerSummaryEnricher(

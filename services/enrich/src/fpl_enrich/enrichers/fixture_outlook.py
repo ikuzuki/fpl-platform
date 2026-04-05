@@ -20,7 +20,7 @@ class FixtureOutlookEnricher(FPLEnricher):
     """
 
     BATCH_SIZE = 5
-    MODEL = "claude-sonnet-4-6-20250514"
+    MODEL = "claude-sonnet-4-6"
 
     def _get_system_prompt(self) -> str:
         return load_prompt("fixture_outlook", self.prompt_version)

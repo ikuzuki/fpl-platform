@@ -258,7 +258,7 @@ class TestCostCalculation:
         mock_enrichers = []
         for model, input_tok, output_tok in [
             ("claude-haiku-4-5-20251001", 10000, 5000),
-            ("claude-sonnet-4-6-20250514", 2000, 1000),
+            ("claude-sonnet-4-6", 2000, 1000),
         ]:
             e = MagicMock()
             e.MODEL = model
