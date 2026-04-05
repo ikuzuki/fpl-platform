@@ -61,6 +61,7 @@
       },
       "Next": "CollectFPLData"
     },
+
     "CollectFPLData": {
       "Type": "Task",
       "Resource": "${lambda_arn_fpl_collector}",
@@ -85,8 +86,20 @@
           "Next": "PipelineFailed"
         }
       ],
-      "Next": "CollectUnderstat"
+      "Next": "CheckCollectFPL"
     },
+    "CheckCollectFPL": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.collect_fpl.statusCode",
+          "NumericEquals": 200,
+          "Next": "CollectUnderstat"
+        }
+      ],
+      "Default": "PipelineFailed"
+    },
+
     "CollectUnderstat": {
       "Type": "Task",
       "Resource": "${lambda_arn_understat_collector}",
@@ -110,8 +123,20 @@
           "Next": "PipelineFailed"
         }
       ],
-      "Next": "CollectNews"
+      "Next": "CheckCollectUnderstat"
     },
+    "CheckCollectUnderstat": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.collect_understat.statusCode",
+          "NumericEquals": 200,
+          "Next": "CollectNews"
+        }
+      ],
+      "Default": "PipelineFailed"
+    },
+
     "CollectNews": {
       "Type": "Task",
       "Resource": "${lambda_arn_news_collector}",
@@ -135,8 +160,20 @@
           "Next": "PipelineFailed"
         }
       ],
-      "Next": "ValidateRawData"
+      "Next": "CheckCollectNews"
     },
+    "CheckCollectNews": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.collect_news.statusCode",
+          "NumericEquals": 200,
+          "Next": "ValidateRawData"
+        }
+      ],
+      "Default": "PipelineFailed"
+    },
+
     "ValidateRawData": {
       "Type": "Task",
       "Resource": "${lambda_arn_validator}",
@@ -158,6 +195,17 @@
       "Type": "Choice",
       "Choices": [
         {
+          "Variable": "$.validation.statusCode",
+          "NumericEquals": 200,
+          "Next": "CheckValidationResult"
+        }
+      ],
+      "Default": "PipelineFailed"
+    },
+    "CheckValidationResult": {
+      "Type": "Choice",
+      "Choices": [
+        {
           "Variable": "$.validation.body.status",
           "StringEquals": "invalid",
           "Next": "PipelineFailed"
@@ -165,6 +213,7 @@
       ],
       "Default": "TransformData"
     },
+
     "TransformData": {
       "Type": "Task",
       "Resource": "${lambda_arn_transform}",
@@ -188,8 +237,20 @@
           "Next": "PipelineFailed"
         }
       ],
-      "Next": "EnrichWithLLM"
+      "Next": "CheckTransform"
     },
+    "CheckTransform": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.transform.statusCode",
+          "NumericEquals": 200,
+          "Next": "EnrichWithLLM"
+        }
+      ],
+      "Default": "PipelineFailed"
+    },
+
     "EnrichWithLLM": {
       "Type": "Task",
       "Resource": "${lambda_arn_enricher}",
@@ -215,8 +276,20 @@
           "Next": "PipelineFailed"
         }
       ],
-      "Next": "PipelineSucceeded"
+      "Next": "CheckEnrichment"
     },
+    "CheckEnrichment": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.enrichment.statusCode",
+          "NumericEquals": 200,
+          "Next": "PipelineSucceeded"
+        }
+      ],
+      "Default": "PipelineFailed"
+    },
+
     "PipelineSucceeded": {
       "Type": "Succeed"
     },
