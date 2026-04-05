@@ -95,7 +95,19 @@ def compute_fpl_scores(
     result["fpl_score"] = result["fpl_score"].clip(0, 100)
     result["fpl_score_rank"] = result["fpl_score"].rank(ascending=False, method="min").astype(int)
 
-    # Drop internal component columns
+    # Rename component columns for output (weighted values, not raw 0-100)
+    component_map = {
+        "_c_form": "score_form",
+        "_c_value": "score_value",
+        "_c_fixtures": "score_fixtures",
+        "_c_xg_overperformance": "score_xg",
+        "_c_ownership_momentum": "score_momentum",
+        "_c_ict": "score_ict",
+        "_c_injury_risk": "score_injury",
+    }
+    for old_name, new_name in component_map.items():
+        if old_name in result.columns:
+            result[new_name] = (result[old_name] * w[old_name.replace("_c_", "")]).round(1)
     result = result.drop(columns=[c for c in result.columns if c.startswith("_c_")])
 
     logger.info(

@@ -41,8 +41,65 @@ export interface PlayerDashboard {
   fixture_recommendation: string | null;
   fpl_score: number;
   fpl_score_rank: number;
+  score_form: number | null;
+  score_value: number | null;
+  score_fixtures: number | null;
+  score_xg: number | null;
+  score_momentum: number | null;
+  score_ict: number | null;
+  score_injury: number | null;
   season: string;
   gameweek: number;
+}
+
+export interface BriefingPick {
+  player_id: number;
+  web_name: string;
+  team_short: string;
+  position: string;
+  price: number;
+  fpl_score: number;
+  form: number;
+  reasons: string[];
+  llm_summary: string | null;
+}
+
+export interface BriefingAlert {
+  player_id: number;
+  web_name: string;
+  team_short: string;
+  position: string;
+  injury_risk: number;
+  injury_reasoning: string | null;
+}
+
+export interface BriefingFixture {
+  team_id: number;
+  team_name: string;
+  team_short: string;
+  fdr_next_3: number;
+  fdr_next_6: number;
+}
+
+export interface GameweekBriefing {
+  season: string;
+  gameweek: number;
+  top_picks: BriefingPick[];
+  sell_alerts: { player_id: number; web_name: string; team_short: string; position: string; fpl_score: number; reasons: string[] }[];
+  injury_alerts: BriefingAlert[];
+  best_fixtures: BriefingFixture[];
+  worst_fixtures: BriefingFixture[];
+  rising_players: { player_id: number; web_name: string; team_short: string; position: string; form: number; fpl_score: number }[];
+  falling_players: { player_id: number; web_name: string; team_short: string; position: string; form: number; fpl_score: number }[];
+  trending_themes: { theme: string; count: number }[];
+  summary_stats: {
+    total_players: number;
+    buy_count: number;
+    sell_count: number;
+    injury_count: number;
+    improving_count: number;
+    declining_count: number;
+  };
 }
 
 export interface FixtureTicker {
@@ -76,6 +133,27 @@ export interface TransferPick {
   net_transfers: number;
   season: string;
   gameweek: number;
+}
+
+export interface PlayerHistory {
+  player_id: number;
+  web_name: string;
+  team_short: string;
+  position: string;
+  gameweek: number;
+  season: string;
+  total_points: number;
+  form: number;
+  price: number;
+  ownership_pct: number;
+  fpl_score: number;
+  fpl_score_rank: number;
+  form_trend: string | null;
+  injury_risk: number | null;
+  sentiment_score: number | null;
+  fdr_next_3: number | null;
+  net_transfers: number;
+  points_per_million: number;
 }
 
 export interface TeamStrength {
