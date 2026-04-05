@@ -50,9 +50,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ADR-0009: Langfuse for LLM observability
 
 ### Changed
+- Enricher base class now fully async: `AsyncAnthropic` client, `asyncio.Semaphore` for rate limiting, `asyncio.gather` for concurrent batch processing
+- Enrichment handler runs all 4 enrichers in parallel with shared semaphore (max 5 concurrent API calls for Tier 1 limits)
+- Structured logging in RunHandler: `[START]`, `[SUCCESS]`, `[ERROR]` with duration and params
+- `[ANTHROPIC]`, `[FPL API]`, `[UNDERSTAT]`, `[RSS]` prefixed logging on all external API calls
+- Step Functions log level configurable (default `ALL` for full execution tracing)
+- Enricher Lambda timeout increased to 900s (Lambda max)
 - ADR-0001 through ADR-0007: added dates, Options Considered sections, project-specific context, and addressed edge cases
-
-### Changed
 - Lambda module: log retention 14d → 30d, default memory 256 → 512 MB
 - S3 data lake module: added raw/ prefix expiration at 90 days
 

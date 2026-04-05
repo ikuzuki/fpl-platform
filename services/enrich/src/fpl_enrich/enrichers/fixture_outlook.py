@@ -16,10 +16,10 @@ class FixtureOutlookEnricher(FPLEnricher):
     """Assess fixture difficulty outlook for FPL transfer decisions.
 
     Uses Sonnet for complex reasoning about fixture runs.
-    Batch size of 1 — each player's fixture context is large.
+    Batch size of 5 balances context size with cost efficiency.
     """
 
-    BATCH_SIZE = 1
+    BATCH_SIZE = 5
     MODEL = "claude-sonnet-4-6-20250514"
 
     def _get_system_prompt(self) -> str:

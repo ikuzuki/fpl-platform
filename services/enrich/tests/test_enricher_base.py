@@ -1,8 +1,9 @@
 """Unit tests for the FPLEnricher abstract base class."""
 
+import asyncio
 import json
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -39,7 +40,9 @@ def _make_anthropic_response(results: list[dict[str, Any]]) -> MagicMock:
 
 @pytest.fixture()
 def mock_client() -> MagicMock:
-    return MagicMock()
+    client = MagicMock()
+    client.messages.create = AsyncMock()
+    return client
 
 
 @pytest.fixture()
@@ -73,24 +76,31 @@ class TestChunkHelper:
 
 @pytest.mark.unit
 class TestCallLLM:
-    def test_parses_json_response(self, enricher: _StubEnricher, mock_client: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_parses_json_response(
+        self, enricher: _StubEnricher, mock_client: MagicMock
+    ) -> None:
         expected = [{"summary": "Good form"}, {"summary": "Poor form"}]
         mock_client.messages.create.return_value = _make_anthropic_response(expected)
 
-        result = enricher._call_llm([{"name": "A"}, {"name": "B"}])
+        result = await enricher._call_llm([{"name": "A"}, {"name": "B"}])
 
         assert result == expected
         mock_client.messages.create.assert_called_once()
 
-    def test_tracks_token_usage(self, enricher: _StubEnricher, mock_client: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_tracks_token_usage(
+        self, enricher: _StubEnricher, mock_client: MagicMock
+    ) -> None:
         mock_client.messages.create.return_value = _make_anthropic_response([{"summary": "x"}])
 
-        enricher._call_llm([{"name": "A"}])
+        await enricher._call_llm([{"name": "A"}])
 
         assert enricher.total_input_tokens == 100
         assert enricher.total_output_tokens == 50
 
-    def test_raises_on_count_mismatch(
+    @pytest.mark.asyncio
+    async def test_raises_on_count_mismatch(
         self, enricher: _StubEnricher, mock_client: MagicMock
     ) -> None:
         mock_client.messages.create.return_value = _make_anthropic_response(
@@ -98,12 +108,15 @@ class TestCallLLM:
         )
 
         with pytest.raises(ValueError, match="Output count mismatch"):
-            enricher._call_llm([{"name": "A"}, {"name": "B"}])
+            await enricher._call_llm([{"name": "A"}, {"name": "B"}])
 
-    def test_formats_numbered_items(self, enricher: _StubEnricher, mock_client: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_formats_numbered_items(
+        self, enricher: _StubEnricher, mock_client: MagicMock
+    ) -> None:
         mock_client.messages.create.return_value = _make_anthropic_response([{"summary": "x"}])
 
-        enricher._call_llm([{"name": "A"}])
+        await enricher._call_llm([{"name": "A"}])
 
         call_args = mock_client.messages.create.call_args
         user_msg = call_args.kwargs["messages"][0]["content"]
@@ -112,50 +125,55 @@ class TestCallLLM:
 
 @pytest.mark.unit
 class TestApply:
-    def test_batches_correctly(self, enricher: _StubEnricher, mock_client: MagicMock) -> None:
+    @pytest.mark.asyncio
+    async def test_batches_correctly(self, enricher: _StubEnricher, mock_client: MagicMock) -> None:
         """With BATCH_SIZE=2 and 3 items, should make 2 LLM calls."""
         mock_client.messages.create.side_effect = [
             _make_anthropic_response([{"summary": "a"}, {"summary": "b"}]),
             _make_anthropic_response([{"summary": "c"}]),
         ]
 
-        results = enricher.apply([{"name": "A"}, {"name": "B"}, {"name": "C"}])
+        results = await enricher.apply([{"name": "A"}, {"name": "B"}, {"name": "C"}])
 
         assert len(results) == 3
         assert all(r is not None for r in results)
         assert mock_client.messages.create.call_count == 2
 
-    def test_returns_none_for_invalid(
+    @pytest.mark.asyncio
+    async def test_returns_none_for_invalid(
         self, enricher: _StubEnricher, mock_client: MagicMock
     ) -> None:
         mock_client.messages.create.return_value = _make_anthropic_response(
             [{"summary": "valid"}, {"no_summary": True}]
         )
 
-        results = enricher.apply([{"name": "A"}, {"name": "B"}])
+        results = await enricher.apply([{"name": "A"}, {"name": "B"}])
 
         assert results[0] == {"summary": "valid"}
         assert results[1] is None
 
-    def test_counts_valid_and_invalid(
+    @pytest.mark.asyncio
+    async def test_counts_valid_and_invalid(
         self, enricher: _StubEnricher, mock_client: MagicMock
     ) -> None:
         mock_client.messages.create.return_value = _make_anthropic_response(
             [{"summary": "ok"}, {"bad": True}]
         )
 
-        enricher.apply([{"name": "A"}, {"name": "B"}])
+        await enricher.apply([{"name": "A"}, {"name": "B"}])
 
         assert enricher.valid_count == 1
         assert enricher.invalid_count == 1
 
-    def test_empty_input(self, enricher: _StubEnricher, mock_client: MagicMock) -> None:
-        results = enricher.apply([])
+    @pytest.mark.asyncio
+    async def test_empty_input(self, enricher: _StubEnricher, mock_client: MagicMock) -> None:
+        results = await enricher.apply([])
 
         assert results == []
         mock_client.messages.create.assert_not_called()
 
-    def test_accumulates_tokens_across_batches(
+    @pytest.mark.asyncio
+    async def test_accumulates_tokens_across_batches(
         self, enricher: _StubEnricher, mock_client: MagicMock
     ) -> None:
         mock_client.messages.create.side_effect = [
@@ -163,10 +181,34 @@ class TestApply:
             _make_anthropic_response([{"summary": "c"}]),
         ]
 
-        enricher.apply([{"name": "A"}, {"name": "B"}, {"name": "C"}])
+        await enricher.apply([{"name": "A"}, {"name": "B"}, {"name": "C"}])
 
         assert enricher.total_input_tokens == 200
         assert enricher.total_output_tokens == 100
+
+    @pytest.mark.asyncio
+    async def test_semaphore_limits_concurrency(self, mock_client: MagicMock) -> None:
+        """Verify the semaphore actually limits concurrent API calls."""
+        semaphore = asyncio.Semaphore(2)
+        enricher = _StubEnricher(anthropic_client=mock_client, semaphore=semaphore)
+
+        max_concurrent = 0
+        current_concurrent = 0
+
+        async def _tracking_create(**kwargs: Any) -> MagicMock:
+            nonlocal max_concurrent, current_concurrent
+            current_concurrent += 1
+            max_concurrent = max(max_concurrent, current_concurrent)
+            await asyncio.sleep(0.01)  # Simulate API latency
+            current_concurrent -= 1
+            return _make_anthropic_response([{"summary": "x"}])
+
+        mock_client.messages.create = _tracking_create
+
+        # 5 items with BATCH_SIZE=2 → 3 batches, semaphore=2
+        await enricher.apply([{"name": f"{i}"} for i in range(5)])
+
+        assert max_concurrent <= 2
 
 
 @pytest.mark.unit

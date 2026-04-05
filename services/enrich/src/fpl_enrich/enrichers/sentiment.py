@@ -15,10 +15,10 @@ logger = logging.getLogger(__name__)
 class SentimentEnricher(FPLEnricher):
     """Assess media sentiment from news and social media mentions.
 
-    Uses Haiku for bulk processing. Batch size of 5 for simple classification.
+    Uses Haiku for bulk processing. Batch size of 10 for cost efficiency.
     """
 
-    BATCH_SIZE = 5
+    BATCH_SIZE = 10
     MODEL = "claude-haiku-4-5-20251001"
 
     def _get_system_prompt(self) -> str:
