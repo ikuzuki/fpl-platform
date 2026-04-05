@@ -48,6 +48,7 @@ class NewsCollector:
 
         for source, feed_url in RSS_FEEDS.items():
             try:
+                logger.info("[RSS] Parsing %s | url=%s", source, feed_url)
                 feed = feedparser.parse(feed_url)
                 for entry in feed.entries:
                     published = getattr(entry, "published", "")
@@ -68,8 +69,14 @@ class NewsCollector:
                             "collected_at": collected_at,
                         }
                     )
+                logger.info(
+                    "[RSS] %s | entries=%d | matched_date=%d",
+                    source,
+                    len(feed.entries),
+                    sum(1 for a in articles if a["source"] == source),
+                )
             except Exception:
-                logger.exception("Failed to parse RSS feed %s", source)
+                logger.exception("[RSS] Failed to parse feed %s", source)
 
         jsonl = "\n".join(json.dumps(a) for a in articles)
         self.s3_client.put_json(self.output_bucket, key, jsonl)

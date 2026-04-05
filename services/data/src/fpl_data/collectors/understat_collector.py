@@ -136,13 +136,20 @@ class UnderstatCollector:
             List of player stat dicts with keys: id, player_name, games,
             time, goals, xG, assists, xA, shots, key_passes, position, etc.
         """
+        url = f"{UNDERSTAT_BASE_URL}/getPlayersStats/"
+        logger.info("[UNDERSTAT] POST %s | league=%s | season=%s", url, league, year)
         async with httpx.AsyncClient(
             headers={"User-Agent": "Mozilla/5.0"},
             timeout=30.0,
         ) as client:
             response = await client.post(
-                f"{UNDERSTAT_BASE_URL}/getPlayersStats/",
+                url,
                 data={"league": league, "season": year},
+            )
+            logger.info(
+                "[UNDERSTAT] response | status=%d | size=%d bytes",
+                response.status_code,
+                len(response.content),
             )
             response.raise_for_status()
             data = response.json()
