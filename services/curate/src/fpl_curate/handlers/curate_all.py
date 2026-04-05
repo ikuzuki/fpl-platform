@@ -148,11 +148,6 @@ async def main(
         row_counts[name] = len(rows)
         logger.info("Wrote %d rows to %s", len(rows), parquet_key)
 
-        # Write JSON (dashboard consumption)
-        json_key = f"public/api/v1/{name}.json"
-        s3_client.put_json(output_bucket, json_key, rows)
-        logger.info("Wrote %d rows to %s", len(rows), json_key)
-
     # --- Update player history (upsert by gameweek) ---
     history_key = "public/api/v1/player_history.json"
     try:
@@ -160,6 +155,22 @@ async def main(
     except Exception:
         existing_history = []
         logger.info("No existing player history found, starting fresh")
+
+    # Only overwrite latest JSON files if this is the most recent gameweek
+    max_existing_gw = max((r.get("gameweek", 0) for r in existing_history), default=0)
+    is_latest = gameweek >= max_existing_gw
+
+    if is_latest:
+        for name, rows in datasets.items():
+            json_key = f"public/api/v1/{name}.json"
+            s3_client.put_json(output_bucket, json_key, rows)
+            logger.info("Wrote %d rows to %s", len(rows), json_key)
+    else:
+        logger.info(
+            "Skipping latest JSON writes — GW%d is older than current latest GW%d",
+            gameweek,
+            max_existing_gw,
+        )
 
     history_rows = build_player_history(
         dashboard_rows=dashboard_rows,
