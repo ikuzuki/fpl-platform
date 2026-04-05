@@ -46,13 +46,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Lambda module: optional `execution_role_arn` for shared external role support
 - S3 data lake module: configurable `name` variable for multi-bucket reuse
 - Step Functions module: CloudWatch log group with execution logging
+- ADR-0002: S3 data lake design (layers, idempotency, container deployment, Hive partitioning, Parquet+zstd)
 - ADR-0003: Direct Anthropic API over LangChain
-- ADR-0004: Tiered LLM model selection and batch processing (Haiku vs Sonnet, batch sizes)
-- ADR-0005: Prompt versioning by directory
-- ADR-0006: S3 prefix-based idempotency
-- ADR-0007: Container images for Lambda over zip packages
-- ADR-0008: S3 data lake layer design (raw/clean/enriched/curated, Hive partitioning, Parquet+zstd)
-- ADR-0009: Langfuse for LLM observability
+- ADR-0004: LLM cost optimisation (model tiering, input filtering, rate limiting, capacity lock skip)
+- ADR-0005: Prompt versioning and LLM observability (directory-based versioning, Langfuse tracing)
+- ADR-0006: Parallel pipeline design (Step Functions parallel states for collection and enrichment)
 
 ### Changed
 - Enricher base class now fully async: `AsyncAnthropic` client, `asyncio.Semaphore` for rate limiting, `asyncio.gather` for concurrent batch processing
@@ -61,7 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `[ANTHROPIC]`, `[FPL API]`, `[UNDERSTAT]`, `[RSS]` prefixed logging on all external API calls
 - Step Functions log level configurable (default `ALL` for full execution tracing)
 - Enricher Lambda timeout increased to 900s (Lambda max)
-- ADR-0001 through ADR-0007: added dates, Options Considered sections, project-specific context, and addressed edge cases
+- ADRs consolidated from 11 to 6: merged related decisions (data lake + idempotency + containers, prompt versioning + observability, parallel design), dropped low-signal entries (Terraform over CDK)
 - Lambda module: log retention 14d → 30d, default memory 256 → 512 MB
 - S3 data lake module: added raw/ prefix expiration at 90 days
 
@@ -84,6 +82,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pre-commit hooks — ruff, mypy, terraform fmt
 - Makefile with `install`, `lint`, `format`, `test`, `check` targets
 - Claude Code config — `CLAUDE.md`, path-specific rules, 4 custom skills, MCP server config
-- ADR-0001 (monorepo architecture), ADR-0002 (Terraform over CDK)
+- ADR-0001 (monorepo architecture)
 - Data dictionary, runbook, PR/issue templates
 - 15 passing unit tests (`ExceptionCollector`, `FPLSettings`, `S3Client`)

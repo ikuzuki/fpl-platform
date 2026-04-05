@@ -63,7 +63,7 @@ Each enricher overrides `RELEVANT_FIELDS` with exactly the fields its prompt ref
 
 ### Rate limiting
 
-Each enricher runs as a separate Lambda (see ADR-0011). Rate control uses dual mechanisms:
+Each enricher runs as a separate Lambda (see ADR-0006). Rate control uses dual mechanisms:
 - `asyncio.Semaphore(2)` — caps in-flight requests to avoid concurrent connection 429s
 - `RateLimiter(rpm)` — caps request rate to stay within RPM and output TPM limits
 
