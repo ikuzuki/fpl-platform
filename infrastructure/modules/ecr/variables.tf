@@ -14,6 +14,17 @@ variable "environment" {
   type        = string
 }
 
+variable "max_image_count" {
+  description = "Maximum number of images to retain in the repository"
+  type        = number
+  default     = 3
+
+  validation {
+    condition     = var.max_image_count >= 1
+    error_message = "Must keep at least 1 image."
+  }
+}
+
 variable "image_tag_mutability" {
   description = "Tag mutability setting (MUTABLE allows :latest overwrite, IMMUTABLE for prod)"
   type        = string
