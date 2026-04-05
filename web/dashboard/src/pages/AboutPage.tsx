@@ -218,11 +218,6 @@ export function AboutPage() {
                   {step.tech}
                 </Badge>
               </CardContent>
-              {i < PIPELINE_STEPS.length - 1 && (
-                <div className="hidden md:block absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-10 text-[var(--muted-foreground)]">
-                  →
-                </div>
-              )}
             </Card>
           ))}
         </div>
