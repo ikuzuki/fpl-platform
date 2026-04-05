@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import time
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from typing import Any
@@ -12,10 +13,34 @@ from langfuse import observe
 
 logger = logging.getLogger(__name__)
 
-# Max concurrent Anthropic API calls across all enrichers.
-# Tier 1 limits: Haiku 50 RPM, Sonnet 50 RPM.
-# With 4 enrichers running in parallel, 5 concurrent keeps us well under.
-DEFAULT_MAX_CONCURRENT = 5
+
+class RateLimiter:
+    """Token-bucket rate limiter for API calls.
+
+    Enforces a maximum number of requests per minute across all coroutines
+    sharing the same instance. Each call to acquire() waits until a slot
+    is available.
+    """
+
+    def __init__(self, requests_per_minute: int) -> None:
+        self.rpm = requests_per_minute
+        self.interval = 60.0 / requests_per_minute
+        self._lock = asyncio.Lock()
+        self._last_request_time = 0.0
+
+    async def acquire(self) -> None:
+        """Wait until the next request slot is available."""
+        async with self._lock:
+            now = time.monotonic()
+            wait = self._last_request_time + self.interval - now
+            if wait > 0:
+                await asyncio.sleep(wait)
+            self._last_request_time = time.monotonic()
+
+
+# Default rate limit — Tier 1 is 50 RPM per model.
+# Leave headroom for SDK retries by targeting 40 RPM.
+DEFAULT_RATE_LIMIT_RPM = 40
 
 
 class FPLEnricher(ABC):
@@ -30,25 +55,25 @@ class FPLEnricher(ABC):
         MODEL — Anthropic model to use (default: claude-haiku-4-5-20251001)
     """
 
-    BATCH_SIZE: int = 5
+    BATCH_SIZE: int = 10
     MODEL: str = "claude-haiku-4-5-20251001"
 
     def __init__(
         self,
         anthropic_client: anthropic.AsyncAnthropic,
         prompt_version: str = "v1",
-        semaphore: asyncio.Semaphore | None = None,
+        rate_limiter: RateLimiter | None = None,
     ) -> None:
         self.client = anthropic_client
         self.prompt_version = prompt_version
-        self.semaphore = semaphore or asyncio.Semaphore(DEFAULT_MAX_CONCURRENT)
+        self.rate_limiter = rate_limiter or RateLimiter(DEFAULT_RATE_LIMIT_RPM)
         self.valid_count = 0
         self.invalid_count = 0
         self.total_input_tokens = 0
         self.total_output_tokens = 0
 
     async def apply(self, items: list[dict[str, Any]]) -> list[dict[str, Any] | None]:
-        """Process all items through the LLM in concurrent batches.
+        """Process all items through the LLM in rate-limited concurrent batches.
 
         Returns a list aligned with input — None for items that failed validation.
         """
@@ -59,15 +84,15 @@ class FPLEnricher(ABC):
 
         batches = list(self._chunk(items, self.BATCH_SIZE))
         logger.info(
-            "%s: processing %d items in %d batches (concurrency=%d)",
+            "%s: processing %d items in %d batches (rate_limit=%d RPM)",
             self.__class__.__name__,
             len(items),
             len(batches),
-            self.semaphore._value,
+            self.rate_limiter.rpm,
         )
 
-        # Run all batches concurrently, limited by semaphore
-        tasks = [self._call_llm_with_semaphore(batch) for batch in batches]
+        # Run all batches concurrently — rate limiter serialises API calls
+        tasks = [self._call_llm_rate_limited(batch) for batch in batches]
         batch_results = await asyncio.gather(*tasks, return_exceptions=True)
 
         results: list[dict[str, Any] | None] = []
@@ -95,10 +120,10 @@ class FPLEnricher(ABC):
         self._log_summary()
         return results
 
-    async def _call_llm_with_semaphore(self, batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Acquire semaphore before making the API call."""
-        async with self.semaphore:
-            return await self._call_llm(batch)
+    async def _call_llm_rate_limited(self, batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Wait for rate limiter before making the API call."""
+        await self.rate_limiter.acquire()
+        return await self._call_llm(batch)
 
     @observe(name="enricher_batch_call")
     async def _call_llm(self, batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
