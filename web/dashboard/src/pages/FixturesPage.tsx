@@ -44,7 +44,7 @@ export function FixturesPage() {
       fdrSums.set(short, sum);
     });
 
-    let teamList = [...teamSet.entries()];
+    const teamList = [...teamSet.entries()];
     if (sortMode === "alpha") {
       teamList.sort((a, b) => a[0].localeCompare(b[0]));
     } else {
