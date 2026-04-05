@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Dashboard v2: hero summary strip with AI Pick of the Week and KPI cards
+- Dashboard v2: player table visual hierarchy (score bars, tier dividers, expand chevrons, heatmap cells)
+- Dashboard v2: radar chart and styled AI analysis card in player detail panel
+- Dashboard v2: dark mode with toggle and localStorage persistence
+- Dashboard v2: transfer cards with coloured borders and sort controls
+- Dashboard v2: teams page scatter plot (Score vs FDR quadrant analysis)
+- Dashboard v2: fixture grid with team focus, FDR sum column, sort by difficulty
+- Dashboard v2: skeleton loaders and empty states
 - React dashboard (`web/dashboard/`) with 4 pages: Player Rankings, Fixture Ticker, Transfer Hub, Team Strength
 - Static JSON output from CurateData Lambda for dashboard consumption (`public/api/v1/*.json`)
 - ADR-0007: Static dashboard architecture (React SPA + pre-generated JSON on CloudFront)

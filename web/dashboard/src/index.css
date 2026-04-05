@@ -13,7 +13,23 @@
   --success: oklch(0.65 0.18 145);
   --warning: oklch(0.75 0.15 80);
   --danger: oklch(0.6 0.2 25);
+  --ai-bg: oklch(0.96 0.02 280);
+  --ai-border: oklch(0.85 0.06 280);
   --radius: 0.5rem;
+}
+
+.dark {
+  --background: oklch(0.15 0.01 240);
+  --foreground: oklch(0.92 0.005 240);
+  --card: oklch(0.2 0.01 240);
+  --card-foreground: oklch(0.92 0.005 240);
+  --muted: oklch(0.25 0.01 240);
+  --muted-foreground: oklch(0.6 0.01 240);
+  --border: oklch(0.3 0.01 240);
+  --accent: oklch(0.65 0.15 265);
+  --accent-foreground: oklch(1 0 0);
+  --ai-bg: oklch(0.22 0.02 280);
+  --ai-border: oklch(0.35 0.04 280);
 }
 
 body {
@@ -26,11 +42,33 @@ body {
   background-color: var(--background);
   color: var(--foreground);
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s, color 0.2s;
 }
 
 /* FDR color scale */
-.fdr-1 { background-color: oklch(0.85 0.15 145); color: white; }
-.fdr-2 { background-color: oklch(0.8 0.12 145); color: white; }
-.fdr-3 { background-color: oklch(0.75 0.05 240); color: white; }
-.fdr-4 { background-color: oklch(0.65 0.15 25); color: white; }
-.fdr-5 { background-color: oklch(0.55 0.2 25); color: white; }
+.fdr-1 { background-color: oklch(0.78 0.14 155); color: white; }
+.fdr-2 { background-color: oklch(0.72 0.12 155); color: white; }
+.fdr-3 { background-color: oklch(0.6 0.04 240); color: white; }
+.fdr-4 { background-color: oklch(0.6 0.14 25); color: white; }
+.fdr-5 { background-color: oklch(0.5 0.2 25); color: white; }
+
+/* Score bar */
+.score-bar {
+  height: 4px;
+  border-radius: 2px;
+  margin-top: 3px;
+  transition: width 0.5s ease-out;
+}
+
+/* Skeleton pulse */
+.skeleton {
+  background: linear-gradient(90deg, var(--muted) 25%, var(--border) 50%, var(--muted) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius);
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
