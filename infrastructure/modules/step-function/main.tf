@@ -7,7 +7,7 @@ resource "aws_sfn_state_machine" "this" {
   logging_configuration {
     log_destination        = "${aws_cloudwatch_log_group.step_function.arn}:*"
     include_execution_data = true
-    level                  = "ERROR"
+    level                  = var.log_level
   }
 }
 

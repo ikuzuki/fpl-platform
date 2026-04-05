@@ -30,3 +30,14 @@ variable "log_retention_days" {
   type        = number
   default     = 30
 }
+
+variable "log_level" {
+  description = "Step Functions logging level (OFF, ALL, ERROR, FATAL)"
+  type        = string
+  default     = "ALL"
+
+  validation {
+    condition     = contains(["OFF", "ALL", "ERROR", "FATAL"], var.log_level)
+    error_message = "Must be OFF, ALL, ERROR, or FATAL."
+  }
+}
