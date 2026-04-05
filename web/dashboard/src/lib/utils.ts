@@ -68,7 +68,9 @@ export function scoreColor(score: number): string {
 
 export function scoreBarColor(score: number): string {
   if (score >= 65) return "bg-green-500";
-  if (score >= 45) return "bg-[var(--accent)]";
+  if (score >= 50) return "bg-emerald-400";
+  if (score >= 40) return "bg-amber-400";
+  if (score >= 30) return "bg-orange-400";
   return "bg-red-500";
 }
 

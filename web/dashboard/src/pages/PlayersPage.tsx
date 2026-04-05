@@ -24,6 +24,18 @@ import {
   PolarAngleAxis,
   Radar,
   ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ScatterChart,
+  Scatter,
+  CartesianGrid,
+  Cell,
+  ReferenceLine,
+  ZAxis,
+  Label,
 } from "recharts";
 import { api } from "@/lib/api";
 import type { PlayerDashboard, TransferPick } from "@/lib/types";
@@ -450,6 +462,12 @@ export function PlayersPage() {
         </div>
       </Card>
 
+      {/* xG Efficiency Scatter */}
+      <XgScatter players={filtered} />
+
+      {/* Ownership vs Value Bubble */}
+      <OwnershipBubble players={filtered} />
+
       {filtered.length === 0 && (
         <div className="text-center py-12 text-[var(--muted-foreground)]">
           <p className="text-lg">No players match your search</p>
@@ -530,9 +548,11 @@ function PlayerDetail({ player }: { player: PlayerDashboard }) {
         </div>
       </div>
 
-      {/* Radar Chart */}
+      {/* Score Breakdown + Radar */}
       <div className="md:col-span-4">
-        <h4 className="font-semibold text-sm mb-2">Player Profile</h4>
+        <h4 className="font-semibold text-sm mb-2">Score Breakdown</h4>
+        <ScoreWaterfall player={player} />
+        <h4 className="font-semibold text-sm mb-2 mt-4">Player Profile</h4>
         <ResponsiveContainer width="100%" height={220}>
           <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="75%">
             <PolarGrid stroke="var(--border)" />
@@ -612,5 +632,169 @@ function StatRow({
       <dt>{label}</dt>
       <dd className="font-medium text-[var(--foreground)]">{value}</dd>
     </div>
+  );
+}
+
+const SCORE_COMPONENTS = [
+  { key: "score_form", label: "Form", color: "oklch(0.6 0.18 145)" },
+  { key: "score_value", label: "Value", color: "oklch(0.55 0.15 265)" },
+  { key: "score_fixtures", label: "Fixtures", color: "oklch(0.65 0.15 200)" },
+  { key: "score_xg", label: "xG", color: "oklch(0.7 0.15 80)" },
+  { key: "score_momentum", label: "Momentum", color: "oklch(0.6 0.15 330)" },
+  { key: "score_ict", label: "ICT", color: "oklch(0.65 0.12 30)" },
+  { key: "score_injury", label: "Injury", color: "oklch(0.6 0.18 25)" },
+] as const;
+
+function ScoreWaterfall({ player }: { player: PlayerDashboard }) {
+  const components = SCORE_COMPONENTS.map((c) => ({
+    name: c.label,
+    value: (player[c.key as keyof PlayerDashboard] as number | null) ?? 0,
+    color: c.color,
+  })).filter((c) => c.value > 0);
+
+  if (components.length === 0) return null;
+
+  return (
+    <ResponsiveContainer width="100%" height={components.length * 28 + 20}>
+      <BarChart data={components} layout="vertical" margin={{ left: 60, right: 30 }}>
+        <XAxis type="number" domain={[0, "auto"]} tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
+        <YAxis type="category" dataKey="name" width={60} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
+        <Tooltip
+          contentStyle={{ backgroundColor: "var(--card)", borderColor: "var(--border)", borderRadius: "0.5rem", fontSize: "12px" }}
+          formatter={(value) => Number(value).toFixed(1)}
+        />
+        <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+          {components.map((entry, i) => (
+            <Cell key={i} fill={entry.color} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+const POS_COLORS: Record<string, string> = {
+  GKP: "oklch(0.7 0.15 80)",
+  DEF: "oklch(0.55 0.15 265)",
+  MID: "oklch(0.6 0.18 145)",
+  FWD: "oklch(0.6 0.18 25)",
+};
+
+function XgScatter({ players }: { players: PlayerDashboard[] }) {
+  const withXg = players.filter((p) => p.xg != null);
+  if (withXg.length < 5) return null;
+
+  const scatterData = withXg.map((p) => ({
+    x: p.xg!,
+    y: p.goals_scored,
+    name: p.web_name,
+    position: p.position,
+    minutes: p.minutes,
+  }));
+
+  const maxVal = Math.max(
+    ...scatterData.map((d) => Math.max(d.x, d.y)),
+    1,
+  );
+
+  return (
+    <Card>
+      <CardContent className="pt-4">
+        <h3 className="font-semibold mb-1">xG Efficiency</h3>
+        <p className="text-xs text-[var(--muted-foreground)] mb-3">
+          Above the line = clinical. Below = wasteful. Size = minutes played.
+        </p>
+        <ResponsiveContainer width="100%" height={350}>
+          <ScatterChart margin={{ top: 10, right: 20, bottom: 30, left: 10 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.5} />
+            <XAxis type="number" dataKey="x" name="xG" domain={[0, maxVal]} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}>
+              <Label value="Expected Goals (xG)" position="bottom" offset={15} style={{ fontSize: 12, fill: "var(--muted-foreground)" }} />
+            </XAxis>
+            <YAxis type="number" dataKey="y" name="Goals" domain={[0, maxVal]} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}>
+              <Label value="Actual Goals" angle={-90} position="insideLeft" offset={-5} style={{ fontSize: 12, fill: "var(--muted-foreground)" }} />
+            </YAxis>
+            <ZAxis type="number" dataKey="minutes" range={[30, 200]} />
+            <ReferenceLine
+              segment={[{ x: 0, y: 0 }, { x: maxVal, y: maxVal }]}
+              stroke="var(--muted-foreground)"
+              strokeDasharray="4 4"
+              opacity={0.5}
+            />
+            <Tooltip
+              content={({ active, payload }) => {
+                if (!active || !payload?.[0]) return null;
+                const d = payload[0].payload;
+                return (
+                  <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-2 shadow-lg text-xs">
+                    <p className="font-semibold">{d.name} ({d.position})</p>
+                    <p className="text-[var(--muted-foreground)]">Goals: {d.y} | xG: {d.x.toFixed(1)} | Mins: {d.minutes}</p>
+                  </div>
+                );
+              }}
+            />
+            <Scatter data={scatterData}>
+              {scatterData.map((d, i) => (
+                <Cell key={i} fill={POS_COLORS[d.position] ?? "var(--accent)"} opacity={0.7} />
+              ))}
+            </Scatter>
+          </ScatterChart>
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
+  );
+}
+
+function OwnershipBubble({ players }: { players: PlayerDashboard[] }) {
+  const scatterData = players.map((p) => ({
+    x: p.ownership_pct,
+    y: p.points_per_million,
+    z: p.total_points,
+    name: p.web_name,
+    position: p.position,
+  }));
+
+  const medianOwn = [...scatterData].sort((a, b) => a.x - b.x)[Math.floor(scatterData.length / 2)]?.x ?? 10;
+  const medianPpm = [...scatterData].sort((a, b) => a.y - b.y)[Math.floor(scatterData.length / 2)]?.y ?? 15;
+
+  return (
+    <Card>
+      <CardContent className="pt-4">
+        <h3 className="font-semibold mb-1">Ownership vs Value</h3>
+        <p className="text-xs text-[var(--muted-foreground)] mb-3">
+          Top-left = differentials (high value, low ownership). Bottom-right = traps.
+        </p>
+        <ResponsiveContainer width="100%" height={350}>
+          <ScatterChart margin={{ top: 10, right: 20, bottom: 30, left: 10 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.5} />
+            <XAxis type="number" dataKey="x" name="Ownership" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}>
+              <Label value="Ownership %" position="bottom" offset={15} style={{ fontSize: 12, fill: "var(--muted-foreground)" }} />
+            </XAxis>
+            <YAxis type="number" dataKey="y" name="Pts/M" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}>
+              <Label value="Points per Million" angle={-90} position="insideLeft" offset={-5} style={{ fontSize: 12, fill: "var(--muted-foreground)" }} />
+            </YAxis>
+            <ZAxis type="number" dataKey="z" range={[20, 150]} />
+            <ReferenceLine x={medianOwn} stroke="var(--border)" strokeDasharray="4 4" />
+            <ReferenceLine y={medianPpm} stroke="var(--border)" strokeDasharray="4 4" />
+            <Tooltip
+              content={({ active, payload }) => {
+                if (!active || !payload?.[0]) return null;
+                const d = payload[0].payload;
+                return (
+                  <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-2 shadow-lg text-xs">
+                    <p className="font-semibold">{d.name} ({d.position})</p>
+                    <p className="text-[var(--muted-foreground)]">Own: {d.x.toFixed(1)}% | Pts/M: {d.y.toFixed(1)} | Pts: {d.z}</p>
+                  </div>
+                );
+              }}
+            />
+            <Scatter data={scatterData}>
+              {scatterData.map((d, i) => (
+                <Cell key={i} fill={POS_COLORS[d.position] ?? "var(--accent)"} opacity={0.7} />
+              ))}
+            </Scatter>
+          </ScatterChart>
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
   );
 }

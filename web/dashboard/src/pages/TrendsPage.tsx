@@ -388,6 +388,55 @@ export function TrendsPage() {
                 </ResponsiveContainer>
               )}
 
+              {/* Sentiment Timeline */}
+              {selected.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-2">
+                    Sentiment Timeline
+                  </p>
+                  {selected.map((pid, i) => {
+                    const p = players.find((pl) => pl.player_id === pid);
+                    if (!p) return null;
+                    return (
+                      <div key={pid} className="flex items-center gap-2 mb-1">
+                        <span className="text-xs w-20 truncate" style={{ color: CHART_COLORS[i % CHART_COLORS.length] }}>
+                          {p.web_name}
+                        </span>
+                        <div className="flex gap-0.5">
+                          {gameweeks.map((gw) => {
+                            const row = data.find(
+                              (r) => r.player_id === pid && r.gameweek === gw,
+                            );
+                            const score = row?.sentiment_score;
+                            let bg = "bg-gray-200 dark:bg-gray-700";
+                            if (score != null) {
+                              if (score > 0.3) bg = "bg-green-400 dark:bg-green-600";
+                              else if (score > 0) bg = "bg-green-200 dark:bg-green-800";
+                              else if (score < -0.3) bg = "bg-red-400 dark:bg-red-600";
+                              else if (score < 0) bg = "bg-red-200 dark:bg-red-800";
+                            }
+                            return (
+                              <div
+                                key={gw}
+                                className={cn("w-8 h-4 rounded-sm", bg)}
+                                title={`GW${gw}: ${score?.toFixed(2) ?? "n/a"}`}
+                              />
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div className="flex gap-0.5 ml-[88px] mt-1">
+                    {gameweeks.map((gw) => (
+                      <div key={gw} className="w-8 text-center text-[9px] text-[var(--muted-foreground)]">
+                        {gw}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Selected player chips */}
               {selected.length > 0 && (
                 <div className="flex gap-2 mt-3 flex-wrap">

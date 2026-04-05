@@ -113,6 +113,14 @@ def build_player_dashboard(
                 # Composite
                 "fpl_score": float(row["fpl_score"]),
                 "fpl_score_rank": int(row["fpl_score_rank"]),
+                # Score components (weighted contributions)
+                "score_form": _safe_float(row.get("score_form")),
+                "score_value": _safe_float(row.get("score_value")),
+                "score_fixtures": _safe_float(row.get("score_fixtures")),
+                "score_xg": _safe_float(row.get("score_xg")),
+                "score_momentum": _safe_float(row.get("score_momentum")),
+                "score_ict": _safe_float(row.get("score_ict")),
+                "score_injury": _safe_float(row.get("score_injury")),
                 # Partition
                 "season": season,
                 "gameweek": gameweek,

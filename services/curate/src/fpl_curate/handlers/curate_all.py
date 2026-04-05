@@ -7,6 +7,7 @@ import pyarrow as pa
 
 from fpl_curate.config import get_curate_settings
 from fpl_curate.curators.fixture_ticker import build_fixture_ticker, build_team_map
+from fpl_curate.curators.gameweek_briefing import build_gameweek_briefing
 from fpl_curate.curators.player_dashboard import build_player_dashboard
 from fpl_curate.curators.player_history import build_player_history
 from fpl_curate.curators.team_strength import build_team_strength
@@ -122,6 +123,16 @@ async def main(
         gameweek=gameweek,
     )
 
+    # 5. Gameweek briefing (aggregates signals from all curated data)
+    briefing = build_gameweek_briefing(
+        dashboard_rows=dashboard_rows,
+        transfer_rows=transfer_rows,
+        fixture_fdr=fixture_fdr,
+        team_map=team_map,
+        season=season,
+        gameweek=gameweek,
+    )
+
     # --- Write outputs ---
     datasets = {
         "player_dashboard": dashboard_rows,
@@ -165,6 +176,13 @@ async def main(
             json_key = f"public/api/v1/{name}.json"
             s3_client.put_json(output_bucket, json_key, rows)
             logger.info("Wrote %d rows to %s", len(rows), json_key)
+
+        # Write briefing JSON
+        briefing_key = "public/api/v1/gameweek_briefing.json"
+        s3_client.put_json(output_bucket, briefing_key, briefing)
+        output_paths.append(f"s3://{output_bucket}/{briefing_key}")
+        row_counts["gameweek_briefing"] = 1
+        logger.info("Wrote briefing to %s", briefing_key)
     else:
         logger.info(
             "Skipping latest JSON writes — GW%d is older than current latest GW%d",

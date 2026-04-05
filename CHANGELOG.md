@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Dashboard v3: Gameweek Briefing home page (top picks, injury alerts, fixture spotlight, form watch)
+- Dashboard v3: Score Breakdown Waterfall in player detail panel (7 weighted components)
+- Dashboard v3: xG Efficiency Scatter (Goals vs xG with diagonal reference)
+- Dashboard v3: Ownership vs Value Bubble Chart (quadrant: differentials vs traps)
+- Dashboard v3: Fixture Swing Chart (rolling 3-GW FDR with best-run callout)
+- Dashboard v3: Expandable "Why Buy/Sell" AI cards on Transfers page (LLM summary, injury, sentiment, fixtures)
+- Dashboard v3: Sentiment Timeline heatmap on Trends page
+- Dashboard v3: Teams page quadrant labels and legend cleanup
+- Dashboard v3: Error boundary with retry button
+- Curate: score component outputs (score_form, score_value, etc.) exposed from scoring.py
+- Curate: gameweek_briefing.json output with aggregated weekly signals (6 new tests)
 - Dashboard v2: hero summary strip with AI Pick of the Week and KPI cards
 - Dashboard v2: player table visual hierarchy (score bars, tier dividers, expand chevrons, heatmap cells)
 - Dashboard v2: radar chart and styled AI analysis card in player detail panel

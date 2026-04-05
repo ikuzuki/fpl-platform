@@ -4,7 +4,8 @@ import { Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const links = [
-  { to: "/", label: "Players" },
+  { to: "/", label: "Briefing" },
+  { to: "/players", label: "Players" },
   { to: "/fixtures", label: "Fixtures" },
   { to: "/transfers", label: "Transfers" },
   { to: "/teams", label: "Teams" },

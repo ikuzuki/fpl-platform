@@ -151,16 +151,20 @@ export function TeamsPage() {
               </Scatter>
             </ScatterChart>
           </ResponsiveContainer>
-          {/* Team labels overlay */}
-          <div className="flex flex-wrap gap-2 mt-2 justify-center">
-            {scatterData.map((t) => (
-              <span
-                key={t.team_id}
-                className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--muted)] text-[var(--muted-foreground)]"
-              >
-                {t.team_short}: {t.avg_fpl_score} / {t.avg_fdr_remaining?.toFixed(1)}
-              </span>
-            ))}
+          {/* Quadrant labels */}
+          <div className="grid grid-cols-2 gap-x-8 mt-2 text-[10px] text-[var(--muted-foreground)] max-w-md mx-auto">
+            <div className="text-right">
+              <span className="text-green-600 dark:text-green-400 font-semibold">Strong + Easy</span> — target their players
+            </div>
+            <div>
+              <span className="text-[var(--accent)] font-semibold">Strong + Hard</span> — hold, don't buy more
+            </div>
+            <div className="text-right">
+              <span className="text-[var(--muted-foreground)] font-semibold">Weak + Easy</span> — differential picks
+            </div>
+            <div>
+              <span className="text-red-500 dark:text-red-400 font-semibold">Weak + Hard</span> — avoid
+            </div>
           </div>
         </CardContent>
       </Card>

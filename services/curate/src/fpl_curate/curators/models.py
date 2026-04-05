@@ -65,6 +65,15 @@ class PlayerDashboardRow(BaseModel):
     fpl_score: float = Field(ge=0.0, le=100.0)
     fpl_score_rank: int = Field(ge=1)
 
+    # Score components (weighted contributions to fpl_score)
+    score_form: float | None = None
+    score_value: float | None = None
+    score_fixtures: float | None = None
+    score_xg: float | None = None
+    score_momentum: float | None = None
+    score_ict: float | None = None
+    score_injury: float | None = None
+
     # Partition keys
     season: str
     gameweek: int

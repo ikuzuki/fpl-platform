@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { ChevronDown, Sparkles, AlertTriangle, Newspaper, Calendar } from "lucide-react";
 import { api } from "@/lib/api";
-import type { TransferPick } from "@/lib/types";
+import type { TransferPick, PlayerDashboard } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/skeleton";
@@ -9,6 +10,7 @@ import {
   positionColor,
   recommendationStyle,
   scoreColor,
+  fdrClass,
   cn,
 } from "@/lib/utils";
 
@@ -17,13 +19,16 @@ type SortKey = "fpl_score" | "price" | "form" | "fdr_next_3";
 
 export function TransfersPage() {
   const [data, setData] = useState<TransferPick[]>([]);
+  const [players, setPlayers] = useState<PlayerDashboard[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>("all");
   const [sortBy, setSortBy] = useState<SortKey>("fpl_score");
+  const [expanded, setExpanded] = useState<number | null>(null);
 
   useEffect(() => {
-    api.transfers().then((d) => {
-      setData(d);
+    Promise.all([api.transfers(), api.players()]).then(([t, p]) => {
+      setData(t);
+      setPlayers(p);
       setLoading(false);
     });
   }, []);
@@ -111,9 +116,22 @@ export function TransfersPage() {
       </div>
 
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-        {filtered.slice(0, 30).map((player) => (
-          <TransferCard key={player.player_id} player={player} />
-        ))}
+        {filtered.slice(0, 30).map((player) => {
+          const detail = players.find((p) => p.player_id === player.player_id);
+          return (
+            <TransferCard
+              key={player.player_id}
+              player={player}
+              detail={detail}
+              isExpanded={expanded === player.player_id}
+              onToggle={() =>
+                setExpanded(
+                  expanded === player.player_id ? null : player.player_id,
+                )
+              }
+            />
+          );
+        })}
       </div>
 
       {filtered.length > 30 && (
@@ -137,15 +155,26 @@ export function TransfersPage() {
   );
 }
 
-function TransferCard({ player }: { player: TransferPick }) {
+function TransferCard({
+  player,
+  detail,
+  isExpanded,
+  onToggle,
+}: {
+  player: TransferPick;
+  detail?: PlayerDashboard;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
   const rec = recommendationStyle(player.recommendation);
 
   return (
     <Card
       className={cn(
-        "hover:shadow-md transition-shadow border-l-4",
+        "hover:shadow-md transition-shadow border-l-4 cursor-pointer",
         rec.border,
       )}
+      onClick={onToggle}
     >
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
@@ -162,6 +191,12 @@ function TransferCard({ player }: { player: TransferPick }) {
             <Badge className={cn(rec.bg, rec.text, "font-semibold")}>
               {rec.label}
             </Badge>
+            <ChevronDown
+              className={cn(
+                "h-4 w-4 text-[var(--muted-foreground)] transition-transform",
+                isExpanded && "rotate-180",
+              )}
+            />
           </div>
         </div>
       </CardHeader>
@@ -196,6 +231,98 @@ function TransferCard({ player }: { player: TransferPick }) {
             </li>
           ))}
         </ul>
+
+        {/* Expanded AI Detail */}
+        {isExpanded && detail && (
+          <div
+            className="mt-4 pt-4 border-t border-[var(--border)] space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* AI Assessment */}
+            {detail.llm_summary && (
+              <div className="rounded-lg border border-[var(--ai-border)] bg-[var(--ai-bg)] p-3">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-[var(--accent)]" />
+                  <span className="text-xs font-semibold text-[var(--accent)]">
+                    AI Assessment
+                  </span>
+                </div>
+                <p className="text-sm text-[var(--muted-foreground)] leading-relaxed">
+                  {detail.llm_summary}
+                </p>
+              </div>
+            )}
+
+            {/* Injury Status */}
+            {detail.injury_risk != null && (
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-3.5 w-3.5 text-[var(--muted-foreground)] mt-0.5 shrink-0" />
+                <div>
+                  <span className="text-xs font-semibold">
+                    Injury: {detail.injury_risk}/10
+                  </span>
+                  {detail.injury_reasoning && (
+                    <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
+                      {detail.injury_reasoning}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Sentiment */}
+            {detail.sentiment_label && (
+              <div className="flex items-start gap-2">
+                <Newspaper className="h-3.5 w-3.5 text-[var(--muted-foreground)] mt-0.5 shrink-0" />
+                <div>
+                  <span className="text-xs font-semibold capitalize">
+                    Sentiment: {detail.sentiment_label}
+                  </span>
+                  {detail.key_themes && detail.key_themes.length > 0 && (
+                    <div className="flex gap-1 mt-1 flex-wrap">
+                      {detail.key_themes.map((t) => (
+                        <Badge
+                          key={t}
+                          className="bg-[var(--muted)] text-[var(--muted-foreground)] text-[10px]"
+                        >
+                          {t}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Fixture Outlook */}
+            {detail.fixture_recommendation && (
+              <div className="flex items-start gap-2">
+                <Calendar className="h-3.5 w-3.5 text-[var(--muted-foreground)] mt-0.5 shrink-0" />
+                <div>
+                  <span className="text-xs font-semibold">Fixture Outlook</span>
+                  <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
+                    {detail.fixture_recommendation}
+                  </p>
+                  {detail.best_gameweeks && detail.best_gameweeks.length > 0 && (
+                    <div className="flex gap-1 mt-1">
+                      {detail.best_gameweeks.map((gw) => (
+                        <span
+                          key={gw}
+                          className={cn(
+                            "rounded px-1.5 py-0.5 text-[10px] font-medium",
+                            fdrClass(2),
+                          )}
+                        >
+                          GW{gw}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
