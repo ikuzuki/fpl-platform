@@ -146,21 +146,13 @@ jobs:
   # ---------------------------------------------------------------------------
   # Dashboard deploy — build React app, upload to S3, invalidate CloudFront
   #
-  # Needs terraform-apply to complete first when infra also changed in this push
-  # (e.g. first deploy after adding the web-hosting module). If infra is
-  # unchanged terraform-apply is skipped and this job runs immediately.
-  #
   # Required secrets:
-  #   CLOUDFRONT_DISTRIBUTION_ID_DEV — set this once after the first
-  #   terraform apply using: terraform -chdir=infrastructure/environments/dev
-  #   output -raw cloudfront_distribution_id
+  #   CLOUDFRONT_DISTRIBUTION_ID_DEV — set once after the first terraform apply:
+  #   terraform -chdir=infrastructure/environments/dev output -raw cloudfront_distribution_id
   # ---------------------------------------------------------------------------
   dashboard-deploy:
-    needs: [detect-changes, terraform-apply]
-    if: |
-      always() &&
-      needs.detect-changes.outputs.web == 'true' &&
-      (needs.terraform-apply.result == 'success' || needs.terraform-apply.result == 'skipped')
+    needs: detect-changes
+    if: needs.detect-changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
