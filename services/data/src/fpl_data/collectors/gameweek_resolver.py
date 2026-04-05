@@ -42,7 +42,10 @@ async def resolve_gameweek(season: str = "2025-26") -> GameweekInfo:
     Raises:
         ValueError: If no gameweek data is found in the API response.
     """
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with httpx.AsyncClient(
+        headers={"User-Agent": "Mozilla/5.0 (compatible; FPL-Platform/1.0)"},
+        timeout=30.0,
+    ) as client:
         response = await client.get(FPL_BOOTSTRAP_URL)
         response.raise_for_status()
         data = response.json()
