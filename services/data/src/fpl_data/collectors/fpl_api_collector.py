@@ -22,6 +22,7 @@ class FPLAPICollector:
     def __init__(self, s3_client: S3Client, output_bucket: str) -> None:
         self.s3_client = s3_client
         self.output_bucket = output_bucket
+        self._bootstrap_cache: dict | None = None
 
     async def collect_bootstrap(self, season: str, *, force: bool = False) -> CollectionResponse:
         """Collect bootstrap-static data (all players, teams, gameweeks).
@@ -38,7 +39,7 @@ class FPLAPICollector:
             logger.info("Bootstrap data already exists for season=%s, skipping", season)
             return CollectionResponse(status="success", records_collected=0, output_path=prefix)
 
-        data = await self._fetch(f"{FPL_BASE_URL}/bootstrap-static/")
+        data = await self._fetch_bootstrap()
         timestamp = datetime.now(UTC).isoformat()
         key = f"{prefix}{timestamp}.json"
         self.s3_client.put_json(self.output_bucket, key, data)
@@ -149,13 +150,19 @@ class FPLAPICollector:
         )
         return CollectionResponse(status="success", records_collected=records, output_path=key)
 
+    async def _fetch_bootstrap(self) -> dict:
+        """Fetch bootstrap-static data, caching for reuse within the same invocation."""
+        if self._bootstrap_cache is None:
+            self._bootstrap_cache = await self._fetch(f"{FPL_BASE_URL}/bootstrap-static/")
+        return self._bootstrap_cache
+
     async def _validate_gameweek_finished(self, gameweek: int) -> None:
         """Check that the requested gameweek has finished.
 
         Raises:
             ValueError: If the gameweek has not finished yet.
         """
-        data = await self._fetch(f"{FPL_BASE_URL}/bootstrap-static/")
+        data = await self._fetch_bootstrap()
         events = data.get("events", [])
 
         for event in events:
@@ -179,7 +186,9 @@ class FPLAPICollector:
         """Fetch JSON from the FPL API."""
         logger.info("[FPL API] GET %s", url)
         async with httpx.AsyncClient(
-            headers={"User-Agent": "Mozilla/5.0 (compatible; FPL-Platform/1.0)"},
+            headers={
+                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            },
             timeout=30.0,
         ) as client:
             response = await client.get(url)
