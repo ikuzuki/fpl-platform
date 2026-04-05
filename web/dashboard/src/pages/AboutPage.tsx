@@ -1,7 +1,7 @@
 import { ExternalLink, Mail } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { PulseLogo, MetricIcons, NavIcons, StatusIcons, FdrDot, RecBadge } from "@/components/icons/FplIcons";
+import { PulseLogo } from "@/components/icons/FplIcons";
 import { cn } from "@/lib/utils";
 
 /* ------------------------------------------------------------------ */
@@ -10,61 +10,67 @@ import { cn } from "@/lib/utils";
 
 const PIPELINE_STEPS = [
   {
+    stage: "Trigger",
+    color: "var(--chart-3)",
+    items: ["EventBridge cron", "Every Tuesday 8am UTC", "Step Functions starts"],
+    tech: "EventBridge",
+  },
+  {
     stage: "Collect",
     color: "var(--chart-1)",
-    items: ["FPL API", "Understat xG", "News RSS"],
-    tech: "Python Lambdas",
+    items: ["FPL API", "Understat xG/xA", "News RSS feeds"],
+    tech: "3 Lambdas in parallel",
   },
   {
     stage: "Validate",
     color: "var(--chart-4)",
-    items: ["Schema checks", "Dedup", "Type coercion"],
+    items: ["Schema checks", "Type coercion", "Invalid records to DLQ"],
     tech: "Great Expectations",
   },
   {
     stage: "Enrich",
     color: "var(--chart-5)",
     items: ["Player summaries", "Injury signals", "Sentiment", "Fixture outlook"],
-    tech: "Claude Haiku + Sonnet",
+    tech: "4 Lambdas in parallel",
   },
   {
     stage: "Curate",
     color: "var(--chart-2)",
     items: ["FPL Score (7 components)", "Transfer picks", "Team strength", "GW briefing"],
-    tech: "Python + DuckDB",
-  },
-  {
-    stage: "Visualise",
-    color: "var(--accent)",
-    items: ["9 interactive pages", "Custom icon system", "URL-synced filters"],
-    tech: "React + Recharts",
+    tech: "Curate Lambda",
   },
 ];
 
 const DESIGN_DECISIONS = [
   {
-    title: "Chart type selection",
-    body: "Scatter plots for correlation analysis (xG efficiency, ownership vs value), heatmaps for density patterns (fixture difficulty, momentum), bar charts for component breakdowns (score waterfall). Each chart type was chosen for the specific analytical question it answers — no pie charts, no decorative viz.",
+    title: "S3 data lake with 4 layers",
+    adr: "ADR-0002",
+    body: "One S3 bucket, four prefixes: raw (JSON, as-is from APIs), clean (Parquet, validated), enriched (Parquet, LLM-augmented), curated (Parquet, dashboard-ready). Hive-style partitioning by season and gameweek enables partition pruning and prefix-based idempotency. No separate buckets per stage - one IAM policy, one lifecycle config, one bucket to manage.",
   },
   {
-    title: "Composite scoring",
-    body: "The FPL Score blends 7 weighted signals (form, value, fixtures, xG, momentum, ICT, injury) into a single 0-100 metric. Each component is min-max normalised so different scales don't dominate. The weights were tuned against historical top-performer correlation.",
+    title: "Direct Anthropic SDK over LangChain",
+    adr: "ADR-0003",
+    body: "The enrichment pipeline makes structured batch calls: system prompt plus user message and get a JSON array back. LangChain's chain abstraction adds indirection without simplifying this pattern, pulls ~20 transitive dependencies, and wraps prompts with its own formatting. Direct SDK calls keep the Lambda container smaller, the dependency tree simpler, and debugging straightforward. LangGraph is used separately for the recommendation agent where stateful multi-step reasoning earns the framework overhead.",
   },
   {
-    title: "LLM enrichment over LangChain",
-    body: "Direct Claude API calls with versioned prompts instead of a framework. Each enrichment type (summary, injury, sentiment, fixtures) uses the cheapest model that achieves the required quality — Haiku for bulk, Sonnet for nuanced reasoning. All calls traced via Langfuse.",
+    title: "Tiered model selection for cost control",
+    adr: "ADR-0004",
+    body: "Three enrichers (player summaries, injury signals, sentiment) use Haiku at $0.25/$1.25 per MTok. Fixture outlook uses Sonnet at $3/$15 per MTok because it needs to reason across 5-game sequences and team form trends. Input filtering reduces per-call token counts by 60-90% by sending only the fields each enricher's prompt actually references. Estimated cost: ~$0.72 per gameweek, ~$27 per season.",
   },
   {
-    title: "Design system tokens",
-    body: "All colours defined as OKLCh CSS custom properties with automatic dark mode. Chart palette, position colours, and score component colours are referenced via var() throughout — no hardcoded hex values in component files.",
+    title: "Versioned prompts and Langfuse tracing",
+    adr: "ADR-0005",
+    body: "Prompts live in plain text files under prompts/v{N}/ directories, checked into git. Never edit a published version - create v{N+1}. Each LLM call is traced via Langfuse @observe decorators: enricher name, batch size, prompt version, token counts, latency, and a quality score for whether the LLM returned the right number of items. Session IDs group all traces for a gameweek run together.",
   },
   {
-    title: "Accessibility baseline",
-    body: "Skip-to-content link, aria-sort on sortable headers, aria-pressed on toggle buttons, labelled search inputs, keyboard-navigable expandable rows, FDR number overlays for colour-blind users. Not perfect, but deliberate.",
+    title: "Parallel Step Functions states",
+    adr: "ADR-0006",
+    body: "Collectors run in parallel (3 branches, ~15s instead of ~45s sequential). Enrichers run as 4 separate Lambdas in a Parallel state - each gets its own 900s timeout, and a Sonnet failure doesn't block the Haiku enrichers. Step Functions handles per-enricher retry independently. Rate control is dual-layered: asyncio.Semaphore(2) caps in-flight connections, and a RateLimiter caps requests per minute against the model's RPM limit.",
   },
   {
-    title: "URL state sync",
-    body: "All page filters (position, search, sort, metric, player selection) persist in the URL via useSearchParams. Every view is linkable and shareable — /players?pos=MID&q=salah works as expected.",
+    title: "Pre-generated JSON on S3 plus CloudFront",
+    adr: "ADR-0007",
+    body: "The curated data changes once per gameweek. The Curate Lambda writes JSON alongside its Parquet outputs to a public S3 prefix. The React app fetches static JSON files on load - no compute runs per dashboard request. Total hosting cost is around $0.50/month. When the LangGraph agent arrives in Phase 2, an API Gateway origin is added to CloudFront without touching the static dashboard at all.",
   },
 ];
 
@@ -80,9 +86,9 @@ const TECH_STACK = {
   ],
   "Data Pipeline": [
     { name: "Python 3.11", note: "Type hints, Pydantic v2" },
-    { name: "AWS Lambda", note: "RunHandler pattern" },
-    { name: "S3 Data Lake", note: "raw → clean → enriched → curated" },
-    { name: "DuckDB", note: "Local analytics engine" },
+    { name: "AWS Lambda", note: "Container images via ECR" },
+    { name: "AWS Step Functions", note: "Parallel states, retry/catch" },
+    { name: "S3 Data Lake", note: "raw, clean, enriched, curated" },
     { name: "Parquet", note: "zstd compression, Hive partitioning" },
     { name: "Great Expectations", note: "Validation at each layer" },
   ],
@@ -94,17 +100,17 @@ const TECH_STACK = {
   ],
   Infrastructure: [
     { name: "Terraform", note: "All resources as code" },
-    { name: "AWS Step Functions", note: "Pipeline orchestration" },
-    { name: "GitHub Actions", note: "CI/CD from intech-cicd" },
+    { name: "EventBridge", note: "Weekly pipeline trigger" },
+    { name: "GitHub Actions", note: "CI/CD, path-filtered" },
     { name: "eu-west-2", note: "London region" },
   ],
 };
 
 const ROADMAP = [
-  { item: "Live API backend", desc: "Replace static JSON with FastAPI endpoints + cache invalidation", status: "planned" },
+  { item: "Live API backend", desc: "Replace static JSON with FastAPI endpoints and cache invalidation", status: "planned" },
   { item: "Team builder", desc: "Full 15-player squad optimiser with budget constraints", status: "planned" },
   { item: "Gameweek auto-email", desc: "Weekly briefing delivered to inbox via SES", status: "planned" },
-  { item: "Historical backtest", desc: "\"What if I'd followed the AI picks since GW1?\" simulation", status: "idea" },
+  { item: "Historical backtest", desc: "What if I had followed the AI picks since GW1? simulation", status: "idea" },
   { item: "Live gameweek tracker", desc: "WebSocket updates during matches with live score projections", status: "idea" },
 ];
 
@@ -135,7 +141,7 @@ export function AboutPage() {
               <div className="flex-1">
                 <h3 className="text-xl font-bold">Issei Kuzuki</h3>
                 <p className="text-sm text-[var(--muted-foreground)] mt-1 leading-relaxed">
-                  Data & software engineer building at the intersection of cloud
+                  Data and software engineer building at the intersection of cloud
                   infrastructure, data pipelines, and AI-powered applications.
                   This project combines a genuine FPL obsession with a desire to
                   demonstrate full-stack depth — from Terraform modules to
@@ -153,7 +159,7 @@ export function AboutPage() {
                     <ExternalLink className="h-3 w-3" />
                   </a>
                   <a
-                    href="https://linkedin.com/in/ikuzuki"
+                    href="https://uk.linkedin.com/in/issei-kuzuki-ab850722b"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
@@ -163,7 +169,7 @@ export function AboutPage() {
                     <ExternalLink className="h-3 w-3" />
                   </a>
                   <a
-                    href="mailto:issei@example.com"
+                    href="mailto:ikuzuki@gmail.com"
                     className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
                   >
                     <Mail className="h-4 w-4" />
@@ -178,7 +184,12 @@ export function AboutPage() {
 
       {/* Architecture pipeline */}
       <section>
-        <h2 className="text-lg font-semibold mb-3">How it works</h2>
+        <h2 className="text-lg font-semibold mb-1">How it works</h2>
+        <p className="text-sm text-[var(--muted-foreground)] mb-3">
+          Every Tuesday at 8am UTC, EventBridge fires and the pipeline runs automatically.
+          No manual intervention. Data flows from three sources through validation, LLM enrichment,
+          and curation before landing as static JSON served to this dashboard.
+        </p>
         <div className="grid gap-3 md:grid-cols-5">
           {PIPELINE_STEPS.map((step, i) => (
             <Card key={step.stage} className="relative overflow-hidden">
@@ -217,12 +228,22 @@ export function AboutPage() {
 
       {/* Design decisions */}
       <section>
-        <h2 className="text-lg font-semibold mb-3">Design decisions</h2>
+        <h2 className="text-lg font-semibold mb-1">Design decisions</h2>
+        <p className="text-sm text-[var(--muted-foreground)] mb-3">
+          Each decision is documented as an Architecture Decision Record in{" "}
+          <code className="text-xs bg-[var(--muted)] px-1 py-0.5 rounded">docs/adr/</code>.
+          The reasoning, alternatives considered, and trade-offs are all captured there.
+        </p>
         <div className="grid gap-3 md:grid-cols-2">
           {DESIGN_DECISIONS.map((d) => (
             <Card key={d.title}>
               <CardContent className="pt-4">
-                <h3 className="font-semibold text-sm mb-1.5">{d.title}</h3>
+                <div className="flex items-start justify-between gap-2 mb-1.5">
+                  <h3 className="font-semibold text-sm">{d.title}</h3>
+                  <Badge className="bg-[var(--muted)] text-[var(--muted-foreground)] text-[10px] shrink-0">
+                    {d.adr}
+                  </Badge>
+                </div>
                 <p className="text-xs text-[var(--muted-foreground)] leading-relaxed">
                   {d.body}
                 </p>
@@ -230,84 +251,6 @@ export function AboutPage() {
             </Card>
           ))}
         </div>
-      </section>
-
-      {/* Icon system showcase */}
-      <section>
-        <h2 className="text-lg font-semibold mb-3">Custom icon system</h2>
-        <Card>
-          <CardContent className="pt-4">
-            <p className="text-xs text-[var(--muted-foreground)] mb-4">
-              23 domain-specific SVG icons built for the FPL context — replacing generic
-              icon libraries with purpose-built visuals that communicate data meaning at a glance.
-            </p>
-            <div className="space-y-4">
-              <div>
-                <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider mb-2">Navigation</p>
-                <div className="flex gap-4 items-center flex-wrap">
-                  {(["Briefing", "Players", "Fixtures", "Transfers", "Teams", "Trends"] as const).map((name) => {
-                    const Icon = NavIcons[name];
-                    return (
-                      <div key={name} className="flex flex-col items-center gap-1">
-                        <Icon size={20} className="text-[var(--foreground)]" />
-                        <span className="text-[9px] text-[var(--muted-foreground)]">{name}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              <div>
-                <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider mb-2">Metrics</p>
-                <div className="flex gap-4 items-center flex-wrap">
-                  {(["Form", "ExpectedGoals", "Ownership", "IctIndex", "Momentum", "Value", "PriceUp", "PriceDown", "AiInsight"] as const).map((name) => {
-                    const Icon = MetricIcons[name];
-                    return (
-                      <div key={name} className="flex flex-col items-center gap-1">
-                        <Icon size={20} />
-                        <span className="text-[9px] text-[var(--muted-foreground)]">{name}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              <div>
-                <p className="text-[10px] text-[var(--muted-foreground)] uppercase tracking-wider mb-2">Status & Badges</p>
-                <div className="flex gap-4 items-center flex-wrap">
-                  <div className="flex flex-col items-center gap-1">
-                    <StatusIcons.Available size={20} />
-                    <span className="text-[9px] text-[var(--muted-foreground)]">Available</span>
-                  </div>
-                  <div className="flex flex-col items-center gap-1">
-                    <StatusIcons.Doubtful size={20} />
-                    <span className="text-[9px] text-[var(--muted-foreground)]">Doubtful</span>
-                  </div>
-                  <div className="flex flex-col items-center gap-1">
-                    <StatusIcons.Injured size={20} />
-                    <span className="text-[9px] text-[var(--muted-foreground)]">Injured</span>
-                  </div>
-                  <div className="flex flex-col items-center gap-1">
-                    <StatusIcons.Suspended size={20} />
-                    <span className="text-[9px] text-[var(--muted-foreground)]">Suspended</span>
-                  </div>
-                  <div className="flex flex-col items-center gap-1">
-                    <StatusIcons.NewSigning size={20} />
-                    <span className="text-[9px] text-[var(--muted-foreground)]">New</span>
-                  </div>
-                  <div className="border-l border-[var(--border)] pl-4 flex gap-2 items-center">
-                    {([1, 2, 3, 4, 5] as const).map((l) => (
-                      <FdrDot key={l} level={l} size={18} />
-                    ))}
-                  </div>
-                  <div className="border-l border-[var(--border)] pl-4 flex gap-2 items-center">
-                    {(["buy", "sell", "hold", "watch"] as const).map((r) => (
-                      <RecBadge key={r} rec={r} size={20} />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </section>
 
       {/* Tech stack */}
