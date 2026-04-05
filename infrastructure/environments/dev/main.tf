@@ -283,7 +283,7 @@ module "lambda_enricher" {
   image_uri          = "${module.ecr_enrich.repository_url}:latest"
   execution_role_arn = aws_iam_role.lambda_standard.arn
   command            = ["fpl_enrich.handlers.enricher.lambda_handler"]
-  timeout            = 600
+  timeout            = 900
   memory_size        = 1024
   environment_variables = {
     ENV              = var.environment
