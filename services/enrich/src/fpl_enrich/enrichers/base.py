@@ -1,5 +1,6 @@
-"""Abstract base class for FPL LLM enrichers with batch processing."""
+"""Abstract base class for FPL LLM enrichers with async batch processing."""
 
+import asyncio
 import json
 import logging
 from abc import ABC, abstractmethod
@@ -10,6 +11,11 @@ import anthropic
 from langfuse import observe
 
 logger = logging.getLogger(__name__)
+
+# Max concurrent Anthropic API calls across all enrichers.
+# Tier 1 limits: Haiku 50 RPM, Sonnet 50 RPM.
+# With 4 enrichers running in parallel, 5 concurrent keeps us well under.
+DEFAULT_MAX_CONCURRENT = 5
 
 
 class FPLEnricher(ABC):
@@ -29,18 +35,20 @@ class FPLEnricher(ABC):
 
     def __init__(
         self,
-        anthropic_client: anthropic.Anthropic,
+        anthropic_client: anthropic.AsyncAnthropic,
         prompt_version: str = "v1",
+        semaphore: asyncio.Semaphore | None = None,
     ) -> None:
         self.client = anthropic_client
         self.prompt_version = prompt_version
+        self.semaphore = semaphore or asyncio.Semaphore(DEFAULT_MAX_CONCURRENT)
         self.valid_count = 0
         self.invalid_count = 0
         self.total_input_tokens = 0
         self.total_output_tokens = 0
 
-    def apply(self, items: list[dict[str, Any]]) -> list[dict[str, Any] | None]:
-        """Process all items through the LLM in batches.
+    async def apply(self, items: list[dict[str, Any]]) -> list[dict[str, Any] | None]:
+        """Process all items through the LLM in concurrent batches.
 
         Returns a list aligned with input — None for items that failed validation.
         """
@@ -49,12 +57,33 @@ class FPLEnricher(ABC):
         self.total_input_tokens = 0
         self.total_output_tokens = 0
 
+        batches = list(self._chunk(items, self.BATCH_SIZE))
+        logger.info(
+            "%s: processing %d items in %d batches (concurrency=%d)",
+            self.__class__.__name__,
+            len(items),
+            len(batches),
+            self.semaphore._value,
+        )
+
+        # Run all batches concurrently, limited by semaphore
+        tasks = [self._call_llm_with_semaphore(batch) for batch in batches]
+        batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+
         results: list[dict[str, Any] | None] = []
+        for i, batch_result in enumerate(batch_results):
+            if isinstance(batch_result, Exception):
+                logger.error(
+                    "%s: batch %d failed: %s",
+                    self.__class__.__name__,
+                    i,
+                    batch_result,
+                )
+                results.extend([None] * len(batches[i]))
+                self.invalid_count += len(batches[i])
+                continue
 
-        for batch in self._chunk(items, self.BATCH_SIZE):
-            batch_results = self._call_llm(batch)
-
-            for output in batch_results:
+            for output in batch_result:
                 validated = self._validate_output(output)
                 if validated is not None:
                     results.append(validated)
@@ -66,8 +95,13 @@ class FPLEnricher(ABC):
         self._log_summary()
         return results
 
+    async def _call_llm_with_semaphore(self, batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Acquire semaphore before making the API call."""
+        async with self.semaphore:
+            return await self._call_llm(batch)
+
     @observe(name="enricher_batch_call")
-    def _call_llm(self, batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    async def _call_llm(self, batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Send a batch of items to the Anthropic API and parse the JSON response."""
         user_content = "\n".join(f"I{i + 1}: {json.dumps(item)}" for i, item in enumerate(batch))
 
@@ -81,7 +115,7 @@ class FPLEnricher(ABC):
             self.prompt_version,
         )
 
-        response = self.client.messages.create(
+        response = await self.client.messages.create(
             model=self.MODEL,
             max_tokens=4096,
             system=system_prompt,

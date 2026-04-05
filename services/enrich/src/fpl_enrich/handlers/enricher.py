@@ -1,5 +1,6 @@
 """Lambda handler for LLM enrichment of player data."""
 
+import asyncio
 import logging
 from typing import Any
 
@@ -8,6 +9,7 @@ import boto3
 import pyarrow as pa
 from langfuse import observe
 
+from fpl_enrich.enrichers.base import DEFAULT_MAX_CONCURRENT
 from fpl_enrich.enrichers.fixture_outlook import FixtureOutlookEnricher
 from fpl_enrich.enrichers.injury_signal import InjurySignalEnricher
 from fpl_enrich.enrichers.player_summary import PlayerSummaryEnricher
@@ -95,6 +97,30 @@ def _init_langfuse(region: str = "eu-west-2") -> None:
         )
 
 
+async def _run_enricher(
+    enricher: Any,
+    players: list[dict[str, Any]],
+    s3_client: S3Client,
+    bucket: str,
+    season: str,
+    gameweek: int,
+) -> tuple[str, list[dict[str, Any] | None]]:
+    """Run a single enricher with fallback handling. Returns (name, results)."""
+    name = enricher.__class__.__name__
+    try:
+        results = await enricher.apply(players)
+        return (name, results)
+    except anthropic.RateLimitError:
+        logger.warning("%s hit rate limit — falling back to cached summaries", name)
+        cached = _read_cached_summaries(s3_client, bucket, season, gameweek)
+        return (name, [cached] if cached else [None] * len(players))
+    except anthropic.APIError as e:
+        logger.error("%s API error: %s — writing to DLQ", name, e)
+        dlq_key = f"dlq/enrichment/season={season}/gameweek={gameweek:02d}/{name}.json"
+        s3_client.put_json(bucket, dlq_key, {"error": str(e), "player_count": len(players)})
+        return (name, [None] * len(players))
+
+
 @observe(name="enrich_gameweek")
 async def main(
     season: str,
@@ -115,35 +141,34 @@ async def main(
 
     # Get API key from Secrets Manager
     api_key = _get_secret("/fpl-platform/dev/anthropic-api-key")
-    client = anthropic.Anthropic(api_key=api_key)
+    async_client = anthropic.AsyncAnthropic(api_key=api_key)
 
-    # Initialise enrichers
-    summary_enricher = PlayerSummaryEnricher(anthropic_client=client, prompt_version=prompt_version)
-    injury_enricher = InjurySignalEnricher(anthropic_client=client, prompt_version=prompt_version)
-    sentiment_enricher = SentimentEnricher(anthropic_client=client, prompt_version=prompt_version)
+    # Shared semaphore across all enrichers — Tier 1 limit is 50 RPM per model
+    semaphore = asyncio.Semaphore(DEFAULT_MAX_CONCURRENT)
+
+    # Initialise enrichers with shared client and semaphore
+    summary_enricher = PlayerSummaryEnricher(
+        anthropic_client=async_client, prompt_version=prompt_version, semaphore=semaphore
+    )
+    injury_enricher = InjurySignalEnricher(
+        anthropic_client=async_client, prompt_version=prompt_version, semaphore=semaphore
+    )
+    sentiment_enricher = SentimentEnricher(
+        anthropic_client=async_client, prompt_version=prompt_version, semaphore=semaphore
+    )
     fixture_enricher = FixtureOutlookEnricher(
-        anthropic_client=client, prompt_version=prompt_version
+        anthropic_client=async_client, prompt_version=prompt_version, semaphore=semaphore
     )
     all_enrichers = [summary_enricher, injury_enricher, sentiment_enricher, fixture_enricher]
 
-    # Run enrichers with fallback handling
-    results: dict[str, list[dict[str, Any] | None]] = {}
-    for enricher in all_enrichers:
-        name = enricher.__class__.__name__
-        try:
-            results[name] = enricher.apply(players)
-        except anthropic.RateLimitError:
-            logger.warning("%s hit rate limit — falling back to cached summaries", name)
-            cached = _read_cached_summaries(s3_client, output_bucket, season, gameweek)
-            results[name] = [cached] if cached else [None] * len(players)
-        except anthropic.APIError as e:
-            logger.error("%s API error: %s — writing to DLQ", name, e)
-            # Write failed batch to DLQ
-            dlq_key = f"dlq/enrichment/season={season}/gameweek={gameweek:02d}/{name}.json"
-            s3_client.put_json(
-                output_bucket, dlq_key, {"error": str(e), "player_count": len(players)}
-            )
-            results[name] = [None] * len(players)
+    # Run all 4 enrichers in parallel, sharing the semaphore for rate limiting
+    enricher_tasks = [
+        _run_enricher(enricher, players, s3_client, output_bucket, season, gameweek)
+        for enricher in all_enrichers
+    ]
+    enricher_outputs = await asyncio.gather(*enricher_tasks)
+
+    results: dict[str, list[dict[str, Any] | None]] = dict(enricher_outputs)
 
     # Merge enrichment results into player records
     enriched_players = []
