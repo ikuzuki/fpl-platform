@@ -1,7 +1,7 @@
 """Unit tests for the FPLEnricher abstract base class."""
 
-import asyncio
 import json
+import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -187,28 +187,30 @@ class TestApply:
         assert enricher.total_output_tokens == 100
 
     @pytest.mark.asyncio
-    async def test_semaphore_limits_concurrency(self, mock_client: MagicMock) -> None:
-        """Verify the semaphore actually limits concurrent API calls."""
-        semaphore = asyncio.Semaphore(2)
-        enricher = _StubEnricher(anthropic_client=mock_client, semaphore=semaphore)
+    async def test_rate_limiter_spaces_requests(self, mock_client: MagicMock) -> None:
+        """Verify the rate limiter spaces out API calls."""
+        from fpl_enrich.enrichers.base import RateLimiter
 
-        max_concurrent = 0
-        current_concurrent = 0
+        # 600 RPM = 10/sec = 0.1s interval — fast enough for tests
+        rate_limiter = RateLimiter(requests_per_minute=600)
+        enricher = _StubEnricher(anthropic_client=mock_client, rate_limiter=rate_limiter)
+
+        call_times: list[float] = []
 
         async def _tracking_create(**kwargs: Any) -> MagicMock:
-            nonlocal max_concurrent, current_concurrent
-            current_concurrent += 1
-            max_concurrent = max(max_concurrent, current_concurrent)
-            await asyncio.sleep(0.01)  # Simulate API latency
-            current_concurrent -= 1
+            call_times.append(time.monotonic())
             return _make_anthropic_response([{"summary": "x"}])
 
         mock_client.messages.create = _tracking_create
 
-        # 5 items with BATCH_SIZE=2 → 3 batches, semaphore=2
-        await enricher.apply([{"name": f"{i}"} for i in range(5)])
+        # 4 items with BATCH_SIZE=2 → 2 batches
+        await enricher.apply([{"name": f"{i}"} for i in range(4)])
 
-        assert max_concurrent <= 2
+        assert len(call_times) == 2
+        # Calls should be spaced by at least the interval (~0.1s)
+        if len(call_times) >= 2:
+            gap = call_times[1] - call_times[0]
+            assert gap >= 0.09  # allow small timing tolerance
 
 
 @pytest.mark.unit

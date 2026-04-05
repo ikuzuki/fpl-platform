@@ -9,7 +9,7 @@ import boto3
 import pyarrow as pa
 from langfuse import observe
 
-from fpl_enrich.enrichers.base import DEFAULT_MAX_CONCURRENT
+from fpl_enrich.enrichers.base import RateLimiter
 from fpl_enrich.enrichers.fixture_outlook import FixtureOutlookEnricher
 from fpl_enrich.enrichers.injury_signal import InjurySignalEnricher
 from fpl_enrich.enrichers.player_summary import PlayerSummaryEnricher
@@ -143,42 +143,73 @@ async def main(
     api_key = _get_secret("/fpl-platform/dev/anthropic-api-key")
     async_client = anthropic.AsyncAnthropic(api_key=api_key)
 
-    # Shared semaphore across all enrichers — Tier 1 limit is 50 RPM per model
-    semaphore = asyncio.Semaphore(DEFAULT_MAX_CONCURRENT)
+    # Shared rate limiter — Tier 1 is 50 RPM, target 40 RPM to leave headroom
+    rate_limiter = RateLimiter(requests_per_minute=40)
 
-    # Initialise enrichers with shared client and semaphore
+    # Initialise enrichers with shared client and rate limiter
     summary_enricher = PlayerSummaryEnricher(
-        anthropic_client=async_client, prompt_version=prompt_version, semaphore=semaphore
+        anthropic_client=async_client, prompt_version=prompt_version, rate_limiter=rate_limiter
     )
     injury_enricher = InjurySignalEnricher(
-        anthropic_client=async_client, prompt_version=prompt_version, semaphore=semaphore
+        anthropic_client=async_client, prompt_version=prompt_version, rate_limiter=rate_limiter
     )
     sentiment_enricher = SentimentEnricher(
-        anthropic_client=async_client, prompt_version=prompt_version, semaphore=semaphore
+        anthropic_client=async_client, prompt_version=prompt_version, rate_limiter=rate_limiter
     )
     fixture_enricher = FixtureOutlookEnricher(
-        anthropic_client=async_client, prompt_version=prompt_version, semaphore=semaphore
+        anthropic_client=async_client, prompt_version=prompt_version, rate_limiter=rate_limiter
     )
     all_enrichers = [summary_enricher, injury_enricher, sentiment_enricher, fixture_enricher]
 
-    # Run all 4 enrichers in parallel, sharing the semaphore for rate limiting
+    # Filter top 200 players by ownership for expensive Sonnet fixture outlook
+    fixture_outlook_limit = 200
+    top_player_ids = {
+        p.get("id")
+        for p in sorted(
+            players,
+            key=lambda p: float(p.get("selected_by_percent", 0)),
+            reverse=True,
+        )[:fixture_outlook_limit]
+    }
+    fixture_players = [p for p in players if p.get("id") in top_player_ids]
+    logger.info(
+        "Fixture outlook: %d/%d players (top by ownership)",
+        len(fixture_players),
+        len(players),
+    )
+
+    # Run Haiku enrichers on all players, Sonnet fixture outlook on top 200 only
     enricher_tasks = [
-        _run_enricher(enricher, players, s3_client, output_bucket, season, gameweek)
-        for enricher in all_enrichers
+        _run_enricher(summary_enricher, players, s3_client, output_bucket, season, gameweek),
+        _run_enricher(injury_enricher, players, s3_client, output_bucket, season, gameweek),
+        _run_enricher(sentiment_enricher, players, s3_client, output_bucket, season, gameweek),
+        _run_enricher(
+            fixture_enricher, fixture_players, s3_client, output_bucket, season, gameweek
+        ),
     ]
     enricher_outputs = await asyncio.gather(*enricher_tasks)
 
-    results: dict[str, list[dict[str, Any] | None]] = dict(enricher_outputs)
+    # Build lookup for fixture outlook results (indexed by player id)
+    fixture_name, fixture_results = enricher_outputs[3]
+    fixture_by_id: dict[Any, dict[str, Any] | None] = {}
+    for player, result in zip(fixture_players, fixture_results, strict=True):
+        fixture_by_id[player.get("id")] = result
 
     # Merge enrichment results into player records
     enriched_players = []
     for i, player in enumerate(players):
         enriched = dict(player)
-        for name, enricher_results in results.items():
+        # Haiku enrichers — aligned 1:1 with full player list
+        for name, enricher_results in enricher_outputs[:3]:
             if i < len(enricher_results) and enricher_results[i] is not None:
                 prefix = name.replace("Enricher", "").lower()
                 for key, value in enricher_results[i].items():
                     enriched[f"{prefix}_{key}"] = value
+        # Fixture outlook — lookup by player id (None if not in top 200)
+        fixture_result = fixture_by_id.get(player.get("id"))
+        if fixture_result is not None:
+            for key, value in fixture_result.items():
+                enriched[f"fixtureoutlook_{key}"] = value
         enriched_players.append(enriched)
 
     # Write enriched Parquet
