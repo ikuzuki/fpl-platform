@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- CloudFront cache invalidation: EventBridge rule triggers a Lambda to invalidate `/api/v1/*` when the pipeline succeeds, so the dashboard serves fresh data immediately
 - Dashboard v4: Captain Picker Decision Matrix page with weighted composite captaincy score
 - Dashboard v4: Differential Radar page — scatter plot + card grid for low-ownership high-value players with sparklines
 - Dashboard v4: Transfer Planner page — side-by-side player comparison with budget simulation, score pyramid, and form sparklines

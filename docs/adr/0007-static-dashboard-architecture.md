@@ -80,6 +80,10 @@ s3://fpl-data-lake-dev/public/api/v1/
 
 Files are versioned by gameweek but the `latest` path always points to the most recent data. Total payload is ~250 KB — small enough to serve entirely from CloudFront edge cache.
 
+### Cache invalidation
+
+CloudFront caches `/api/v1/*` responses at the edge. Without explicit invalidation, users could see stale data for up to 24 hours after a pipeline run. Rather than embedding invalidation logic inside the Step Function (which would couple pipeline orchestration to CDN concerns), an EventBridge rule reacts to the pipeline's `SUCCEEDED` status and triggers a lightweight Lambda that calls `cloudfront:CreateInvalidation` on `/api/v1/*`. This keeps the pipeline's responsibility limited to producing data, and the invalidation concern decoupled and independently testable.
+
 ## Consequences
 
 **Easier:**
