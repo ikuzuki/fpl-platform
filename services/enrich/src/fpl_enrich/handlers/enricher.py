@@ -9,7 +9,7 @@ import boto3
 import pyarrow as pa
 from langfuse import observe
 
-from fpl_enrich.enrichers.base import DEFAULT_MAX_CONCURRENT
+from fpl_enrich.enrichers.base import RateLimiter
 from fpl_enrich.enrichers.fixture_outlook import FixtureOutlookEnricher
 from fpl_enrich.enrichers.injury_signal import InjurySignalEnricher
 from fpl_enrich.enrichers.player_summary import PlayerSummaryEnricher
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 # Cost rates per million tokens (USD)
 COST_RATES: dict[str, dict[str, float]] = {
     "claude-haiku-4-5-20251001": {"input": 0.25, "output": 1.25},
-    "claude-sonnet-4-6-20250514": {"input": 3.0, "output": 15.0},
+    "claude-sonnet-4-6": {"input": 3.0, "output": 15.0},
 }
 
 
@@ -133,35 +133,52 @@ async def main(
     logger.info("Starting enrichment for %s GW%d", season, gameweek)
     s3_client = S3Client()
 
-    # Read clean player data
+    # Read clean player data and filter to top 300 by ownership
     clean_key = f"clean/players/season={season}/gameweek={gameweek:02d}/players.parquet"
     table = s3_client.read_parquet(output_bucket, clean_key)
-    players = table.to_pylist()
-    logger.info("Read %d players from %s", len(players), clean_key)
+    all_players = table.to_pylist()
+    logger.info("Read %d total players from %s", len(all_players), clean_key)
+
+    enrichment_limit = 300
+    sorted_players = sorted(
+        all_players,
+        key=lambda p: float(p.get("selected_by_percent", 0)),
+        reverse=True,
+    )
+    players = sorted_players[:enrichment_limit]
+    enriched_ids = {p.get("id") for p in players}
+    logger.info(
+        "Enriching top %d/%d players by ownership (min ownership: %s%%)",
+        len(players),
+        len(all_players),
+        players[-1].get("selected_by_percent", "?") if players else "?",
+    )
 
     # Get API key from Secrets Manager
     api_key = _get_secret("/fpl-platform/dev/anthropic-api-key")
     async_client = anthropic.AsyncAnthropic(api_key=api_key)
 
-    # Shared semaphore across all enrichers — Tier 1 limit is 50 RPM per model
-    semaphore = asyncio.Semaphore(DEFAULT_MAX_CONCURRENT)
+    # Shared rate limiter — Tier 1: 50 RPM / 10K output TPM for Haiku.
+    # At 20 RPM with ~700 output tokens/batch ≈ 14K TPM — occasional 429s
+    # are handled by the SDK's built-in retry with backoff.
+    rate_limiter = RateLimiter(requests_per_minute=20)
 
-    # Initialise enrichers with shared client and semaphore
+    # Initialise enrichers with shared client and rate limiter
     summary_enricher = PlayerSummaryEnricher(
-        anthropic_client=async_client, prompt_version=prompt_version, semaphore=semaphore
+        anthropic_client=async_client, prompt_version=prompt_version, rate_limiter=rate_limiter
     )
     injury_enricher = InjurySignalEnricher(
-        anthropic_client=async_client, prompt_version=prompt_version, semaphore=semaphore
+        anthropic_client=async_client, prompt_version=prompt_version, rate_limiter=rate_limiter
     )
     sentiment_enricher = SentimentEnricher(
-        anthropic_client=async_client, prompt_version=prompt_version, semaphore=semaphore
+        anthropic_client=async_client, prompt_version=prompt_version, rate_limiter=rate_limiter
     )
     fixture_enricher = FixtureOutlookEnricher(
-        anthropic_client=async_client, prompt_version=prompt_version, semaphore=semaphore
+        anthropic_client=async_client, prompt_version=prompt_version, rate_limiter=rate_limiter
     )
     all_enrichers = [summary_enricher, injury_enricher, sentiment_enricher, fixture_enricher]
 
-    # Run all 4 enrichers in parallel, sharing the semaphore for rate limiting
+    # Run all 4 enrichers in parallel on the filtered player set
     enricher_tasks = [
         _run_enricher(enricher, players, s3_client, output_bucket, season, gameweek)
         for enricher in all_enrichers
@@ -170,7 +187,7 @@ async def main(
 
     results: dict[str, list[dict[str, Any] | None]] = dict(enricher_outputs)
 
-    # Merge enrichment results into player records
+    # Merge enrichment results into enriched player records
     enriched_players = []
     for i, player in enumerate(players):
         enriched = dict(player)
@@ -180,6 +197,11 @@ async def main(
                 for key, value in enricher_results[i].items():
                     enriched[f"{prefix}_{key}"] = value
         enriched_players.append(enriched)
+
+    # Append unenriched players so the full squad is in the output
+    for player in all_players:
+        if player.get("id") not in enriched_ids:
+            enriched_players.append(dict(player))
 
     # Write enriched Parquet
     enriched_table = pa.Table.from_pylist(enriched_players)
