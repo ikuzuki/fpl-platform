@@ -327,12 +327,11 @@ resource "aws_cloudwatch_event_target" "pipeline_target" {
   arn      = module.pipeline.state_machine_arn
   role_arn = aws_iam_role.eventbridge_sfn.arn
 
-  # ResolveGameweek (first pipeline step) auto-detects the latest finished
-  # gameweek from the FPL API. last_processed_gw=0 means "process whatever
-  # is latest". The pipeline exits cleanly via PipelineSkipped if there's
-  # nothing new to process.
+  # gameweek=0 triggers auto-resolution via the FPL API (ResolveGameweek).
+  # gameweek>0 skips resolution and runs that specific gameweek (backfill mode).
   input = jsonencode({
     season            = "2025-26"
+    gameweek          = 0
     last_processed_gw = 0
     force             = false
   })
