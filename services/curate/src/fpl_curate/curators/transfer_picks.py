@@ -26,31 +26,35 @@ def build_transfer_picks(
     for player in dashboard_rows:
         recommendation, reasons = _classify_player(player)
 
-        rows.append({
-            "player_id": player["player_id"],
-            "web_name": player["web_name"],
-            "team_name": player["team_name"],
-            "team_short": player["team_short"],
-            "position": player["position"],
-            "price": player["price"],
-            "fpl_score": player["fpl_score"],
-            "fpl_score_rank": player["fpl_score_rank"],
-            "recommendation": recommendation,
-            "recommendation_reasons": reasons,
-            "form": player["form"],
-            "form_trend": player.get("form_trend"),
-            "injury_risk": player.get("injury_risk"),
-            "fdr_next_3": player.get("fdr_next_3"),
-            "net_transfers": player["net_transfers"],
-            "season": season,
-            "gameweek": gameweek,
-        })
+        rows.append(
+            {
+                "player_id": player["player_id"],
+                "web_name": player["web_name"],
+                "team_name": player["team_name"],
+                "team_short": player["team_short"],
+                "position": player["position"],
+                "price": player["price"],
+                "fpl_score": player["fpl_score"],
+                "fpl_score_rank": player["fpl_score_rank"],
+                "recommendation": recommendation,
+                "recommendation_reasons": reasons,
+                "form": player["form"],
+                "form_trend": player.get("form_trend"),
+                "injury_risk": player.get("injury_risk"),
+                "fdr_next_3": player.get("fdr_next_3"),
+                "net_transfers": player["net_transfers"],
+                "season": season,
+                "gameweek": gameweek,
+            }
+        )
 
     buy_count = sum(1 for r in rows if r["recommendation"] == "buy")
     sell_count = sum(1 for r in rows if r["recommendation"] == "sell")
     logger.info(
         "Built transfer picks: %d total, %d buy, %d sell",
-        len(rows), buy_count, sell_count,
+        len(rows),
+        buy_count,
+        sell_count,
     )
 
     return rows

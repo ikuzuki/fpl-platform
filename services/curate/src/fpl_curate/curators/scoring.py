@@ -55,12 +55,8 @@ def compute_fpl_scores(
 
     # --- Component: fixtures (0-100) ---
     # Lower FDR = easier fixtures = higher score. Invert: score = (5 - fdr) / 4 * 100
-    result["fdr_next_3"] = result["team"].map(
-        lambda t: fixture_fdr.get(t, {}).get("next_3")
-    )
-    result["fdr_next_6"] = result["team"].map(
-        lambda t: fixture_fdr.get(t, {}).get("next_6")
-    )
+    result["fdr_next_3"] = result["team"].map(lambda t: fixture_fdr.get(t, {}).get("next_3"))
+    result["fdr_next_6"] = result["team"].map(lambda t: fixture_fdr.get(t, {}).get("next_6"))
     fdr_score = (5 - result["fdr_next_3"].fillna(3.0)) / 4 * 100
     result["_c_fixtures"] = fdr_score.clip(0, 100)
 

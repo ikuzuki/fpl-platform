@@ -53,69 +53,71 @@ def build_player_dashboard(
 
     # Map team and position
     df["team_name"] = df["team"].map(lambda t: team_map.get(t, {}).get("name", f"Team {t}"))
-    df["team_short"] = df["team"].map(
-        lambda t: team_map.get(t, {}).get("short_name", "???")
-    )
+    df["team_short"] = df["team"].map(lambda t: team_map.get(t, {}).get("short_name", "???"))
     df["position"] = df["element_type"].map(POSITION_MAP)
     df["full_name"] = df["first_name"] + " " + df["second_name"]
 
     # Build output rows
     rows: list[dict[str, Any]] = []
     for _, row in df.iterrows():
-        rows.append({
-            "player_id": int(row["id"]),
-            "web_name": row["web_name"],
-            "full_name": row["full_name"],
-            "team_name": row["team_name"],
-            "team_short": row["team_short"],
-            "position": row["position"],
-            # Performance
-            "total_points": int(row["total_points"]),
-            "minutes": int(row["minutes"]),
-            "goals_scored": int(row["goals_scored"]),
-            "assists": int(row["assists"]),
-            "clean_sheets": int(row["clean_sheets"]),
-            "bonus": int(row["bonus"]),
-            "form": float(row["form"]),
-            "points_per_game": float(row["points_per_game"]),
-            # Value
-            "price": float(row["price"]),
-            "ownership_pct": float(row["selected_by_percent"]),
-            "points_per_million": float(row["points_per_million"]) if pd.notna(row["points_per_million"]) else 0.0,
-            "transfers_in": int(row["transfers_in_event"]),
-            "transfers_out": int(row["transfers_out_event"]),
-            "net_transfers": int(row["net_transfers"]),
-            # xStats
-            "xg": _safe_float(row.get("understat_xg")),
-            "xa": _safe_float(row.get("understat_xa")),
-            "npxg": _safe_float(row.get("understat_npxg")),
-            "xg_delta": _safe_float(row.get("xg_delta")),
-            # ICT
-            "influence": float(row["influence"]),
-            "creativity": float(row["creativity"]),
-            "threat": float(row["threat"]),
-            "ict_index": float(row["ict_index"]),
-            # LLM enrichments
-            "form_trend": row.get("player_summary_form_trend"),
-            "form_confidence": _safe_float(row.get("player_summary_confidence")),
-            "llm_summary": row.get("player_summary_summary"),
-            "injury_risk": _safe_int(row.get("injury_signal_risk_score")),
-            "injury_reasoning": row.get("injury_signal_reasoning"),
-            "sentiment_label": row.get("sentiment_sentiment"),
-            "sentiment_score": _safe_float(row.get("sentiment_score")),
-            "key_themes": _safe_list(row.get("sentiment_key_themes")),
-            # Fixtures
-            "fdr_next_3": _safe_float(row.get("fdr_next_3")),
-            "fdr_next_6": _safe_float(row.get("fdr_next_6")),
-            "best_gameweeks": _safe_list(row.get("fixture_outlook_best_gameweeks")),
-            "fixture_recommendation": row.get("fixture_outlook_recommendation"),
-            # Composite
-            "fpl_score": float(row["fpl_score"]),
-            "fpl_score_rank": int(row["fpl_score_rank"]),
-            # Partition
-            "season": season,
-            "gameweek": gameweek,
-        })
+        rows.append(
+            {
+                "player_id": int(row["id"]),
+                "web_name": row["web_name"],
+                "full_name": row["full_name"],
+                "team_name": row["team_name"],
+                "team_short": row["team_short"],
+                "position": row["position"],
+                # Performance
+                "total_points": int(row["total_points"]),
+                "minutes": int(row["minutes"]),
+                "goals_scored": int(row["goals_scored"]),
+                "assists": int(row["assists"]),
+                "clean_sheets": int(row["clean_sheets"]),
+                "bonus": int(row["bonus"]),
+                "form": float(row["form"]),
+                "points_per_game": float(row["points_per_game"]),
+                # Value
+                "price": float(row["price"]),
+                "ownership_pct": float(row["selected_by_percent"]),
+                "points_per_million": float(row["points_per_million"])
+                if pd.notna(row["points_per_million"])
+                else 0.0,
+                "transfers_in": int(row["transfers_in_event"]),
+                "transfers_out": int(row["transfers_out_event"]),
+                "net_transfers": int(row["net_transfers"]),
+                # xStats
+                "xg": _safe_float(row.get("understat_xg")),
+                "xa": _safe_float(row.get("understat_xa")),
+                "npxg": _safe_float(row.get("understat_npxg")),
+                "xg_delta": _safe_float(row.get("xg_delta")),
+                # ICT
+                "influence": float(row["influence"]),
+                "creativity": float(row["creativity"]),
+                "threat": float(row["threat"]),
+                "ict_index": float(row["ict_index"]),
+                # LLM enrichments
+                "form_trend": row.get("player_summary_form_trend"),
+                "form_confidence": _safe_float(row.get("player_summary_confidence")),
+                "llm_summary": row.get("player_summary_summary"),
+                "injury_risk": _safe_int(row.get("injury_signal_risk_score")),
+                "injury_reasoning": row.get("injury_signal_reasoning"),
+                "sentiment_label": row.get("sentiment_sentiment"),
+                "sentiment_score": _safe_float(row.get("sentiment_score")),
+                "key_themes": _safe_list(row.get("sentiment_key_themes")),
+                # Fixtures
+                "fdr_next_3": _safe_float(row.get("fdr_next_3")),
+                "fdr_next_6": _safe_float(row.get("fdr_next_6")),
+                "best_gameweeks": _safe_list(row.get("fixture_outlook_best_gameweeks")),
+                "fixture_recommendation": row.get("fixture_outlook_recommendation"),
+                # Composite
+                "fpl_score": float(row["fpl_score"]),
+                "fpl_score_rank": int(row["fpl_score_rank"]),
+                # Partition
+                "season": season,
+                "gameweek": gameweek,
+            }
+        )
 
     logger.info("Built player dashboard: %d rows", len(rows))
     return rows

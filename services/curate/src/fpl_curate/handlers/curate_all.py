@@ -44,8 +44,7 @@ async def main(
 
     # Idempotency check — use player_dashboard as the sentinel
     sentinel_key = (
-        f"curated/player_dashboard/season={season}/gameweek={gameweek:02d}/"
-        f"player_dashboard.parquet"
+        f"curated/player_dashboard/season={season}/gameweek={gameweek:02d}/player_dashboard.parquet"
     )
     if not force and s3_client.object_exists(output_bucket, sentinel_key):
         logger.info("Curated data already exists at %s, skipping", sentinel_key)
@@ -58,8 +57,7 @@ async def main(
 
     # 1. Enriched player summaries
     enriched_key = (
-        f"enriched/player_summaries/season={season}/gameweek={gameweek:02d}/"
-        f"summaries.parquet"
+        f"enriched/player_summaries/season={season}/gameweek={gameweek:02d}/summaries.parquet"
     )
     enriched_table = s3_client.read_parquet(output_bucket, enriched_key)
     enriched_df = enriched_table.to_pandas()
@@ -137,10 +135,12 @@ async def main(
     for name, rows in datasets.items():
         key = f"curated/{name}/season={season}/gameweek={gameweek:02d}/{name}.parquet"
         table = pa.Table.from_pylist(rows)
-        table = table.replace_schema_metadata({
-            **(table.schema.metadata or {}),
-            b"schema_version": SCHEMA_VERSION.encode(),
-        })
+        table = table.replace_schema_metadata(
+            {
+                **(table.schema.metadata or {}),
+                b"schema_version": SCHEMA_VERSION.encode(),
+            }
+        )
         s3_client.write_parquet(output_bucket, key, table)
         output_paths.append(f"s3://{output_bucket}/{key}")
         row_counts[name] = len(rows)

@@ -48,23 +48,25 @@ def build_team_strength(
 
         fdr_data = fixture_fdr.get(team_id, {})
 
-        rows.append({
-            "team_id": team_id,
-            "team_name": team_name,
-            "team_short": team_short,
-            "avg_fpl_score": round(sum(scores) / len(scores), 1),
-            "total_points": sum(points),
-            "avg_form": round(sum(forms) / len(forms), 1),
-            "squad_value": round(sum(prices), 1),
-            "top_scorer_id": top_scorer["player_id"],
-            "top_scorer_name": top_scorer["web_name"],
-            "top_scorer_points": top_scorer["total_points"],
-            "avg_fdr_remaining": round(fdr_data["next_6"], 1) if "next_6" in fdr_data else None,
-            "player_count": len(players),
-            "enriched_player_count": enriched_count,
-            "season": season,
-            "gameweek": gameweek,
-        })
+        rows.append(
+            {
+                "team_id": team_id,
+                "team_name": team_name,
+                "team_short": team_short,
+                "avg_fpl_score": round(sum(scores) / len(scores), 1),
+                "total_points": sum(points),
+                "avg_form": round(sum(forms) / len(forms), 1),
+                "squad_value": round(sum(prices), 1),
+                "top_scorer_id": top_scorer["player_id"],
+                "top_scorer_name": top_scorer["web_name"],
+                "top_scorer_points": top_scorer["total_points"],
+                "avg_fdr_remaining": round(fdr_data["next_6"], 1) if "next_6" in fdr_data else None,
+                "player_count": len(players),
+                "enriched_player_count": enriched_count,
+                "season": season,
+                "gameweek": gameweek,
+            }
+        )
 
     logger.info("Built team strength: %d teams", len(rows))
     return rows

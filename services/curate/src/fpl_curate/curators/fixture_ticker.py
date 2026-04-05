@@ -25,10 +25,7 @@ def build_fixture_ticker(
         fixture_fdr_lookup maps team_id -> {"next_3": avg_fdr, "next_6": avg_fdr}.
     """
     # Filter to remaining fixtures
-    remaining = [
-        f for f in fixtures_raw
-        if f.get("event") is not None and f["event"] > current_gw
-    ]
+    remaining = [f for f in fixtures_raw if f.get("event") is not None and f["event"] > current_gw]
     remaining.sort(key=lambda f: (f["event"], f.get("kickoff_time", "")))
 
     rows: list[dict[str, Any]] = []
@@ -47,32 +44,36 @@ def build_fixture_ticker(
         away_team = team_map.get(away_id, {"name": f"Team {away_id}", "short_name": "???"})
 
         # Home team row
-        rows.append({
-            "team_id": home_id,
-            "team_name": home_team["name"],
-            "team_short": home_team["short_name"],
-            "gameweek": gw,
-            "opponent": away_team["name"],
-            "opponent_short": away_team["short_name"],
-            "is_home": True,
-            "fdr": home_fdr,
-            "kickoff_time": kickoff,
-            "season": season,
-        })
+        rows.append(
+            {
+                "team_id": home_id,
+                "team_name": home_team["name"],
+                "team_short": home_team["short_name"],
+                "gameweek": gw,
+                "opponent": away_team["name"],
+                "opponent_short": away_team["short_name"],
+                "is_home": True,
+                "fdr": home_fdr,
+                "kickoff_time": kickoff,
+                "season": season,
+            }
+        )
 
         # Away team row
-        rows.append({
-            "team_id": away_id,
-            "team_name": away_team["name"],
-            "team_short": away_team["short_name"],
-            "gameweek": gw,
-            "opponent": home_team["name"],
-            "opponent_short": home_team["short_name"],
-            "is_home": False,
-            "fdr": away_fdr,
-            "kickoff_time": kickoff,
-            "season": season,
-        })
+        rows.append(
+            {
+                "team_id": away_id,
+                "team_name": away_team["name"],
+                "team_short": away_team["short_name"],
+                "gameweek": gw,
+                "opponent": home_team["name"],
+                "opponent_short": home_team["short_name"],
+                "is_home": False,
+                "fdr": away_fdr,
+                "kickoff_time": kickoff,
+                "season": season,
+            }
+        )
 
         # Accumulate FDR for averages
         team_fdrs.setdefault(home_id, []).append(home_fdr)

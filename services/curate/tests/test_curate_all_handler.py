@@ -43,10 +43,22 @@ def sample_bootstrap() -> dict[str, Any]:
 @pytest.fixture()
 def sample_fixtures() -> list[dict[str, Any]]:
     return [
-        {"event": 32, "team_h": 1, "team_a": 14, "team_h_difficulty": 2, "team_a_difficulty": 4,
-         "kickoff_time": "2026-04-12T15:00:00Z"},
-        {"event": 33, "team_h": 13, "team_a": 1, "team_h_difficulty": 4, "team_a_difficulty": 5,
-         "kickoff_time": "2026-04-19T17:30:00Z"},
+        {
+            "event": 32,
+            "team_h": 1,
+            "team_a": 14,
+            "team_h_difficulty": 2,
+            "team_a_difficulty": 4,
+            "kickoff_time": "2026-04-12T15:00:00Z",
+        },
+        {
+            "event": 33,
+            "team_h": 13,
+            "team_a": 1,
+            "team_h_difficulty": 4,
+            "team_a_difficulty": 5,
+            "kickoff_time": "2026-04-19T17:30:00Z",
+        },
     ]
 
 
@@ -54,7 +66,9 @@ def sample_fixtures() -> list[dict[str, Any]]:
 class TestCurateAllHandler:
     @pytest.mark.asyncio
     async def test_skips_when_exists(
-        self, mock_s3_client: MagicMock, mock_settings: CurateSettings,
+        self,
+        mock_s3_client: MagicMock,
+        mock_settings: CurateSettings,
     ) -> None:
         mock_s3_client.object_exists.return_value = True
 
@@ -93,13 +107,18 @@ class TestCurateAllHandler:
 
         assert result["status"] == "success"
         assert set(result["datasets_written"]) == {
-            "player_dashboard", "fixture_ticker", "transfer_picks", "team_strength",
+            "player_dashboard",
+            "fixture_ticker",
+            "transfer_picks",
+            "team_strength",
         }
         assert mock_s3_client.write_parquet.call_count == 4
 
     @pytest.mark.asyncio
     async def test_fails_when_no_fixtures(
-        self, mock_s3_client: MagicMock, mock_settings: CurateSettings,
+        self,
+        mock_s3_client: MagicMock,
+        mock_settings: CurateSettings,
     ) -> None:
         mock_s3_client.read_parquet.return_value = pa.table({"id": [1]})
         mock_s3_client.list_objects.side_effect = [

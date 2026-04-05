@@ -37,9 +37,7 @@ class PlayerDashboardRow(BaseModel):
     xg: float | None = None
     xa: float | None = None
     npxg: float | None = None
-    xg_delta: float | None = Field(
-        default=None, description="goals_scored - xG (overperformance)"
-    )
+    xg_delta: float | None = Field(default=None, description="goals_scored - xG (overperformance)")
 
     # ICT
     influence: float
