@@ -38,9 +38,11 @@ class RateLimiter:
             self._last_request_time = time.monotonic()
 
 
-# Default rate limit — Tier 1 is 50 RPM per model.
-# Leave headroom for SDK retries by targeting 40 RPM.
-DEFAULT_RATE_LIMIT_RPM = 40
+# Defaults for Tier 1 rate limits.
+# - Semaphore caps in-flight requests (avoids "concurrent connections" 429).
+# - Rate limiter caps request rate (avoids RPM and output TPM 429).
+DEFAULT_MAX_CONCURRENT = 2
+DEFAULT_RATE_LIMIT_RPM = 15
 
 
 class FPLEnricher(ABC):
@@ -63,10 +65,12 @@ class FPLEnricher(ABC):
         anthropic_client: anthropic.AsyncAnthropic,
         prompt_version: str = "v1",
         rate_limiter: RateLimiter | None = None,
+        semaphore: asyncio.Semaphore | None = None,
     ) -> None:
         self.client = anthropic_client
         self.prompt_version = prompt_version
         self.rate_limiter = rate_limiter or RateLimiter(DEFAULT_RATE_LIMIT_RPM)
+        self.semaphore = semaphore or asyncio.Semaphore(DEFAULT_MAX_CONCURRENT)
         self.valid_count = 0
         self.invalid_count = 0
         self.total_input_tokens = 0
@@ -84,15 +88,17 @@ class FPLEnricher(ABC):
 
         batches = list(self._chunk(items, self.BATCH_SIZE))
         logger.info(
-            "%s: processing %d items in %d batches (rate_limit=%d RPM)",
+            "%s: processing %d items in %d batches (max_concurrent=%d, rate_limit=%d RPM)",
             self.__class__.__name__,
             len(items),
             len(batches),
+            self.semaphore._value,
             self.rate_limiter.rpm,
         )
 
-        # Run all batches concurrently — rate limiter serialises API calls
-        tasks = [self._call_llm_rate_limited(batch) for batch in batches]
+        # Run all batches concurrently — semaphore limits in-flight,
+        # rate limiter spaces out new requests
+        tasks = [self._call_llm_controlled(batch) for batch in batches]
         batch_results = await asyncio.gather(*tasks, return_exceptions=True)
 
         results: list[dict[str, Any] | None] = []
@@ -120,10 +126,11 @@ class FPLEnricher(ABC):
         self._log_summary()
         return results
 
-    async def _call_llm_rate_limited(self, batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Wait for rate limiter before making the API call."""
-        await self.rate_limiter.acquire()
-        return await self._call_llm(batch)
+    async def _call_llm_controlled(self, batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Acquire semaphore, then wait for rate limiter, then call LLM."""
+        async with self.semaphore:
+            await self.rate_limiter.acquire()
+            return await self._call_llm(batch)
 
     @observe(name="enricher_batch_call")
     async def _call_llm(self, batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -158,7 +165,16 @@ class FPLEnricher(ABC):
             response.stop_reason,
         )
 
-        raw_text = response.content[0].text.strip()
+        raw_text = response.content[0].text.strip() if response.content else ""
+
+        if not raw_text:
+            logger.error(
+                "[ANTHROPIC] %s: empty response (stop_reason=%s, content_blocks=%d)",
+                self.__class__.__name__,
+                response.stop_reason,
+                len(response.content),
+            )
+            raise ValueError("LLM returned empty response")
 
         # Strip markdown code fences if the LLM wraps the JSON
         if raw_text.startswith("```"):
@@ -166,7 +182,15 @@ class FPLEnricher(ABC):
             raw_text = raw_text.rsplit("```", 1)[0]  # remove closing ```
             raw_text = raw_text.strip()
 
-        parsed: list[dict[str, Any]] = json.loads(raw_text)
+        try:
+            parsed: list[dict[str, Any]] = json.loads(raw_text)
+        except json.JSONDecodeError:
+            logger.error(
+                "[ANTHROPIC] %s: invalid JSON (first 200 chars): %s",
+                self.__class__.__name__,
+                raw_text[:200],
+            )
+            raise
 
         if len(parsed) != len(batch):
             raise ValueError(f"Output count mismatch: expected {len(batch)}, got {len(parsed)}")
