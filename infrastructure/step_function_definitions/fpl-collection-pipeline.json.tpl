@@ -1,7 +1,54 @@
 {
   "Comment": "FPL data collection, validation, transformation, and enrichment pipeline",
-  "StartAt": "CollectFPLData",
+  "StartAt": "ResolveGameweek",
   "States": {
+    "ResolveGameweek": {
+      "Type": "Task",
+      "Resource": "${lambda_arn_resolve_gameweek}",
+      "Parameters": {
+        "season.$": "$.season",
+        "last_processed_gw.$": "$.last_processed_gw",
+        "force.$": "$.force"
+      },
+      "ResultPath": "$.resolved",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "IntervalSeconds": 10,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "PipelineFailed"
+        }
+      ],
+      "Next": "CheckShouldRun"
+    },
+    "CheckShouldRun": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.resolved.body.should_run",
+          "BooleanEquals": false,
+          "Next": "PipelineSkipped"
+        }
+      ],
+      "Default": "PrepareInput"
+    },
+    "PrepareInput": {
+      "Type": "Pass",
+      "Comment": "Flatten resolved gameweek into top-level state for downstream steps",
+      "Parameters": {
+        "season.$": "$.resolved.body.season",
+        "gameweek.$": "$.resolved.body.gameweek",
+        "force.$": "$.resolved.body.force"
+      },
+      "Next": "CollectFPLData"
+    },
     "CollectFPLData": {
       "Type": "Task",
       "Resource": "${lambda_arn_fpl_collector}",
@@ -160,6 +207,10 @@
     },
     "PipelineSucceeded": {
       "Type": "Succeed"
+    },
+    "PipelineSkipped": {
+      "Type": "Succeed",
+      "Comment": "No new gameweek to process — pipeline exits cleanly."
     },
     "PipelineFailed": {
       "Type": "Fail",

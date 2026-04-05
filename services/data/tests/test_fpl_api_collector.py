@@ -186,8 +186,15 @@ async def test_collect_gameweek_live_success(
     mock_s3_client: MagicMock,
     gameweek_live_response: dict,
 ) -> None:
-    with patch.object(
-        collector, "_fetch", new_callable=AsyncMock, return_value=gameweek_live_response
+    with (
+        patch.object(
+            collector,
+            "_validate_gameweek_finished",
+            new_callable=AsyncMock,
+        ),
+        patch.object(
+            collector, "_fetch", new_callable=AsyncMock, return_value=gameweek_live_response
+        ),
     ):
         result = await collector.collect_gameweek_live("2025-26", 5)
 
@@ -204,12 +211,37 @@ async def test_collect_gameweek_live_path_formatting(
     mock_s3_client: MagicMock,
     gameweek_live_response: dict,
 ) -> None:
-    with patch.object(
-        collector, "_fetch", new_callable=AsyncMock, return_value=gameweek_live_response
+    with (
+        patch.object(
+            collector,
+            "_validate_gameweek_finished",
+            new_callable=AsyncMock,
+        ),
+        patch.object(
+            collector, "_fetch", new_callable=AsyncMock, return_value=gameweek_live_response
+        ),
     ):
         result = await collector.collect_gameweek_live("2025-26", 1)
 
     assert "season=2025-26/gameweek=01/" in result.output_path
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_collect_gameweek_live_rejects_unfinished(
+    collector: FPLAPICollector,
+) -> None:
+    bootstrap_data = {
+        "events": [
+            {"id": 1, "finished": True, "is_current": False},
+            {"id": 2, "finished": False, "is_current": True},
+        ]
+    }
+    with (
+        patch.object(collector, "_fetch", new_callable=AsyncMock, return_value=bootstrap_data),
+        pytest.raises(ValueError, match="has not finished yet"),
+    ):
+        await collector.collect_gameweek_live("2025-26", 2)
 
 
 # --- collect_player_history tests ---
