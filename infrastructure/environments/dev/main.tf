@@ -45,6 +45,12 @@ module "ecr_enrich" {
   environment = var.environment
 }
 
+module "ecr_curate" {
+  source      = "../../modules/ecr"
+  name        = "curate"
+  environment = var.environment
+}
+
 module "ecr_agent" {
   source      = "../../modules/ecr"
   name        = "agent"
@@ -351,6 +357,21 @@ module "lambda_merge_enrichments" {
   }
 }
 
+module "lambda_curate_data" {
+  source             = "../../modules/lambda"
+  name               = "curate-data"
+  environment        = var.environment
+  image_uri          = "${module.ecr_curate.repository_url}:latest"
+  execution_role_arn = aws_iam_role.lambda_standard.arn
+  command            = ["fpl_curate.handlers.curate_all.lambda_handler"]
+  timeout            = 120
+  memory_size        = 512
+  environment_variables = {
+    ENV              = var.environment
+    DATA_LAKE_BUCKET = module.data_lake.bucket_name
+  }
+}
+
 # -----------------------------------------------------------------------------
 # Step Functions Pipeline
 # -----------------------------------------------------------------------------
@@ -371,6 +392,7 @@ module "pipeline" {
     lambda_arn_enrich_sentiment       = module.lambda_enrich_sentiment.function_arn
     lambda_arn_enrich_fixture_outlook = module.lambda_enrich_fixture_outlook.function_arn
     lambda_arn_merge_enrichments      = module.lambda_merge_enrichments.function_arn
+    lambda_arn_curate_data            = module.lambda_curate_data.function_arn
   })
 
   lambda_arns = [
@@ -385,6 +407,7 @@ module "pipeline" {
     module.lambda_enrich_sentiment.function_arn,
     module.lambda_enrich_fixture_outlook.function_arn,
     module.lambda_merge_enrichments.function_arn,
+    module.lambda_curate_data.function_arn,
   ]
 }
 

@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Curate service (`services/curate/`) — derives 4 dashboard-ready datasets from enriched data
+- Composite FPL score (0-100) blending form, value, fixtures, xG overperformance, ICT, injury risk, and ownership momentum
+- Player dashboard curated table (300 enriched players with derived fields and rankings)
+- Fixture ticker curated table (FDR heatmap data for remaining gameweeks)
+- Transfer picks curated table (buy/sell/hold/watch recommendations with reasoning)
+- Team strength curated table (20-team aggregation with avg FPL score, squad value, top scorer)
+- `CurationResult` response model in `fpl_lib.core.responses`
+- 46 unit tests for curate service (models, scoring, curators, handler)
+- CurateData Lambda in Step Functions pipeline (after MergeEnrichments)
+- ECR repository and Lambda module for curate service in Terraform
 - Understat xG/xA join in player transformer — matches by normalised name, adds 8 Understat columns (understat_xg, understat_xa, understat_npxg, etc.)
 - News articles attached to players for injury/sentiment enrichers via name matching
 - Fixture data attached to players for fixture outlook enricher (next 5 GWs with difficulty ratings)

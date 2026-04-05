@@ -10,6 +10,7 @@ jobs:
     outputs:
       data: ${{ steps.filter.outputs.data }}
       enrich: ${{ steps.filter.outputs.enrich }}
+      curate: ${{ steps.filter.outputs.curate }}
       agent: ${{ steps.filter.outputs.agent }}
       infra: ${{ steps.filter.outputs.infra }}
     steps:
@@ -23,6 +24,9 @@ jobs:
               - 'libs/**'
             enrich:
               - 'services/enrich/**'
+              - 'libs/**'
+            curate:
+              - 'services/curate/**'
               - 'libs/**'
             agent:
               - 'services/agent/**'
@@ -60,6 +64,7 @@ jobs:
     if: |
       needs.detect-changes.outputs.data == 'true' ||
       needs.detect-changes.outputs.enrich == 'true' ||
+      needs.detect-changes.outputs.curate == 'true' ||
       needs.detect-changes.outputs.agent == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -73,6 +78,8 @@ jobs:
             changed: ${{ needs.detect-changes.outputs.data }}
           - name: enrich
             changed: ${{ needs.detect-changes.outputs.enrich }}
+          - name: curate
+            changed: ${{ needs.detect-changes.outputs.curate }}
           - name: agent
             changed: ${{ needs.detect-changes.outputs.agent }}
     steps:

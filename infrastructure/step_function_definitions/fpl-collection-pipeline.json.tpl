@@ -367,10 +367,36 @@
         {
           "Variable": "$.enrichment.statusCode",
           "NumericEquals": 200,
-          "Next": "PipelineSucceeded"
+          "Next": "CurateData"
         }
       ],
       "Default": "PipelineFailed"
+    },
+
+    "CurateData": {
+      "Type": "Task",
+      "Resource": "${lambda_arn_curate_data}",
+      "Parameters": {
+        "season.$": "$.season",
+        "gameweek.$": "$.gameweek"
+      },
+      "ResultPath": "$.curation",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "IntervalSeconds": 10,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "PipelineFailed"
+        }
+      ],
+      "Next": "PipelineSucceeded"
     },
 
     "PipelineSucceeded": {

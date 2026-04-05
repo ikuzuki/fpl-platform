@@ -5,6 +5,7 @@ install:
 	pip install -e libs/
 	pip install -e services/data/
 	pip install -e services/enrich/
+	pip install -e services/curate/
 	pre-commit install
 
 lint:

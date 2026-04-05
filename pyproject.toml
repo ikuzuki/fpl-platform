@@ -45,10 +45,10 @@ select = ["E", "W", "F", "I", "N", "UP", "B", "SIM"]
 ignore = ["E501"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["fpl_lib", "fpl_data", "fpl_enrich", "fpl_agent", "fpl_stream"]
+known-first-party = ["fpl_lib", "fpl_data", "fpl_enrich", "fpl_curate", "fpl_agent", "fpl_stream"]
 
 [tool.pytest.ini_options]
-testpaths = ["libs/tests", "services/data/tests", "services/enrich/tests", "services/agent/tests"]
+testpaths = ["libs/tests", "services/data/tests", "services/enrich/tests", "services/curate/tests", "services/agent/tests"]
 python_files = ["test_*.py"]
 addopts = [
     "--strict-markers",
