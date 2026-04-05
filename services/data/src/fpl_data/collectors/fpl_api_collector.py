@@ -178,7 +178,10 @@ class FPLAPICollector:
     async def _fetch(self, url: str) -> dict | list:
         """Fetch JSON from the FPL API."""
         logger.info("[FPL API] GET %s", url)
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(
+            headers={"User-Agent": "Mozilla/5.0 (compatible; FPL-Platform/1.0)"},
+            timeout=30.0,
+        ) as client:
             response = await client.get(url)
             logger.info(
                 "[FPL API] %s | status=%d | size=%d bytes",
