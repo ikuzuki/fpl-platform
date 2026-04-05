@@ -15,6 +15,7 @@ import {
 import type { PlayerDashboard } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { POS_CHART_COLORS, TOOLTIP_STYLE } from "@/lib/utils";
+import { MetricIcons } from "@/components/icons/FplIcons";
 
 export function XgScatter({ players }: { players: PlayerDashboard[] }) {
   const withXg = players.filter((p) => p.xg != null);
@@ -47,7 +48,10 @@ export function XgScatter({ players }: { players: PlayerDashboard[] }) {
   return (
     <Card>
       <CardContent className="pt-4">
-        <h3 className="font-semibold mb-1">xG Efficiency</h3>
+        <h3 className="font-semibold mb-1 flex items-center gap-1.5">
+          <MetricIcons.ExpectedGoals size={16} />
+          xG Efficiency
+        </h3>
         <p className="text-xs text-[var(--muted-foreground)] mb-3">
           Above the line = clinical. Below = wasteful. Size = minutes played.
         </p>

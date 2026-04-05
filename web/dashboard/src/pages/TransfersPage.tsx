@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ChevronDown, AlertTriangle, Newspaper, Calendar } from "lucide-react";
-import { MetricIcons } from "@/components/icons/FplIcons";
+import { MetricIcons, RecBadge } from "@/components/icons/FplIcons";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 import type { TransferPick, PlayerDashboard } from "@/lib/types";
@@ -190,6 +190,7 @@ function TransferCard({
           </div>
           <div className="flex gap-1.5 items-center">
             <Badge className={positionColor(player.position)}>{player.position}</Badge>
+            <RecBadge rec={player.recommendation} size={18} />
             <Badge className={cn(rec.bg, rec.text, "font-semibold")}>{rec.label}</Badge>
             <ChevronDown
               className={cn(

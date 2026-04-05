@@ -10,6 +10,7 @@ import {
   ReferenceLine,
 } from "recharts";
 import { Calendar } from "lucide-react";
+import { FdrDot } from "@/components/icons/FplIcons";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 import type { FixtureTicker } from "@/lib/types";
@@ -73,16 +74,8 @@ export function FixturesPage() {
           </button>
           <div className="flex gap-1.5 items-center text-xs text-[var(--muted-foreground)]" aria-label="FDR scale legend">
             <span>Easy</span>
-            {[1, 2, 3, 4, 5].map((fdr) => (
-              <div
-                key={fdr}
-                className={cn(
-                  "w-6 h-5 rounded text-[10px] flex items-center justify-center font-medium",
-                  fdrClass(fdr),
-                )}
-              >
-                {fdr}
-              </div>
+            {([1, 2, 3, 4, 5] as const).map((fdr) => (
+              <FdrDot key={fdr} level={fdr} size={18} />
             ))}
             <span>Hard</span>
           </div>

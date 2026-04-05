@@ -9,7 +9,8 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
-import { Search, TrendingUp, TrendingDown } from "lucide-react";
+import { Search } from "lucide-react";
+import { MetricIcons } from "@/components/icons/FplIcons";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 import type { PlayerHistory } from "@/lib/types";
@@ -166,7 +167,7 @@ export function TrendsPage() {
           <Card className="border-l-4 border-l-green-500">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-green-500" />
+                <MetricIcons.PriceUp size={16} />
                 Biggest Risers (FPL Score)
               </CardTitle>
             </CardHeader>
@@ -211,7 +212,7 @@ export function TrendsPage() {
           <Card className="border-l-4 border-l-red-500">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
-                <TrendingDown className="h-4 w-4 text-red-500" />
+                <MetricIcons.PriceDown size={16} />
                 Biggest Fallers (FPL Score)
               </CardTitle>
             </CardHeader>

@@ -15,7 +15,6 @@ import {
 import {
   ArrowRightLeft,
   Search,
-  Sparkles,
   TrendingUp,
   TrendingDown,
   Minus,
@@ -23,6 +22,7 @@ import {
   Zap,
   Calendar,
 } from "lucide-react";
+import { MetricIcons } from "@/components/icons/FplIcons";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 import type { PlayerDashboard, PlayerHistory } from "@/lib/types";
@@ -528,7 +528,8 @@ export function PlannerPage() {
                       : "bg-red-50 dark:bg-red-900/20",
                   )}
                 >
-                  <div className="text-xs text-[var(--muted-foreground)] uppercase tracking-wider">
+                  <div className="text-xs text-[var(--muted-foreground)] uppercase tracking-wider flex items-center gap-1">
+                    <MetricIcons.Value size={12} />
                     Budget change
                   </div>
                   <div
@@ -690,7 +691,7 @@ export function PlannerPage() {
               {sellPlayer.llm_summary && (
                 <div className="rounded-lg border border-[var(--ai-border)] bg-[var(--ai-bg)] p-4">
                   <div className="flex items-center gap-1.5 mb-2">
-                    <Sparkles className="h-3.5 w-3.5 text-[var(--accent)]" />
+                    <MetricIcons.AiInsight size={15} />
                     <span className="text-xs font-semibold text-[var(--accent)]">
                       AI on {sellPlayer.web_name}
                     </span>
@@ -703,7 +704,7 @@ export function PlannerPage() {
               {buyPlayer.llm_summary && (
                 <div className="rounded-lg border border-[var(--ai-border)] bg-[var(--ai-bg)] p-4">
                   <div className="flex items-center gap-1.5 mb-2">
-                    <Sparkles className="h-3.5 w-3.5 text-[var(--accent)]" />
+                    <MetricIcons.AiInsight size={15} />
                     <span className="text-xs font-semibold text-[var(--accent)]">
                       AI on {buyPlayer.web_name}
                     </span>

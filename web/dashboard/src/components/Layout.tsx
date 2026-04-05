@@ -3,7 +3,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import { Moon, Sun, Menu, X, Crown, Target, ArrowRightLeft } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { PulseLogo, NavIcons } from "@/components/icons/FplIcons";
+import { PulseLogo, PulseWordmark, NavIcons } from "@/components/icons/FplIcons";
 
 const links: { to: string; label: string; icon: ReactNode }[] = [
   { to: "/", label: "Briefing", icon: <NavIcons.Briefing size={16} /> },
@@ -48,7 +48,8 @@ export function Layout() {
           <div className="flex items-center gap-8">
             <NavLink to="/" className="flex items-center gap-2.5">
               <PulseLogo size={28} />
-              <span className="text-lg font-bold tracking-tight">
+              <PulseWordmark size={100} className="hidden sm:block" />
+              <span className="text-lg font-bold tracking-tight sm:hidden">
                 <span className="text-[var(--accent)]">FPL</span> Pulse
               </span>
             </NavLink>

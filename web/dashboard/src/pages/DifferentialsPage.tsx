@@ -12,7 +12,8 @@ import {
   LabelList,
   Cell,
 } from "recharts";
-import { TrendingUp, TrendingDown, Minus, Sparkles } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { MetricIcons } from "@/components/icons/FplIcons";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 import type { PlayerDashboard, PlayerHistory } from "@/lib/types";
@@ -249,7 +250,7 @@ export function DifferentialsPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Sparkles className="h-6 w-6 text-amber-500" />
+          <MetricIcons.AiInsight size={24} />
           Differential Radar
         </h1>
         <p className="text-sm text-[var(--muted-foreground)] mt-1">

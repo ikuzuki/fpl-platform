@@ -54,29 +54,41 @@ export function PlayerDetail({ player }: { player: PlayerDashboard }) {
               ))}
             </div>
           )}
-          {player.injury_reasoning && (
-            <div className="mt-3 pt-3 border-t border-[var(--ai-border)]">
-              <div className="flex items-center gap-1.5 mb-1">
+          <div className="mt-3 pt-3 border-t border-[var(--ai-border)]">
+            <div className="flex items-center gap-1.5 mb-1">
+              {player.injury_risk != null && player.injury_risk >= 5
+                ? <StatusIcons.Injured size={14} />
+                : player.injury_risk != null && player.injury_risk >= 2
+                  ? <StatusIcons.Doubtful size={14} />
+                  : <StatusIcons.Available size={14} />}
+              <p className="text-xs font-medium text-[var(--muted-foreground)]">
                 {player.injury_risk != null && player.injury_risk >= 5
-                  ? <StatusIcons.Injured size={14} />
-                  : <StatusIcons.Doubtful size={14} />}
-                <p className="text-xs font-medium text-[var(--muted-foreground)]">
-                  Injury Assessment
-                </p>
-              </div>
+                  ? "Injury Risk"
+                  : player.injury_risk != null && player.injury_risk >= 2
+                    ? "Minor Concern"
+                    : "Fully Available"}
+              </p>
+            </div>
+            {player.injury_reasoning && (
               <p className="text-sm text-[var(--muted-foreground)]">
                 {player.injury_reasoning}
               </p>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
       {/* Score Breakdown + Radar */}
       <div className="md:col-span-4">
-        <h4 className="font-semibold text-sm mb-2">Score Breakdown</h4>
+        <h4 className="font-semibold text-sm mb-2 flex items-center gap-1.5">
+          <MetricIcons.Form size={14} />
+          Score Breakdown
+        </h4>
         <ScoreWaterfall player={player} />
-        <h4 className="font-semibold text-sm mb-2 mt-4">Player Profile</h4>
+        <h4 className="font-semibold text-sm mb-2 mt-4 flex items-center gap-1.5">
+          <MetricIcons.IctIndex size={14} />
+          Player Profile
+        </h4>
         <ResponsiveContainer width="100%" height={220}>
           <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="75%">
             <PolarGrid stroke="var(--border)" />

@@ -15,6 +15,7 @@ import {
 import type { PlayerDashboard } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { POS_CHART_COLORS, TOOLTIP_STYLE } from "@/lib/utils";
+import { MetricIcons } from "@/components/icons/FplIcons";
 
 export function OwnershipBubble({ players }: { players: PlayerDashboard[] }) {
   const scatterData = players.map((p) => ({
@@ -49,7 +50,10 @@ export function OwnershipBubble({ players }: { players: PlayerDashboard[] }) {
   return (
     <Card>
       <CardContent className="pt-4">
-        <h3 className="font-semibold mb-1">Ownership vs Value</h3>
+        <h3 className="font-semibold mb-1 flex items-center gap-1.5">
+          <MetricIcons.Ownership size={16} />
+          Ownership vs Value
+        </h3>
         <p className="text-xs text-[var(--muted-foreground)] mb-3">
           Top-left = differentials (high value, low ownership). Bottom-right = traps. Size = total points.
         </p>

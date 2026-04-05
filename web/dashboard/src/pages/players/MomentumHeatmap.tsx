@@ -3,6 +3,7 @@ import type { PlayerHistory } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn, positionColor } from "@/lib/utils";
+import { MetricIcons } from "@/components/icons/FplIcons";
 
 function scoreToColor(score: number): string {
   if (score >= 70) return "bg-[var(--accent)] text-white";
@@ -42,7 +43,10 @@ export function MomentumHeatmap({ history }: { history: PlayerHistory[] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-sm">Gameweek Momentum</CardTitle>
+        <CardTitle className="text-sm flex items-center gap-1.5">
+          <MetricIcons.Momentum size={16} />
+          Gameweek Momentum
+        </CardTitle>
         <p className="text-xs text-[var(--muted-foreground)]">
           FPL Score by player per gameweek. Darker = stronger. Hover to highlight a player.
         </p>
