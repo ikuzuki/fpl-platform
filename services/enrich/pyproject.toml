@@ -24,3 +24,6 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+fpl_enrich = ["prompts/**/*.txt"]
