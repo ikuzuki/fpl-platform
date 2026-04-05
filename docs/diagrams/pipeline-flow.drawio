@@ -1,0 +1,357 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2026-04-05T00:00:00.000Z" agent="Claude" version="24.0.0">
+  <diagram name="FPL Pipeline Flow" id="pipeline-flow">
+    <mxGraphModel dx="1800" dy="2400" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="2400">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ============================================================ -->
+        <!-- TITLE                                                        -->
+        <!-- ============================================================ -->
+        <mxCell id="title" value="&lt;b&gt;FPL Collection Pipeline&lt;/b&gt;&#xa;Step Functions State Machine" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=18;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="600" y="20" width="400" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="legend-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#cccccc;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="1380" y="80" width="360" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-title" value="&lt;b&gt;Legend&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=12;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="1395" y="85" width="80" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-lambda" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="1395" y="110" width="20" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-lambda-t" value="Lambda Task" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1425" y="107" width="100" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-parallel" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1395" y="133" width="20" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-parallel-t" value="Parallel State" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1425" y="130" width="100" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-choice" value="" style="rhombus;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="1393" y="153" width="24" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-choice-t" value="Choice State" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1425" y="153" width="100" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-s3" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#999999;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="1395" y="178" width="20" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-s3-t" value="S3 Data Path" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1425" y="175" width="100" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-ext" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="1555" y="110" width="20" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-ext-t" value="External API" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1585" y="107" width="100" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-term" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="1555" y="133" width="20" height="15" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-term-t" value="Terminal State" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1585" y="130" width="100" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- STEP 1: CheckInputMode                                       -->
+        <!-- ============================================================ -->
+        <mxCell id="check-input" value="&lt;b&gt;CheckInputMode&lt;/b&gt;&#xa;gameweek &gt; 0 ?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="720" y="100" width="160" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- STEP 2: ResolveGameweek -->
+        <mxCell id="resolve-gw" value="&lt;b&gt;ResolveGameweek&lt;/b&gt;&#xa;Lambda" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="500" y="240" width="160" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="fpl-api-ext" value="FPL API&#xa;bootstrap-static" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="300" y="245" width="130" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-ext-resolve" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#9673a6;strokeWidth=1;dashed=1;endArrow=classic;" edge="1" parent="1" source="fpl-api-ext" target="resolve-gw">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- CheckShouldRun -->
+        <mxCell id="check-should-run" value="&lt;b&gt;CheckShouldRun&lt;/b&gt;&#xa;should_run?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="500" y="340" width="160" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- PipelineSkipped -->
+        <mxCell id="pipeline-skipped" value="&lt;b&gt;Skipped&lt;/b&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="300" y="355" width="100" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Arrows: input mode -->
+        <mxCell id="arrow-input-resolve" value="gw = 0&#xa;(auto)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#82b366;strokeWidth=2;endArrow=classic;fontSize=10;fontColor=#666666;" edge="1" parent="1" source="check-input" target="resolve-gw">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-input-collect" value="gw &gt; 0&#xa;(backfill)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#82b366;strokeWidth=2;endArrow=classic;fontSize=10;fontColor=#666666;" edge="1" parent="1" source="check-input" target="collect-parallel">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="960" y="140" />
+              <mxPoint x="960" y="480" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="arrow-resolve-check" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#666666;strokeWidth=2;endArrow=classic;" edge="1" parent="1" source="resolve-gw" target="check-should-run">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-check-skip" value="false" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#d6b656;strokeWidth=2;endArrow=classic;fontSize=10;fontColor=#666666;" edge="1" parent="1" source="check-should-run" target="pipeline-skipped">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-check-collect" value="true" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#82b366;strokeWidth=2;endArrow=classic;fontSize=10;fontColor=#666666;" edge="1" parent="1" source="check-should-run" target="collect-parallel">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- STEP 3: CollectParallel                                      -->
+        <!-- ============================================================ -->
+        <mxCell id="collect-parallel" value="&lt;b&gt;CollectParallel&lt;/b&gt;" style="swimlane;whiteSpace=wrap;html=1;startSize=25;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;rounded=1;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="330" y="480" width="940" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="collect-fpl" value="&lt;b&gt;CollectFPLData&lt;/b&gt;&#xa;Lambda" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="collect-parallel">
+          <mxGeometry x="30" y="40" width="160" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="collect-understat" value="&lt;b&gt;CollectUnderstat&lt;/b&gt;&#xa;Lambda" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="collect-parallel">
+          <mxGeometry x="240" y="40" width="160" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="collect-news" value="&lt;b&gt;CollectNews&lt;/b&gt;&#xa;Lambda" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="collect-parallel">
+          <mxGeometry x="450" y="40" width="160" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- External APIs for collectors -->
+        <mxCell id="ext-fpl" value="FPL API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="collect-parallel">
+          <mxGeometry x="55" y="100" width="110" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="ext-understat" value="Understat API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="collect-parallel">
+          <mxGeometry x="265" y="100" width="110" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="ext-news" value="RSS Feeds" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="collect-parallel">
+          <mxGeometry x="475" y="100" width="110" height="25" as="geometry" />
+        </mxCell>
+
+        <!-- S3 raw outputs from collectors -->
+        <mxCell id="s3-raw-fpl" value="raw/fpl-api/&#xa;season={s}/gameweek={gw}/" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#999999;dashed=1;fontSize=9;" vertex="1" parent="collect-parallel">
+          <mxGeometry x="660" y="15" width="170" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="s3-raw-understat" value="raw/understat/&#xa;season={s}/gameweek={gw}/" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#999999;dashed=1;fontSize=9;" vertex="1" parent="collect-parallel">
+          <mxGeometry x="660" y="55" width="170" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="s3-raw-news" value="raw/news/&#xa;season={s}/gameweek={gw}/" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#999999;dashed=1;fontSize=9;" vertex="1" parent="collect-parallel">
+          <mxGeometry x="660" y="95" width="170" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Arrows: collectors → S3 -->
+        <mxCell id="arrow-fpl-s3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#999999;strokeWidth=1;dashed=1;endArrow=classic;" edge="1" parent="collect-parallel" source="collect-fpl" target="s3-raw-fpl">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-understat-s3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#999999;strokeWidth=1;dashed=1;endArrow=classic;" edge="1" parent="collect-parallel" source="collect-understat" target="s3-raw-understat">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-news-s3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#999999;strokeWidth=1;dashed=1;endArrow=classic;" edge="1" parent="collect-parallel" source="collect-news" target="s3-raw-news">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- S3 RAW LAYER (shared between collect and validate)           -->
+        <!-- ============================================================ -->
+        <mxCell id="s3-raw-layer" value="&lt;b&gt;S3 Raw Layer&lt;/b&gt;&#xa;raw/fpl-api/ | raw/understat/ | raw/news/&#xa;*.json (Hive partitioned)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#999999;fontSize=10;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="580" y="650" width="440" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-collect-raw" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#999999;strokeWidth=2;dashed=1;endArrow=classic;" edge="1" parent="1" source="collect-parallel" target="s3-raw-layer">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- STEP 4: ValidateRawData                                      -->
+        <!-- ============================================================ -->
+        <mxCell id="validate" value="&lt;b&gt;ValidateRawData&lt;/b&gt;&#xa;Lambda" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="720" y="740" width="160" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="s3-dlq" value="dlq/&#xa;(failed records)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#b85450;dashed=1;fontSize=9;fontColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="1050" y="745" width="130" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-raw-validate" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#666666;strokeWidth=2;endArrow=classic;" edge="1" parent="1" source="s3-raw-layer" target="validate">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-validate-dlq" value="failures" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#b85450;strokeWidth=1;dashed=1;endArrow=classic;fontSize=10;fontColor=#b85450;" edge="1" parent="1" source="validate" target="s3-dlq">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- CheckValidation -->
+        <mxCell id="check-validation" value="&lt;b&gt;CheckValidation&lt;/b&gt;&#xa;status = valid?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="720" y="840" width="160" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-validate-check" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#666666;strokeWidth=2;endArrow=classic;" edge="1" parent="1" source="validate" target="check-validation">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- STEP 5: TransformData                                        -->
+        <!-- ============================================================ -->
+        <mxCell id="transform" value="&lt;b&gt;TransformData&lt;/b&gt;&#xa;Lambda" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="720" y="960" width="160" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-check-transform" value="valid" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#82b366;strokeWidth=2;endArrow=classic;fontSize=10;fontColor=#666666;" edge="1" parent="1" source="check-validation" target="transform">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- S3 Clean Layer -->
+        <mxCell id="s3-clean" value="&lt;b&gt;S3 Clean Layer&lt;/b&gt;&#xa;clean/players/season={s}/gameweek={gw}/players.parquet&#xa;(zstd, 30+ columns, schema_version)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#999999;fontSize=10;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="560" y="1055" width="480" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-transform-clean" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#999999;strokeWidth=2;dashed=1;endArrow=classic;" edge="1" parent="1" source="transform" target="s3-clean">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- CheckTransform -->
+        <mxCell id="check-transform" value="&lt;b&gt;CheckTransform&lt;/b&gt;" style="rhombus;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="735" y="1140" width="130" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-clean-checktx" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#666666;strokeWidth=2;endArrow=classic;" edge="1" parent="1" source="s3-clean" target="check-transform">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- STEP 6: EnrichParallel                                       -->
+        <!-- ============================================================ -->
+        <mxCell id="enrich-parallel" value="&lt;b&gt;EnrichParallel&lt;/b&gt;" style="swimlane;whiteSpace=wrap;html=1;startSize=25;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;rounded=1;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="250" y="1250" width="1100" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="enrich-summary" value="&lt;b&gt;EnrichPlayer&#xa;Summary&lt;/b&gt;&#xa;&lt;font style=&quot;font-size:9px&quot;&gt;Haiku · 10/batch&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="enrich-parallel">
+          <mxGeometry x="30" y="35" width="140" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="enrich-injury" value="&lt;b&gt;EnrichInjury&#xa;Signal&lt;/b&gt;&#xa;&lt;font style=&quot;font-size:9px&quot;&gt;Haiku · 10/batch&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="enrich-parallel">
+          <mxGeometry x="200" y="35" width="140" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="enrich-sentiment" value="&lt;b&gt;EnrichSentiment&lt;/b&gt;&#xa;&lt;font style=&quot;font-size:9px&quot;&gt;Haiku · 10/batch&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="enrich-parallel">
+          <mxGeometry x="370" y="35" width="140" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="enrich-fixture" value="&lt;b&gt;EnrichFixture&#xa;Outlook&lt;/b&gt;&#xa;&lt;font style=&quot;font-size:9px&quot;&gt;Sonnet · 5/batch&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="enrich-parallel">
+          <mxGeometry x="540" y="35" width="140" height="55" as="geometry" />
+        </mxCell>
+
+        <!-- Anthropic API -->
+        <mxCell id="ext-anthropic" value="&lt;b&gt;Anthropic API&lt;/b&gt;&#xa;Tier 1: 50 RPM · 10K output TPM" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="enrich-parallel">
+          <mxGeometry x="130" y="110" width="420" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- Per-enricher S3 outputs -->
+        <mxCell id="s3-enrich-summary" value="enriched/&#xa;player_summary/" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#999999;dashed=1;fontSize=8;" vertex="1" parent="enrich-parallel">
+          <mxGeometry x="720" y="15" width="120" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="s3-enrich-injury" value="enriched/&#xa;injury_signal/" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#999999;dashed=1;fontSize=8;" vertex="1" parent="enrich-parallel">
+          <mxGeometry x="720" y="50" width="120" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="s3-enrich-sentiment" value="enriched/&#xa;sentiment/" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#999999;dashed=1;fontSize=8;" vertex="1" parent="enrich-parallel">
+          <mxGeometry x="720" y="85" width="120" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="s3-enrich-fixture" value="enriched/&#xa;fixture_outlook/" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#999999;dashed=1;fontSize=8;" vertex="1" parent="enrich-parallel">
+          <mxGeometry x="720" y="120" width="120" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Arrows: enrichers → S3 -->
+        <mxCell id="arrow-es1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#999999;strokeWidth=1;dashed=1;endArrow=classic;" edge="1" parent="enrich-parallel" source="enrich-summary" target="s3-enrich-summary">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-es2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#999999;strokeWidth=1;dashed=1;endArrow=classic;" edge="1" parent="enrich-parallel" source="enrich-injury" target="s3-enrich-injury">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-es3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#999999;strokeWidth=1;dashed=1;endArrow=classic;" edge="1" parent="enrich-parallel" source="enrich-sentiment" target="s3-enrich-sentiment">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-es4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#999999;strokeWidth=1;dashed=1;endArrow=classic;" edge="1" parent="enrich-parallel" source="enrich-fixture" target="s3-enrich-fixture">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Rate limit annotations -->
+        <mxCell id="rate-haiku" value="5 RPM each&#xa;(shared 50 RPM)" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=9;fontColor=#9673a6;fontStyle=2;" vertex="1" parent="enrich-parallel">
+          <mxGeometry x="860" y="40" width="110" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="rate-sonnet" value="15 RPM&#xa;(own limit)" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=9;fontColor=#9673a6;fontStyle=2;" vertex="1" parent="enrich-parallel">
+          <mxGeometry x="860" y="115" width="110" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow: CheckTransform → EnrichParallel -->
+        <mxCell id="arrow-checktx-enrich" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#666666;strokeWidth=2;endArrow=classic;" edge="1" parent="1" source="check-transform" target="enrich-parallel">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- STEP 7: MergeEnrichments                                     -->
+        <!-- ============================================================ -->
+        <mxCell id="merge" value="&lt;b&gt;MergeEnrichments&lt;/b&gt;&#xa;Lambda" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="720" y="1470" width="160" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-enrich-merge" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#666666;strokeWidth=2;endArrow=classic;" edge="1" parent="1" source="enrich-parallel" target="merge">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- S3 Enriched Layer (final output) -->
+        <mxCell id="s3-enriched-final" value="&lt;b&gt;S3 Enriched Layer&lt;/b&gt;&#xa;enriched/player_summaries/season={s}/gameweek={gw}/summaries.parquet&#xa;(all players + enrichment columns for top 300)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#999999;fontSize=10;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="530" y="1565" width="540" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-merge-s3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#999999;strokeWidth=2;dashed=1;endArrow=classic;" edge="1" parent="1" source="merge" target="s3-enriched-final">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- CheckEnrichment -->
+        <mxCell id="check-enrichment" value="&lt;b&gt;CheckEnrichment&lt;/b&gt;" style="rhombus;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="735" y="1660" width="130" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-s3final-check" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#666666;strokeWidth=2;endArrow=classic;" edge="1" parent="1" source="s3-enriched-final" target="check-enrichment">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- STEP 8: Terminal states                                      -->
+        <!-- ============================================================ -->
+        <mxCell id="pipeline-succeeded" value="&lt;b&gt;Pipeline&#xa;Succeeded&lt;/b&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="745" y="1780" width="110" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="pipeline-failed" value="&lt;b&gt;Pipeline&#xa;Failed&lt;/b&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="1780" width="110" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-check-success" value="200" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#82b366;strokeWidth=2;endArrow=classic;fontSize=10;fontColor=#666666;" edge="1" parent="1" source="check-enrichment" target="pipeline-succeeded">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Failure arrows (from various checks) -->
+        <mxCell id="arrow-checkval-fail" value="invalid" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#b85450;strokeWidth=1;dashed=1;endArrow=classic;fontSize=9;fontColor=#b85450;" edge="1" parent="1" source="check-validation" target="pipeline-failed">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1155" y="875" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="arrow-checkenrich-fail" value="error" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#b85450;strokeWidth=1;dashed=1;endArrow=classic;fontSize=9;fontColor=#b85450;" edge="1" parent="1" source="check-enrichment" target="pipeline-failed">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================ -->
+        <!-- ANNOTATIONS                                                  -->
+        <!-- ============================================================ -->
+        <mxCell id="note-filter" value="&lt;i&gt;Top 300 players by ownership&lt;/i&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=10;fontColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="250" y="1225" width="200" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="note-controls" value="&lt;i&gt;Each Lambda: semaphore(2) + rate limiter&lt;/i&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=10;fontColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="1225" width="250" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Downstream consumer hint -->
+        <mxCell id="downstream" value="&lt;b&gt;Downstream Consumers&lt;/b&gt;&#xa;Streamlit Dashboard · LangGraph Agent" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="670" y="1880" width="260" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-to-downstream" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#9673a6;strokeWidth=1;dashed=1;endArrow=classic;" edge="1" parent="1" source="pipeline-succeeded" target="downstream">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
