@@ -4,8 +4,8 @@ Triggers a Step Functions execution for each gameweek, waits for completion,
 and reports results. Uses the same pipeline as the weekly scheduled run.
 
 Usage:
-    python -m fpl_data.scripts.backfill --season 2025-26 --start-gw 1 --end-gw 20
-    python -m fpl_data.scripts.backfill --season 2025-26 --start-gw 5 --end-gw 5
+    python scripts/backfill.py --season 2025-26 --start-gw 1 --end-gw 20
+    python scripts/backfill.py --season 2025-26 --start-gw 32 --end-gw 32
 """
 
 import argparse
