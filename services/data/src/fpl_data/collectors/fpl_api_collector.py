@@ -186,9 +186,7 @@ class FPLAPICollector:
         """Fetch JSON from the FPL API."""
         logger.info("[FPL API] GET %s", url)
         async with httpx.AsyncClient(
-            headers={
-                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            },
+            headers={"User-Agent": "Mozilla/5.0 (compatible; FPL-Platform/1.0)"},
             timeout=30.0,
         ) as client:
             response = await client.get(url)
