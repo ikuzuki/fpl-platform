@@ -78,6 +78,27 @@ export interface TransferPick {
   gameweek: number;
 }
 
+export interface PlayerHistory {
+  player_id: number;
+  web_name: string;
+  team_short: string;
+  position: string;
+  gameweek: number;
+  season: string;
+  total_points: number;
+  form: number;
+  price: number;
+  ownership_pct: number;
+  fpl_score: number;
+  fpl_score_rank: number;
+  form_trend: string | null;
+  injury_risk: number | null;
+  sentiment_score: number | null;
+  fdr_next_3: number | null;
+  net_transfers: number;
+  points_per_million: number;
+}
+
 export interface TeamStrength {
   team_id: number;
   team_name: string;

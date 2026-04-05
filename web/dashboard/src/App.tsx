@@ -4,6 +4,7 @@ import { PlayersPage } from "@/pages/PlayersPage";
 import { FixturesPage } from "@/pages/FixturesPage";
 import { TransfersPage } from "@/pages/TransfersPage";
 import { TeamsPage } from "@/pages/TeamsPage";
+import { TrendsPage } from "@/pages/TrendsPage";
 
 export default function App() {
   return (
@@ -14,6 +15,7 @@ export default function App() {
           <Route path="fixtures" element={<FixturesPage />} />
           <Route path="transfers" element={<TransfersPage />} />
           <Route path="teams" element={<TeamsPage />} />
+          <Route path="trends" element={<TrendsPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

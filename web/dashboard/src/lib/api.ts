@@ -1,5 +1,6 @@
 import type {
   PlayerDashboard,
+  PlayerHistory,
   FixtureTicker,
   TransferPick,
   TeamStrength,
@@ -18,4 +19,5 @@ export const api = {
   fixtures: () => fetchJson<FixtureTicker[]>("fixture_ticker.json"),
   transfers: () => fetchJson<TransferPick[]>("transfer_picks.json"),
   teams: () => fetchJson<TeamStrength[]>("team_strength.json"),
+  history: () => fetchJson<PlayerHistory[]>("player_history.json"),
 };

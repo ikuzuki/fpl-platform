@@ -8,6 +8,7 @@ const links = [
   { to: "/fixtures", label: "Fixtures" },
   { to: "/transfers", label: "Transfers" },
   { to: "/teams", label: "Teams" },
+  { to: "/trends", label: "Trends" },
 ];
 
 export function Layout() {
