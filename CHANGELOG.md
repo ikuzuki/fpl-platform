@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Understat xG/xA join in player transformer — matches by normalised name, adds 8 Understat columns (understat_xg, understat_xa, understat_npxg, etc.)
+- News articles attached to players for injury/sentiment enrichers via name matching
+- Fixture data attached to players for fixture outlook enricher (next 5 GWs with difficulty ratings)
+- Premier League keyword filter on RSS news collector (removes non-football content)
+- 3 new unit tests for Understat join (match, unmatched, empty)
 - Step Functions pipeline: 9-state machine (Collect FPL → Understat → News → Validate → Check → Transform → Enrich → Succeed/Fail)
 - 6 Lambda modules in dev environment (fpl-api-collector, understat-collector, news-collector, validator, transform, enricher)
 - EventBridge schedule: Tuesday 8am UTC weekly trigger

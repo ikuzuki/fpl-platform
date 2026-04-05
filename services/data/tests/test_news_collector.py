@@ -55,12 +55,12 @@ async def test_collect_rss_feeds_success(
     feed = _make_feed(
         [
             _make_feed_entry(
-                "Salah scores hat-trick",
+                "Salah scores hat-trick for Liverpool",
                 "Fri, 04 Apr 2026 12:00:00 GMT",
                 date_tuple=(2026, 4, 4),
             ),
             _make_feed_entry(
-                "Haaland injured",
+                "Haaland injured in Manchester City training",
                 "Fri, 04 Apr 2026 14:00:00 GMT",
                 date_tuple=(2026, 4, 4),
             ),

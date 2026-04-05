@@ -16,8 +16,39 @@ logger = logging.getLogger(__name__)
 
 RSS_FEEDS: dict[str, str] = {
     "bbc_football": "https://feeds.bbci.co.uk/sport/football/rss.xml",
-    "sky_sports": "https://www.skysports.com/rss/12040",
-    "the_guardian_football": "https://www.theguardian.com/football/rss",
+    "sky_premier_league": "https://www.skysports.com/rss/11661",
+    "the_guardian_football": "https://www.theguardian.com/football/premierleague/rss",
+}
+
+# Only keep articles mentioning Premier League context
+PL_KEYWORDS = {
+    "premier league",
+    "epl",
+    "fpl",
+    "arsenal",
+    "aston villa",
+    "bournemouth",
+    "brentford",
+    "brighton",
+    "chelsea",
+    "crystal palace",
+    "everton",
+    "fulham",
+    "ipswich",
+    "leicester",
+    "liverpool",
+    "manchester city",
+    "manchester united",
+    "man city",
+    "man utd",
+    "newcastle",
+    "nottingham forest",
+    "southampton",
+    "tottenham",
+    "spurs",
+    "west ham",
+    "wolves",
+    "wolverhampton",
 }
 
 
@@ -58,6 +89,12 @@ class NewsCollector:
                     else:
                         entry_date = ""
                     if entry_date != date:
+                        continue
+                    # Filter for Premier League relevance
+                    text = (
+                        getattr(entry, "title", "") + " " + getattr(entry, "summary", "")
+                    ).lower()
+                    if not any(kw in text for kw in PL_KEYWORDS):
                         continue
                     articles.append(
                         {
