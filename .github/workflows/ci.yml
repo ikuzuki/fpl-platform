@@ -15,6 +15,7 @@ jobs:
       etl: ${{ steps.filter.outputs.etl }}
       agent: ${{ steps.filter.outputs.agent }}
       infra: ${{ steps.filter.outputs.infra }}
+      web: ${{ steps.filter.outputs.web }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -39,6 +40,8 @@ jobs:
               - 'libs/**'
             infra:
               - 'infrastructure/**'
+            web:
+              - 'web/**'
 
   lint-and-test:
     needs: detect-changes
@@ -101,6 +104,34 @@ jobs:
           else
             echo "No tests found, skipping"
           fi
+
+  web-ci:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web/dashboard
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/dashboard/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (tsc + vite)
+        run: npm run build
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
 
   terraform-plan:
     needs: detect-changes
