@@ -42,3 +42,9 @@ variable "environment_variables" {
   type        = map(string)
   default     = {}
 }
+
+variable "command" {
+  description = "Handler entry point for container image Lambdas (e.g. 'fpl_data.handlers.fpl_api_handler.lambda_handler')"
+  type        = list(string)
+  default     = null
+}
