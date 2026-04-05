@@ -221,19 +221,19 @@ class TestFixtureOutlookEnricherValidation:
 class TestEnricherConfig:
     def test_player_summary_batch_size(self, mock_client: MagicMock) -> None:
         enricher = PlayerSummaryEnricher(anthropic_client=mock_client)
-        assert enricher.BATCH_SIZE == 3
+        assert enricher.BATCH_SIZE == 10
 
     def test_injury_signal_batch_size(self, mock_client: MagicMock) -> None:
         enricher = InjurySignalEnricher(anthropic_client=mock_client)
-        assert enricher.BATCH_SIZE == 5
+        assert enricher.BATCH_SIZE == 10
 
     def test_sentiment_batch_size(self, mock_client: MagicMock) -> None:
         enricher = SentimentEnricher(anthropic_client=mock_client)
-        assert enricher.BATCH_SIZE == 5
+        assert enricher.BATCH_SIZE == 10
 
     def test_fixture_outlook_batch_size(self, mock_client: MagicMock) -> None:
         enricher = FixtureOutlookEnricher(anthropic_client=mock_client)
-        assert enricher.BATCH_SIZE == 1
+        assert enricher.BATCH_SIZE == 5
 
     def test_player_summary_loads_prompt(self, mock_client: MagicMock) -> None:
         enricher = PlayerSummaryEnricher(anthropic_client=mock_client)

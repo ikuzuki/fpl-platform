@@ -15,10 +15,10 @@ logger = logging.getLogger(__name__)
 class PlayerSummaryEnricher(FPLEnricher):
     """Summarise player form over a rolling gameweek window.
 
-    Uses Haiku for bulk processing. Batch size of 3 keeps context focused.
+    Uses Haiku for bulk processing. Batch size of 10 for cost efficiency.
     """
 
-    BATCH_SIZE = 3
+    BATCH_SIZE = 10
     MODEL = "claude-haiku-4-5-20251001"
 
     def __init__(self, *args: Any, window_size: int = 5, **kwargs: Any) -> None:
