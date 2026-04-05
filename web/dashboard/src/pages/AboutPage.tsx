@@ -256,10 +256,10 @@ export function AboutPage() {
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           {Object.entries(TECH_STACK).map(([category, items]) => (
             <Card key={category}>
-              <CardHeader className="pb-2">
+              <CardHeader className="py-3">
                 <CardTitle className="text-sm">{category}</CardTitle>
               </CardHeader>
-              <CardContent className="pt-0">
+              <CardContent className="pt-3">
                 <div className="space-y-2">
                   {items.map((item) => (
                     <div key={item.name} className="flex items-start justify-between gap-2">
