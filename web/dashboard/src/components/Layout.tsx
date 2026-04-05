@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { Moon, Sun, Menu, X, Crown, Target, ArrowRightLeft } from "lucide-react";
+import { Moon, Sun, Menu, X, Crown, Target, ArrowRightLeft, Info } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { PulseLogo, PulseWordmark, NavIcons } from "@/components/icons/FplIcons";
@@ -15,6 +15,7 @@ const links: { to: string; label: string; icon: ReactNode }[] = [
   { to: "/fixtures", label: "Fixtures", icon: <NavIcons.Fixtures size={16} /> },
   { to: "/teams", label: "Teams", icon: <NavIcons.Teams size={16} /> },
   { to: "/trends", label: "Trends", icon: <NavIcons.Trends size={16} /> },
+  { to: "/about", label: "About", icon: <Info className="h-4 w-4" /> },
 ];
 
 export function Layout() {
