@@ -11,6 +11,7 @@ jobs:
       libs: ${{ steps.filter.outputs.libs }}
       data: ${{ steps.filter.outputs.data }}
       enrich: ${{ steps.filter.outputs.enrich }}
+      curate: ${{ steps.filter.outputs.curate }}
       etl: ${{ steps.filter.outputs.etl }}
       agent: ${{ steps.filter.outputs.agent }}
       infra: ${{ steps.filter.outputs.infra }}
@@ -27,6 +28,9 @@ jobs:
               - 'libs/**'
             enrich:
               - 'services/enrich/**'
+              - 'libs/**'
+            curate:
+              - 'services/curate/**'
               - 'libs/**'
             etl:
               - 'services/etl/**'
@@ -52,6 +56,9 @@ jobs:
           - name: enrich
             path: services/enrich
             changed: ${{ needs.detect-changes.outputs.enrich }}
+          - name: curate
+            path: services/curate
+            changed: ${{ needs.detect-changes.outputs.curate }}
           - name: agent
             path: services/agent
             changed: ${{ needs.detect-changes.outputs.agent }}
