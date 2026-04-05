@@ -27,6 +27,31 @@ export function positionColor(pos: string): string {
   return colors[pos] ?? "bg-gray-100 text-gray-800";
 }
 
+export const POS_CHART_COLORS: Record<string, string> = {
+  GKP: "var(--pos-gkp)",
+  DEF: "var(--pos-def)",
+  MID: "var(--pos-mid)",
+  FWD: "var(--pos-fwd)",
+};
+
+export const CHART_COLORS = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+];
+
+export const SCORE_COMPONENTS = [
+  { key: "score_form", label: "Form", color: "var(--score-form)" },
+  { key: "score_value", label: "Value", color: "var(--score-value)" },
+  { key: "score_fixtures", label: "Fixtures", color: "var(--score-fixtures)" },
+  { key: "score_xg", label: "xG", color: "var(--score-xg)" },
+  { key: "score_momentum", label: "Momentum", color: "var(--score-momentum)" },
+  { key: "score_ict", label: "ICT", color: "var(--score-ict)" },
+  { key: "score_injury", label: "Injury", color: "var(--score-injury)" },
+] as const;
+
 export function recommendationStyle(rec: string) {
   const styles: Record<
     string,
@@ -93,3 +118,10 @@ export function playerTier(rank: number): string | null {
   if (rank <= 50) return "High Value";
   return null;
 }
+
+export const TOOLTIP_STYLE = {
+  backgroundColor: "var(--card)",
+  borderColor: "var(--border)",
+  borderRadius: "0.5rem",
+  fontSize: "12px",
+} as const;

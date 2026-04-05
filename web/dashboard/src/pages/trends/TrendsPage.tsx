@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   LineChart,
   Line,
@@ -8,66 +9,73 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
-import { Search, TrendingUp, TrendingDown } from "lucide-react";
+import { Search } from "lucide-react";
+import { MetricIcons } from "@/components/icons/FplIcons";
 import { api } from "@/lib/api";
+import { useApi } from "@/lib/useApi";
 import type { PlayerHistory } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TableSkeleton } from "@/components/ui/skeleton";
+import { ErrorCard } from "@/components/ui/error-card";
 import {
   cn,
   formatPrice,
   positionColor,
   scoreColor,
+  CHART_COLORS,
+  TOOLTIP_STYLE,
 } from "@/lib/utils";
 
 type Metric = "fpl_score" | "price" | "ownership_pct" | "form" | "points_per_million";
 
-const METRICS: { key: Metric; label: string; format: (v: number) => string }[] =
-  [
-    { key: "fpl_score", label: "FPL Score", format: (v) => v.toFixed(1) },
-    { key: "price", label: "Price", format: (v) => formatPrice(v) },
-    {
-      key: "ownership_pct",
-      label: "Ownership",
-      format: (v) => `${v.toFixed(1)}%`,
-    },
-    { key: "form", label: "Form", format: (v) => v.toFixed(1) },
-    {
-      key: "points_per_million",
-      label: "Pts/M",
-      format: (v) => v.toFixed(1),
-    },
-  ];
-
-const CHART_COLORS = [
-  "oklch(0.6 0.18 265)",
-  "oklch(0.6 0.18 145)",
-  "oklch(0.65 0.18 25)",
-  "oklch(0.7 0.15 80)",
-  "oklch(0.55 0.15 330)",
+const METRICS: { key: Metric; label: string; format: (v: number) => string }[] = [
+  { key: "fpl_score", label: "FPL Score", format: (v) => v.toFixed(1) },
+  { key: "price", label: "Price", format: (v) => formatPrice(v) },
+  { key: "ownership_pct", label: "Ownership", format: (v) => `${v.toFixed(1)}%` },
+  { key: "form", label: "Form", format: (v) => v.toFixed(1) },
+  { key: "points_per_million", label: "Pts/M", format: (v) => v.toFixed(1) },
 ];
 
 export function TrendsPage() {
-  const [data, setData] = useState<PlayerHistory[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState<number[]>([]);
-  const [metric, setMetric] = useState<Metric>("fpl_score");
+  const { data, loading, error } = useApi(() => api.history(), [] as PlayerHistory[]);
 
-  useEffect(() => {
-    api.history().then((d) => {
-      setData(d);
-      setLoading(false);
-    });
-  }, []);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const search = searchParams.get("q") ?? "";
+  const metric = (searchParams.get("metric") as Metric) ?? "fpl_score";
+
+  const selectedParam = searchParams.get("ids");
+  const selected = useMemo(
+    () => (selectedParam ? selectedParam.split(",").map(Number).filter(Boolean) : []),
+    [selectedParam],
+  );
+
+  const setSearch = (q: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (q) next.set("q", q);
+    else next.delete("q");
+    setSearchParams(next, { replace: true });
+  };
+
+  const setMetric = (m: Metric) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("metric", m);
+    setSearchParams(next, { replace: true });
+  };
+
+  const setSelected = (updater: (prev: number[]) => number[]) => {
+    const next = new URLSearchParams(searchParams);
+    const updated = updater(selected);
+    if (updated.length > 0) next.set("ids", updated.join(","));
+    else next.delete("ids");
+    setSearchParams(next, { replace: true });
+  };
 
   const gameweeks = useMemo(
     () => [...new Set(data.map((r) => r.gameweek))].sort((a, b) => a - b),
     [data],
   );
 
-  // Get latest GW snapshot for player list
   const latestGw = gameweeks[gameweeks.length - 1];
   const players = useMemo(() => {
     return data
@@ -85,15 +93,12 @@ export function TrendsPage() {
     );
   }, [players, search]);
 
-  // Build chart data
   const chartData = useMemo(() => {
     if (selected.length === 0) return [];
     return gameweeks.map((gw) => {
       const point: Record<string, number | string> = { gameweek: `GW${gw}` };
       selected.forEach((pid) => {
-        const row = data.find(
-          (r) => r.player_id === pid && r.gameweek === gw,
-        );
+        const row = data.find((r) => r.player_id === pid && r.gameweek === gw);
         const player = players.find((p) => p.player_id === pid);
         const key = player?.web_name ?? `Player ${pid}`;
         point[key] = row?.[metric] ?? 0;
@@ -106,7 +111,6 @@ export function TrendsPage() {
     (pid) => players.find((p) => p.player_id === pid)?.web_name ?? "",
   );
 
-  // Compute movers (biggest change between first and last GW)
   const movers = useMemo(() => {
     if (gameweeks.length < 2) return { risers: [], fallers: [] };
     const firstGw = gameweeks[0];
@@ -114,12 +118,8 @@ export function TrendsPage() {
 
     const deltas = players
       .map((p) => {
-        const first = data.find(
-          (r) => r.player_id === p.player_id && r.gameweek === firstGw,
-        );
-        const last = data.find(
-          (r) => r.player_id === p.player_id && r.gameweek === lastGw,
-        );
+        const first = data.find((r) => r.player_id === p.player_id && r.gameweek === firstGw);
+        const last = data.find((r) => r.player_id === p.player_id && r.gameweek === lastGw);
         if (!first || !last) return null;
         return {
           ...p,
@@ -137,6 +137,7 @@ export function TrendsPage() {
   }, [data, gameweeks, players]);
 
   if (loading) return <TableSkeleton rows={10} />;
+  if (error) return <ErrorCard message={error} />;
 
   if (gameweeks.length === 0) {
     return (
@@ -156,8 +157,7 @@ export function TrendsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Player Trends</h1>
         <span className="text-sm text-[var(--muted-foreground)]">
-          {gameweeks.length} gameweeks &middot; GW{gameweeks[0]}-GW
-          {gameweeks[gameweeks.length - 1]}
+          {gameweeks.length} gameweeks &middot; GW{gameweeks[0]}-GW{gameweeks[gameweeks.length - 1]}
         </span>
       </div>
 
@@ -167,7 +167,7 @@ export function TrendsPage() {
           <Card className="border-l-4 border-l-green-500">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-green-500" />
+                <MetricIcons.PriceUp size={16} />
                 Biggest Risers (FPL Score)
               </CardTitle>
             </CardHeader>
@@ -176,6 +176,8 @@ export function TrendsPage() {
                 <div
                   key={p.player_id}
                   className="flex items-center justify-between py-1.5 border-b border-[var(--border)] last:border-b-0 cursor-pointer hover:bg-[var(--muted)]/50 rounded px-1"
+                  role="button"
+                  tabIndex={0}
                   onClick={() =>
                     setSelected((prev) =>
                       prev.includes(p.player_id)
@@ -183,15 +185,21 @@ export function TrendsPage() {
                         : [...prev.slice(-4), p.player_id],
                     )
                   }
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSelected((prev) =>
+                        prev.includes(p.player_id)
+                          ? prev.filter((id) => id !== p.player_id)
+                          : [...prev.slice(-4), p.player_id],
+                      );
+                    }
+                  }}
                 >
                   <div className="flex items-center gap-2">
-                    <Badge className={cn(positionColor(p.position), "text-[10px]")}>
-                      {p.position}
-                    </Badge>
+                    <Badge className={cn(positionColor(p.position), "text-[10px]")}>{p.position}</Badge>
                     <span className="text-sm font-medium">{p.web_name}</span>
-                    <span className="text-xs text-[var(--muted-foreground)]">
-                      {p.team_short}
-                    </span>
+                    <span className="text-xs text-[var(--muted-foreground)]">{p.team_short}</span>
                   </div>
                   <span className="text-sm font-bold text-green-600 dark:text-green-400">
                     +{p.delta.toFixed(1)}
@@ -204,7 +212,7 @@ export function TrendsPage() {
           <Card className="border-l-4 border-l-red-500">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
-                <TrendingDown className="h-4 w-4 text-red-500" />
+                <MetricIcons.PriceDown size={16} />
                 Biggest Fallers (FPL Score)
               </CardTitle>
             </CardHeader>
@@ -213,6 +221,8 @@ export function TrendsPage() {
                 <div
                   key={p.player_id}
                   className="flex items-center justify-between py-1.5 border-b border-[var(--border)] last:border-b-0 cursor-pointer hover:bg-[var(--muted)]/50 rounded px-1"
+                  role="button"
+                  tabIndex={0}
                   onClick={() =>
                     setSelected((prev) =>
                       prev.includes(p.player_id)
@@ -220,15 +230,21 @@ export function TrendsPage() {
                         : [...prev.slice(-4), p.player_id],
                     )
                   }
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSelected((prev) =>
+                        prev.includes(p.player_id)
+                          ? prev.filter((id) => id !== p.player_id)
+                          : [...prev.slice(-4), p.player_id],
+                      );
+                    }
+                  }}
                 >
                   <div className="flex items-center gap-2">
-                    <Badge className={cn(positionColor(p.position), "text-[10px]")}>
-                      {p.position}
-                    </Badge>
+                    <Badge className={cn(positionColor(p.position), "text-[10px]")}>{p.position}</Badge>
                     <span className="text-sm font-medium">{p.web_name}</span>
-                    <span className="text-xs text-[var(--muted-foreground)]">
-                      {p.team_short}
-                    </span>
+                    <span className="text-xs text-[var(--muted-foreground)]">{p.team_short}</span>
                   </div>
                   <span className="text-sm font-bold text-red-500 dark:text-red-400">
                     {p.delta.toFixed(1)}
@@ -248,7 +264,9 @@ export function TrendsPage() {
             <CardContent className="pt-4">
               <div className="relative mb-3">
                 <Search className="absolute left-2.5 top-2 h-4 w-4 text-[var(--muted-foreground)]" />
+                <label htmlFor="trends-search" className="sr-only">Search players</label>
                 <input
+                  id="trends-search"
                   type="text"
                   placeholder="Search player..."
                   value={search}
@@ -277,32 +295,21 @@ export function TrendsPage() {
                       }
                       className={cn(
                         "w-full flex items-center justify-between px-2 py-1.5 rounded text-left text-sm transition-colors",
-                        isSelected
-                          ? "bg-[var(--accent)]/10 font-medium"
-                          : "hover:bg-[var(--muted)]",
+                        isSelected ? "bg-[var(--accent)]/10 font-medium" : "hover:bg-[var(--muted)]",
                       )}
+                      aria-pressed={isSelected}
                     >
                       <div className="flex items-center gap-2">
                         {isSelected && (
                           <div
                             className="w-2.5 h-2.5 rounded-full"
-                            style={{
-                              backgroundColor:
-                                CHART_COLORS[colorIdx % CHART_COLORS.length],
-                            }}
+                            style={{ backgroundColor: CHART_COLORS[colorIdx % CHART_COLORS.length] }}
                           />
                         )}
                         <span>{p.web_name}</span>
-                        <span className="text-[10px] text-[var(--muted-foreground)]">
-                          {p.team_short}
-                        </span>
+                        <span className="text-[10px] text-[var(--muted-foreground)]">{p.team_short}</span>
                       </div>
-                      <span
-                        className={cn(
-                          "text-xs font-mono",
-                          scoreColor(p.fpl_score),
-                        )}
-                      >
+                      <span className={cn("text-xs font-mono", scoreColor(p.fpl_score))}>
                         {p.fpl_score.toFixed(1)}
                       </span>
                     </button>
@@ -317,13 +324,11 @@ export function TrendsPage() {
         <div className="md:col-span-9">
           <Card className="h-full">
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                 <CardTitle>
-                  {selected.length === 0
-                    ? "Select players to compare"
-                    : `${metricConfig.label} over time`}
+                  {selected.length === 0 ? "Select players to compare" : `${metricConfig.label} over time`}
                 </CardTitle>
-                <div className="flex gap-1">
+                <div className="flex gap-1 flex-wrap" role="group" aria-label="Select metric">
                   {METRICS.map((m) => (
                     <button
                       key={m.key}
@@ -334,6 +339,7 @@ export function TrendsPage() {
                           ? "bg-[var(--accent)] text-[var(--accent-foreground)]"
                           : "bg-[var(--muted)] text-[var(--muted-foreground)] hover:bg-[var(--border)]",
                       )}
+                      aria-pressed={metric === m.key}
                     >
                       {m.label}
                     </button>
@@ -344,33 +350,16 @@ export function TrendsPage() {
             <CardContent>
               {selected.length === 0 ? (
                 <div className="flex items-center justify-center h-[300px] text-[var(--muted-foreground)]">
-                  <p className="text-sm">
-                    Pick players from the list or click a riser/faller to start
-                  </p>
+                  <p className="text-sm">Pick players from the list or click a riser/faller to start</p>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={340}>
                   <LineChart data={chartData}>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="var(--border)"
-                      opacity={0.5}
-                    />
-                    <XAxis
-                      dataKey="gameweek"
-                      tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
-                    />
-                    <YAxis
-                      tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
-                      domain={["auto", "auto"]}
-                    />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.5} />
+                    <XAxis dataKey="gameweek" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
+                    <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} domain={["auto", "auto"]} />
                     <Tooltip
-                      contentStyle={{
-                        backgroundColor: "var(--card)",
-                        borderColor: "var(--border)",
-                        borderRadius: "0.5rem",
-                        fontSize: "12px",
-                      }}
+                      contentStyle={TOOLTIP_STYLE}
                       formatter={(value) => metricConfig.format(Number(value))}
                     />
                     {selectedNames.map((name, i) => (
@@ -404,9 +393,7 @@ export function TrendsPage() {
                         </span>
                         <div className="flex gap-0.5">
                           {gameweeks.map((gw) => {
-                            const row = data.find(
-                              (r) => r.player_id === pid && r.gameweek === gw,
-                            );
+                            const row = data.find((r) => r.player_id === pid && r.gameweek === gw);
                             const score = row?.sentiment_score;
                             let bg = "bg-gray-200 dark:bg-gray-700";
                             if (score != null) {
@@ -429,9 +416,7 @@ export function TrendsPage() {
                   })}
                   <div className="flex gap-0.5 ml-[88px] mt-1">
                     {gameweeks.map((gw) => (
-                      <div key={gw} className="w-8 text-center text-[9px] text-[var(--muted-foreground)]">
-                        {gw}
-                      </div>
+                      <div key={gw} className="w-8 text-center text-[9px] text-[var(--muted-foreground)]">{gw}</div>
                     ))}
                   </div>
                 </div>
@@ -446,24 +431,12 @@ export function TrendsPage() {
                     return (
                       <button
                         key={pid}
-                        onClick={() =>
-                          setSelected((prev) =>
-                            prev.filter((id) => id !== pid),
-                          )
-                        }
+                        onClick={() => setSelected((prev) => prev.filter((id) => id !== pid))}
                         className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium bg-[var(--muted)] hover:bg-[var(--border)] transition-colors"
                       >
-                        <div
-                          className="w-2 h-2 rounded-full"
-                          style={{
-                            backgroundColor:
-                              CHART_COLORS[i % CHART_COLORS.length],
-                          }}
-                        />
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
                         {p.web_name}
-                        <span className="text-[var(--muted-foreground)] ml-1">
-                          &times;
-                        </span>
+                        <span className="text-[var(--muted-foreground)] ml-1">&times;</span>
                       </button>
                     );
                   })}

@@ -8,6 +8,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Dashboard v4: Captain Picker Decision Matrix page with weighted composite captaincy score
+- Dashboard v4: Differential Radar page — scatter plot + card grid for low-ownership high-value players with sparklines
+- Dashboard v4: Transfer Planner page — side-by-side player comparison with budget simulation, score pyramid, and form sparklines
+- Dashboard v4: Gameweek Momentum Heatmap — FPL Score by player per gameweek (top 50 players)
+- Dashboard v4: FDR number overlay in fixture grid cells for colour-blind accessibility
+- Dashboard v4: Scatter outlier labels on xG Efficiency and Ownership vs Value charts (top 5 by distance)
+- Dashboard v4: Position colour legend under scatter charts
+- Dashboard v4: Team labels on Teams scatter chart
+- Dashboard v4: Vitest + React Testing Library setup with 38 tests (utils + useApi hook)
+
+### Changed
+- Dashboard v4: Extracted PlayersPage into 5 focused sub-components (PlayerDetail, ScoreWaterfall, XgScatter, OwnershipBubble, MomentumHeatmap)
+- Dashboard v4: Extracted TrendsPage into dedicated directory structure
+- Dashboard v4: Created reusable useApi hook — replaced 6 duplicated useState+useEffect fetch patterns across all pages
+- Dashboard v4: Moved chart colours, position colours, and score component colours into CSS custom properties (design system tokens)
+- Dashboard v4: Added useSearchParams URL state sync for all page filters (position, search, sort, metric, player selection)
+- Dashboard v4: Added mobile hamburger menu (md: breakpoint nav collapse)
+- Dashboard v4: Added skip-to-content link, aria-sort on sortable headers, search labels, aria-pressed on filter buttons, keyboard navigation on expandable rows
+- Dashboard v4: Added ErrorCard component with proper error states on all pages (replaces silent error swallowing)
+- Dashboard v4: Added expand animation (CSS grid-template-rows transition) for player detail and transfer card expansion
+- Dashboard v4: Footer now shows actual gameweek/season from briefing data instead of static text
+- Dashboard v4: Expanded navigation to include Captain, Differentials, and Planner pages
+- Dashboard v4: Shared TOOLTIP_STYLE constant for consistent Recharts tooltip styling
+
 - Dashboard v3: Gameweek Briefing home page (top picks, injury alerts, fixture spotlight, form watch)
 - Dashboard v3: Score Breakdown Waterfall in player detail panel (7 weighted components)
 - Dashboard v3: xG Efficiency Scatter (Goals vs xG with diagonal reference)
