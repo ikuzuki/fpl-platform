@@ -2,11 +2,14 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Layout } from "@/components/Layout";
 import { BriefingPage } from "@/pages/BriefingPage";
-import { PlayersPage } from "@/pages/PlayersPage";
+import { PlayersPage } from "@/pages/players/PlayersPage";
 import { FixturesPage } from "@/pages/FixturesPage";
 import { TransfersPage } from "@/pages/TransfersPage";
 import { TeamsPage } from "@/pages/TeamsPage";
-import { TrendsPage } from "@/pages/TrendsPage";
+import { TrendsPage } from "@/pages/trends/TrendsPage";
+import { CaptainPage } from "@/pages/CaptainPage";
+import { DifferentialsPage } from "@/pages/DifferentialsPage";
+import { PlannerPage } from "@/pages/PlannerPage";
 
 export default function App() {
   return (
@@ -20,6 +23,9 @@ export default function App() {
             <Route path="transfers" element={<TransfersPage />} />
             <Route path="teams" element={<TeamsPage />} />
             <Route path="trends" element={<TrendsPage />} />
+            <Route path="captain" element={<CaptainPage />} />
+            <Route path="differentials" element={<DifferentialsPage />} />
+            <Route path="planner" element={<PlannerPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

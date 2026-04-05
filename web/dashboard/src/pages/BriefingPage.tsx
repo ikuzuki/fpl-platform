@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Sparkles,
@@ -9,10 +8,12 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { useApi } from "@/lib/useApi";
 import type { GameweekBriefing } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/skeleton";
+import { ErrorCard } from "@/components/ui/error-card";
 import {
   cn,
   formatPrice,
@@ -22,18 +23,10 @@ import {
 } from "@/lib/utils";
 
 export function BriefingPage() {
-  const [data, setData] = useState<GameweekBriefing | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    api
-      .briefing()
-      .then((d) => {
-        setData(d);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, []);
+  const { data, loading, error } = useApi(
+    () => api.briefing(),
+    null as GameweekBriefing | null,
+  );
 
   if (loading) {
     return (
@@ -47,6 +40,8 @@ export function BriefingPage() {
       </div>
     );
   }
+
+  if (error) return <ErrorCard message={error} />;
 
   if (!data) {
     return (
@@ -62,7 +57,7 @@ export function BriefingPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-3xl font-bold">
             GW{data.gameweek} Briefing
@@ -213,16 +208,14 @@ export function BriefingPage() {
                     <span className="font-medium text-sm">
                       {team.team_name}
                     </span>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          "text-xs px-2 py-0.5 rounded font-medium",
-                          fdrClass(Math.round(team.fdr_next_6)),
-                        )}
-                      >
-                        {team.fdr_next_6} avg
-                      </span>
-                    </div>
+                    <span
+                      className={cn(
+                        "text-xs px-2 py-0.5 rounded font-medium",
+                        fdrClass(Math.round(team.fdr_next_6)),
+                      )}
+                    >
+                      {team.fdr_next_6} avg
+                    </span>
                   </div>
                 ))}
               </div>
@@ -357,7 +350,7 @@ export function BriefingPage() {
           { to: "/players", label: "Player Rankings", desc: "Full 300-player table" },
           { to: "/fixtures", label: "Fixture Ticker", desc: "FDR heatmap grid" },
           { to: "/transfers", label: "Transfer Hub", desc: "Buy/sell recommendations" },
-          { to: "/trends", label: "Trends", desc: "Historical comparison" },
+          { to: "/captain", label: "Captain Picker", desc: "Weekly captaincy matrix" },
         ].map((link) => (
           <Link
             key={link.to}
