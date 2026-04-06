@@ -323,6 +323,14 @@ export function PlayersPage() {
         </Card>
       </div>
 
+      {/* Visual Insights */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <XgScatter players={data.players} />
+        <OwnershipBubble players={data.players} />
+      </div>
+
+      {data.history.length > 0 && <MomentumHeatmap history={data.history} />}
+
       {/* Table Controls */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">Player Rankings</h1>
@@ -460,11 +468,6 @@ export function PlayersPage() {
           </table>
         </div>
       </Card>
-
-      <XgScatter players={filtered} />
-      <OwnershipBubble players={filtered} />
-
-      {data.history.length > 0 && <MomentumHeatmap history={data.history} />}
 
       {filtered.length === 0 && (
         <div className="text-center py-12 text-[var(--muted-foreground)]">

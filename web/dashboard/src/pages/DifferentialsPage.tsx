@@ -326,17 +326,18 @@ export function DifferentialsPage() {
                   }}
                 />
                 <Tooltip
-                  contentStyle={TOOLTIP_STYLE}
-                  formatter={(value: unknown, name: unknown) => {
-                    const v = Number(value);
-                    const n = String(name);
-                    if (n === "Ownership") return [`${v.toFixed(1)}%`, n];
-                    if (n === "FPL Score") return [v.toFixed(1), n];
-                    return [v, n];
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.[0]) return null;
+                    const d = payload[0].payload;
+                    return (
+                      <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-2 shadow-lg text-xs" style={TOOLTIP_STYLE}>
+                        <p className="font-semibold">{d.web_name} ({d.position})</p>
+                        <p className="text-[var(--muted-foreground)]">
+                          FPL Score: {d.fpl_score.toFixed(1)} | Own: {d.ownership_pct.toFixed(1)}%
+                        </p>
+                      </div>
+                    );
                   }}
-                  labelFormatter={(_: unknown, payload: ReadonlyArray<{ payload?: { web_name?: string } }>) =>
-                    payload?.[0]?.payload?.web_name ?? ""
-                  }
                 />
                 {/* Reference lines at medians */}
                 <ReferenceLine
