@@ -30,6 +30,8 @@ Monorepo with shared lib, multiple services, and Terraform infrastructure.
 - Test all: `make test`
 - Test single service: `make test-service SERVICE=data`
 - Test unit only: `make test-unit`
+- Test integration only: `make test-integration` (moto-backed S3 tests)
+- Test E2E pipeline: `pytest tests/integration/test_pipeline_e2e.py`
 - Terraform plan: `cd infrastructure/environments/dev && terraform plan`
 - Terraform format: `terraform fmt -recursive infrastructure/`
 
@@ -64,7 +66,10 @@ Monorepo with shared lib, multiple services, and Terraform infrastructure.
 ## Testing
 - pytest with markers: @pytest.mark.unit, @pytest.mark.integration, @pytest.mark.slow
 - Mock external services (S3, APIs, LLMs) in unit tests
-- Integration tests hit real APIs (marked slow, not run in CI by default)
+- Integration tests use moto (in-memory S3) — real Parquet serialization, no real AWS
+- Contract tests (`tests/contracts/`) verify schema compatibility between pipeline stages
+- E2E test (`tests/integration/test_pipeline_e2e.py`) runs Validation → Transform → Merge → Curate against moto S3
+- Test directories use `--import-mode=importlib` to avoid conftest collisions across services
 
 ## Git Workflow
 - **Always branch off main** — never commit directly to main (branch protection is enforced)

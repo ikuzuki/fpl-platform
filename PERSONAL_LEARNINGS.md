@@ -39,6 +39,9 @@ Even with `AdministratorAccess`, IAM users get "Access Denied" on Cost Explorer.
 ### No Hard Spending Limits on AWS
 AWS has no "stop everything at $X" switch. Closest you get: `aws_budgets_budget` with SNS notifications at 50%/80%/100% thresholds, plus CloudWatch billing alarms as backup. Requires manual intervention when alerted.
 
+### pytest `__init__.py` Collisions in Monorepos
+Multiple `tests/` directories each with `__init__.py` create one `tests` package — conftest files collide with `ImportPathMismatchError`. Fix: remove `__init__.py` from test dirs, use `--import-mode=importlib`.
+
 ### Prompt References Must Match Input Filtering
 If you filter fields before sending to the LLM (`RELEVANT_FIELDS`), updating a prompt to reference a new field means you must also add it to the filter — or the LLM simply won't see it. Silent data omission, no error.
 
@@ -54,6 +57,9 @@ Saving `~/.ssh/config` via Notepad creates `config.txt` — SSH ignores it. Writ
 ---
 
 ## Patterns — Reusable Approaches Worth Reaching For Again
+
+### S3-Mediated Services Have Invisible Contracts
+When services communicate via S3, there's no API spec or type checking at the boundary — the "contract" is column names in a Parquet file. These drift silently. A test that imports the producer's output schema and the consumer's expected columns catches this with zero I/O.
 
 ### Idempotency via Output Check
 Before every operation, check if the output already exists:
