@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- ADR-0007: Added SSR (Next.js/Remix) as explicitly rejected option — documents why server-side rendering is unnecessary for a weekly-refresh personal dashboard
+
 ### Fixed
 - Dashboard: Trends page — removed flat-line metrics (price, ownership, form, pts/m) that showed identical values across gameweeks due to bootstrap snapshot reuse; chart now tracks FPL Score only
 - Dashboard: xG Efficiency scatter — axis labels showed corrupted numbers; capped domain to 99th percentile and added tick formatting
