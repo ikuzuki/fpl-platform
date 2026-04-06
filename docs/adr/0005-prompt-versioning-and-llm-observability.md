@@ -71,26 +71,65 @@ services/enrich/src/fpl_enrich/prompts/
 **Deployment:** The `prompt_version` default is in the Lambda handler. To roll out a new version, either update the Step Functions state machine input or the handler default. Prompts are additive — v1 still works after v2 is deployed, so a forgotten parameter update is safe (just stale).
 
 ### LLM observability with Langfuse
-Integration via the `@observe` decorator on enricher methods and the Lambda handler:
+Integration via the `@observe` decorator on enricher methods and Lambda handlers. Session IDs and trace-level metadata are set via `propagate_attributes` in each Lambda entry point, which propagates to all child spans created within that context.
 
+**Session and metadata setup** (Lambda handler level):
 ```python
+from langfuse import observe, propagate_attributes
+
+def lambda_handler(event, context):
+    _init_langfuse()
+    season = event.get("season", "unknown")
+    gameweek = event.get("gameweek", 0)
+    with propagate_attributes(
+        session_id=f"{season}-gw{gameweek}",
+        metadata={"enricher": "player_summary", "prompt_version": event.get("prompt_version", "v1")},
+    ):
+        return RunHandler(main_func=main, ...).lambda_executor(lambda_event=event)
+```
+
+**Batch-level metadata and scoring** (base enricher):
+```python
+from langfuse import Langfuse, observe
+
 @observe(name="enricher_batch_call")
-def _call_llm(self, batch: list[dict]) -> list[dict]:
-    langfuse_context.update_current_observation(
-        metadata={"enricher": self.__class__.__name__, "prompt_version": self.prompt_version}
+async def _call_llm(self, batch: list[dict]) -> list[dict]:
+    langfuse = Langfuse()
+    langfuse.update_current_span(
+        metadata={
+            "enricher": self.__class__.__name__,
+            "prompt_version": self.prompt_version,
+            "model": self.MODEL,
+            "batch_size": len(batch),
+        },
     )
-    langfuse_context.score_current_observation(
+    # ... LLM call and parsing ...
+    langfuse.score_current_span(
         name="output_count_valid",
-        value=1.0 if len(results) == len(batch) else 0.0,
+        value=1.0 if len(parsed) == len(batch) else 0.0,
+        comment=f"expected={len(batch)}, got={len(parsed)}",
     )
+```
+
+**Trace-level quality scoring** (after all batches complete):
+```python
+Langfuse().score_current_trace(
+    name="validation_pass_rate",
+    value=round(self.valid_count / total, 4),
+    comment=f"{self.__class__.__name__}: {self.valid_count}/{total} passed",
+)
 ```
 
 Keys stored in Secrets Manager (`/fpl-platform/dev/langfuse-public-key`, `/fpl-platform/dev/langfuse-secret-key`).
 
+> **Note:** This project uses Langfuse SDK v4, which replaced the v2/v3 `langfuse_context` / `langfuse.decorators` API with `Langfuse()` instance methods and the `propagate_attributes` context manager. If upgrading Langfuse, check the migration guide.
+
 **What we trace:**
-- **Per batch call:** enricher name, batch size, prompt version, input/output token counts, latency, model
-- **Per gameweek run:** session ID (`{season}-gw{gameweek}`), total calls, total cost, success/failure counts
-- **Quality scores:** output count validation (did the LLM return the right number of items?)
+- **Per batch call:** enricher name, batch size, prompt version, model, input/output token counts, latency (all via observation metadata)
+- **Per gameweek run:** session ID (`{season}-gw{gameweek}`) groups all traces for one pipeline run; enricher name and prompt version propagated to all child spans
+- **Quality scores:**
+  - `output_count_valid` (per batch, numeric 0.0–1.0): did the LLM return the expected number of items?
+  - `validation_pass_rate` (per enricher trace, numeric 0.0–1.0): what fraction of LLM outputs passed Pydantic model validation?
 
 ### How these work together
 Prompt version metadata flows into every Langfuse trace, enabling A/B comparison between prompt versions with concrete metrics (cost, latency, output quality scores). When we deploy v2, the Langfuse dashboard shows side-by-side performance against v1 without any custom analytics work. Cost attribution per enricher type is immediate — we can see that fixture outlook is ~94% of spend (see ADR-0004) and whether a prompt change shifts that.
@@ -109,3 +148,4 @@ Prompt version metadata flows into every Langfuse trace, enabling A/B comparison
 - Adds `langfuse` as a dependency (OpenTelemetry, protobuf transitive deps)
 - Two secrets to manage in Secrets Manager
 - If Langfuse's cloud service is down, tracing silently fails (by design — doesn't block the pipeline)
+- Langfuse SDK has breaking API changes between major versions (v2→v3→v4); code examples in this ADR target v4 (`propagate_attributes`, `Langfuse()` instance methods)
