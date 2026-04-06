@@ -25,6 +25,12 @@ If your deploy workflow constructs image names as `{project}-{service}-{env}` bu
 ### Cloudflare Blocks AWS Lambda IPs
 Many public APIs use Cloudflare which blocks Lambda IP ranges. User-Agent headers help with basic checks but Cloudflare also TLS-fingerprints (Python httpx ≠ Chrome). What actually works: **exponential backoff** (blocking is often temporary/rate-based) and **caching to avoid duplicate calls** within the same invocation.
 
+### Langfuse Traces Vanish on Fast Lambdas
+The Langfuse SDK ships traces asynchronously in a background thread. Long-running Lambdas (minutes) flush naturally. Fast Lambdas (<1s) return before the first flush — the container freezes and traces are lost. Fix: call `Langfuse().flush()` before returning. This also means `@observe` decorators fire during tests — if credentials are in your environment, test data silently pollutes your production dashboard. Disable with `LANGFUSE_TRACING_ENABLED=false` in test config.
+
+### Langfuse SDK Has Breaking Major Version Changes
+v2/v3 used `langfuse_context` and `langfuse.decorators`. v4 replaced these with `Langfuse()` instance methods (`update_current_span`, `score_current_span`) and the `propagate_attributes` context manager. Tutorials and Stack Overflow answers will show the old API. Always check your installed version first.
+
 ### Empty LLM Responses
 Under rate limit pressure, LLMs occasionally return empty content. `json.loads("")` gives the cryptic `"Expecting value: line 1 column 1 (char 0)"`. Always guard:
 ```python
