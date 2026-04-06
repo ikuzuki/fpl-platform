@@ -4,7 +4,7 @@ import logging
 from typing import Any
 
 import pyarrow as pa
-from langfuse import observe, propagate_attributes
+from langfuse import Langfuse, observe, propagate_attributes
 
 from fpl_curate.config import get_curate_settings
 from fpl_curate.curators.fixture_ticker import build_fixture_ticker, build_team_map
@@ -235,8 +235,10 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         session_id=f"{season}-gw{gameweek}",
         metadata={"pipeline": "curate"},
     ):
-        return RunHandler(
+        result = RunHandler(
             main_func=main,
             required_main_params=REQUIRED_PARAMS,
             optional_main_params=OPTIONAL_PARAMS,
         ).lambda_executor(lambda_event=event)
+    Langfuse().flush()
+    return result

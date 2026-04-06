@@ -7,7 +7,7 @@ from typing import Any
 import anthropic
 import boto3
 import pyarrow as pa
-from langfuse import observe, propagate_attributes
+from langfuse import Langfuse, observe, propagate_attributes
 
 from fpl_enrich.enrichers.base import RateLimiter
 from fpl_enrich.enrichers.fixture_outlook import FixtureOutlookEnricher
@@ -239,8 +239,10 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         session_id=f"{season}-gw{gameweek}",
         metadata={"prompt_version": event.get("prompt_version", "v1"), "pipeline": "enrich_all"},
     ):
-        return RunHandler(
+        result = RunHandler(
             main_func=main,
             required_main_params=["season", "gameweek"],
             optional_main_params=["output_bucket", "cost_bucket", "prompt_version"],
         ).lambda_executor(lambda_event=event)
+    Langfuse().flush()
+    return result

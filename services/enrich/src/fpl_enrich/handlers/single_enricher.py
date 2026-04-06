@@ -12,7 +12,7 @@ from typing import Any
 
 import anthropic
 import boto3
-from langfuse import observe, propagate_attributes
+from langfuse import Langfuse, observe, propagate_attributes
 
 from fpl_enrich.enrichers.base import RateLimiter
 from fpl_enrich.enrichers.fixture_outlook import FixtureOutlookEnricher
@@ -382,11 +382,13 @@ def player_summary_handler(event: dict[str, Any], context: Any) -> dict[str, Any
             "prompt_version": event.get("prompt_version", "v1"),
         },
     ):
-        return RunHandler(
+        result = RunHandler(
             main_func=player_summary_main,
             required_main_params=["season", "gameweek"],
             optional_main_params=["output_bucket", "prompt_version"],
         ).lambda_executor(lambda_event=event)
+    Langfuse().flush()
+    return result
 
 
 def injury_signal_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
@@ -398,11 +400,13 @@ def injury_signal_handler(event: dict[str, Any], context: Any) -> dict[str, Any]
         session_id=f"{season}-gw{gameweek}",
         metadata={"enricher": "injury_signal", "prompt_version": event.get("prompt_version", "v1")},
     ):
-        return RunHandler(
+        result = RunHandler(
             main_func=injury_signal_main,
             required_main_params=["season", "gameweek"],
             optional_main_params=["output_bucket", "prompt_version"],
         ).lambda_executor(lambda_event=event)
+    Langfuse().flush()
+    return result
 
 
 def sentiment_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
@@ -414,11 +418,13 @@ def sentiment_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         session_id=f"{season}-gw{gameweek}",
         metadata={"enricher": "sentiment", "prompt_version": event.get("prompt_version", "v1")},
     ):
-        return RunHandler(
+        result = RunHandler(
             main_func=sentiment_main,
             required_main_params=["season", "gameweek"],
             optional_main_params=["output_bucket", "prompt_version"],
         ).lambda_executor(lambda_event=event)
+    Langfuse().flush()
+    return result
 
 
 def fixture_outlook_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
@@ -433,8 +439,10 @@ def fixture_outlook_handler(event: dict[str, Any], context: Any) -> dict[str, An
             "prompt_version": event.get("prompt_version", "v1"),
         },
     ):
-        return RunHandler(
+        result = RunHandler(
             main_func=fixture_outlook_main,
             required_main_params=["season", "gameweek"],
             optional_main_params=["output_bucket", "prompt_version"],
         ).lambda_executor(lambda_event=event)
+    Langfuse().flush()
+    return result
