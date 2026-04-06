@@ -7,7 +7,7 @@ from typing import Any
 import anthropic
 import boto3
 import pyarrow as pa
-from langfuse import observe
+from langfuse import observe, propagate_attributes
 
 from fpl_enrich.enrichers.base import RateLimiter
 from fpl_enrich.enrichers.fixture_outlook import FixtureOutlookEnricher
@@ -233,8 +233,14 @@ async def main(
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """AWS Lambda entry point for enrichment."""
     _init_langfuse()
-    return RunHandler(
-        main_func=main,
-        required_main_params=["season", "gameweek"],
-        optional_main_params=["output_bucket", "cost_bucket", "prompt_version"],
-    ).lambda_executor(lambda_event=event)
+    season = event.get("season", "unknown")
+    gameweek = event.get("gameweek", 0)
+    with propagate_attributes(
+        session_id=f"{season}-gw{gameweek}",
+        metadata={"prompt_version": event.get("prompt_version", "v1"), "pipeline": "enrich_all"},
+    ):
+        return RunHandler(
+            main_func=main,
+            required_main_params=["season", "gameweek"],
+            optional_main_params=["output_bucket", "cost_bucket", "prompt_version"],
+        ).lambda_executor(lambda_event=event)

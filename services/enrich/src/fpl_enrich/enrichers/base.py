@@ -9,7 +9,7 @@ from collections.abc import Iterator
 from typing import Any
 
 import anthropic
-from langfuse import observe
+from langfuse import Langfuse, observe
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +124,16 @@ class FPLEnricher(ABC):
                     self.invalid_count += 1
 
         self._log_summary()
+
+        # Score the parent trace with overall validation pass rate
+        total = self.valid_count + self.invalid_count
+        if total > 0:
+            Langfuse().score_current_trace(
+                name="validation_pass_rate",
+                value=round(self.valid_count / total, 4),
+                comment=f"{self.__class__.__name__}: {self.valid_count}/{total} passed",
+            )
+
         return results
 
     async def _call_llm_controlled(self, batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -145,6 +155,15 @@ class FPLEnricher(ABC):
     @observe(name="enricher_batch_call")
     async def _call_llm(self, batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Send a batch of items to the Anthropic API and parse the JSON response."""
+        langfuse = Langfuse()
+        langfuse.update_current_span(
+            metadata={
+                "enricher": self.__class__.__name__,
+                "prompt_version": self.prompt_version,
+                "model": self.MODEL,
+                "batch_size": len(batch),
+            },
+        )
         prepared = [self._prepare_item(item) for item in batch]
         user_content = "\n".join(f"I{i + 1}: {json.dumps(item)}" for i, item in enumerate(prepared))
 
@@ -203,7 +222,14 @@ class FPLEnricher(ABC):
             )
             raise
 
-        if len(parsed) != len(batch):
+        count_valid = len(parsed) == len(batch)
+        langfuse.score_current_span(
+            name="output_count_valid",
+            value=1.0 if count_valid else 0.0,
+            comment=f"expected={len(batch)}, got={len(parsed)}",
+        )
+
+        if not count_valid:
             raise ValueError(f"Output count mismatch: expected {len(batch)}, got {len(parsed)}")
 
         return parsed
