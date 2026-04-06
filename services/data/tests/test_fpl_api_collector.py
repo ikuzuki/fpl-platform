@@ -2,8 +2,8 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
 import pytest
+from curl_cffi.requests import Response as CurlResponse
 
 from fpl_data.collectors.fpl_api_collector import FPL_BASE_URL, FPLAPICollector
 
@@ -63,10 +63,21 @@ def player_history_response() -> dict:
     }
 
 
-def _mock_response(data: dict | list, status_code: int = 200) -> httpx.Response:
-    """Create a mock httpx.Response."""
-    request = httpx.Request("GET", "https://example.com")
-    response = httpx.Response(status_code=status_code, json=data, request=request)
+def _mock_curl_response(data: dict | list, status_code: int = 200) -> MagicMock:
+    """Create a mock curl_cffi Response."""
+    import json
+
+    response = MagicMock(spec=CurlResponse)
+    response.status_code = status_code
+    response.content = json.dumps(data).encode()
+    response.json.return_value = data
+    response.raise_for_status = MagicMock()
+    if status_code >= 400:
+        from curl_cffi.requests.errors import RequestsError
+
+        response.raise_for_status.side_effect = RequestsError(
+            f"HTTP {status_code}", code=status_code
+        )
     return response
 
 
@@ -130,14 +141,14 @@ async def test_collect_bootstrap_force_overwrites(
 async def test_collect_bootstrap_raises_on_http_error(
     collector: FPLAPICollector,
 ) -> None:
+    from curl_cffi.requests.errors import RequestsError
+
     async def _raise_500(url: str) -> None:
-        request = httpx.Request("GET", url)
-        response = httpx.Response(500, request=request)
-        raise httpx.HTTPStatusError("Server error", request=request, response=response)
+        raise RequestsError("HTTP 500", code=500)
 
     with (
         patch.object(collector, "_fetch", side_effect=_raise_500),
-        pytest.raises(httpx.HTTPStatusError),
+        pytest.raises(RequestsError),
     ):
         await collector.collect_bootstrap("2025-26")
 
@@ -289,10 +300,18 @@ async def test_fetch_calls_correct_url(
     collector: FPLAPICollector,
     bootstrap_response: dict,
 ) -> None:
-    mock_response = _mock_response(bootstrap_response)
-    with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_response):
+    mock_response = _mock_curl_response(bootstrap_response)
+    mock_session = AsyncMock()
+    mock_session.get = AsyncMock(return_value=mock_response)
+
+    with patch(
+        "fpl_data.collectors.fpl_api_collector.AsyncSession",
+    ) as mock_cls:
+        mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
         data = await collector._fetch(f"{FPL_BASE_URL}/bootstrap-static/")
 
+    mock_session.get.assert_called_once_with(f"{FPL_BASE_URL}/bootstrap-static/")
     assert data["elements"] == bootstrap_response["elements"]
 
 
@@ -301,11 +320,20 @@ async def test_fetch_calls_correct_url(
 async def test_fetch_raises_on_server_error(
     collector: FPLAPICollector,
 ) -> None:
-    mock_response = _mock_response({}, status_code=500)
+    from curl_cffi.requests.errors import RequestsError
+
+    mock_response = _mock_curl_response({}, status_code=500)
+    mock_session = AsyncMock()
+    mock_session.get = AsyncMock(return_value=mock_response)
+
     with (
-        patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_response),
-        pytest.raises(httpx.HTTPStatusError),
+        patch(
+            "fpl_data.collectors.fpl_api_collector.AsyncSession",
+        ) as mock_cls,
+        pytest.raises(RequestsError),
     ):
+        mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
         await collector._fetch(f"{FPL_BASE_URL}/bootstrap-static/")
 
 
