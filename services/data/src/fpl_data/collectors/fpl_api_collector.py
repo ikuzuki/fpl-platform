@@ -1,13 +1,16 @@
 """Collector for the official FPL API.
 
 FPL API is public, no auth required. Base URL: https://fantasy.premierleague.com/api
+
+Uses curl_cffi to impersonate Chrome's TLS fingerprint, which prevents
+Cloudflare from blocking requests originating from AWS Lambda IPs.
 """
 
 import asyncio
 import logging
 from datetime import UTC, datetime
 
-import httpx
+from curl_cffi.requests import AsyncSession
 
 from fpl_lib.clients.s3 import S3Client
 from fpl_lib.core.responses import CollectionResponse
@@ -186,19 +189,13 @@ class FPLAPICollector:
     async def _fetch(self, url: str, max_retries: int = 5) -> dict | list:
         """Fetch JSON from the FPL API with exponential backoff.
 
-        Cloudflare may block AWS Lambda IPs on initial attempts but
-        allow retries after a delay.
+        Uses curl_cffi with Chrome TLS impersonation to bypass Cloudflare
+        fingerprint-based blocking on AWS Lambda IPs.
         """
-        async with httpx.AsyncClient(
-            headers={
-                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            },
-            timeout=30.0,
-        ) as client:
+        async with AsyncSession(impersonate="chrome", timeout=30) as session:
             for attempt in range(max_retries):
                 logger.info("[FPL API] GET %s (attempt %d/%d)", url, attempt + 1, max_retries)
-                response = await client.get(url)
+                response = await session.get(url)
                 logger.info(
                     "[FPL API] %s | status=%d | size=%d bytes",
                     url.split("/api/")[-1],

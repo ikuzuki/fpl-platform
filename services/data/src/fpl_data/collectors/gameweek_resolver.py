@@ -2,11 +2,14 @@
 
 The FPL API bootstrap-static endpoint contains an `events` array where each
 event has `id` (gameweek number), `finished` (bool), and `is_current` (bool).
+
+Uses curl_cffi to impersonate Chrome's TLS fingerprint, which prevents
+Cloudflare from blocking requests originating from AWS Lambda IPs.
 """
 
 import logging
 
-import httpx
+from curl_cffi.requests import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -42,14 +45,8 @@ async def resolve_gameweek(season: str = "2025-26") -> GameweekInfo:
     Raises:
         ValueError: If no gameweek data is found in the API response.
     """
-    async with httpx.AsyncClient(
-        headers={
-            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        },
-        timeout=30.0,
-    ) as client:
-        response = await client.get(FPL_BOOTSTRAP_URL)
+    async with AsyncSession(impersonate="chrome", timeout=30) as session:
+        response = await session.get(FPL_BOOTSTRAP_URL)
         response.raise_for_status()
         data = response.json()
 
