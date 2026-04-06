@@ -30,7 +30,10 @@ export function XgScatter({ players }: { players: PlayerDashboard[] }) {
     delta: Math.abs(p.goals_scored - p.xg!),
   }));
 
-  const maxVal = Math.max(...scatterData.map((d) => Math.max(d.x, d.y)), 1);
+  // Cap axis to 99th percentile to avoid outlier-stretched axes
+  const allVals = scatterData.flatMap((d) => [d.x, d.y]).sort((a, b) => a - b);
+  const p99 = allVals[Math.floor(allVals.length * 0.99)] ?? 1;
+  const maxVal = Math.ceil(p99 + 1);
 
   // Label top 5 outliers by distance from the reference line
   const outlierNames = new Set(
@@ -58,10 +61,10 @@ export function XgScatter({ players }: { players: PlayerDashboard[] }) {
         <ResponsiveContainer width="100%" height={350}>
           <ScatterChart margin={{ top: 10, right: 20, bottom: 30, left: 10 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.5} />
-            <XAxis type="number" dataKey="x" name="xG" domain={[0, maxVal]} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}>
+            <XAxis type="number" dataKey="x" name="xG" domain={[0, maxVal]} tickFormatter={(v) => Math.round(v).toString()} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}>
               <Label value="Expected Goals (xG)" position="bottom" offset={15} style={{ fontSize: 12, fill: "var(--muted-foreground)" }} />
             </XAxis>
-            <YAxis type="number" dataKey="y" name="Goals" domain={[0, maxVal]} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}>
+            <YAxis type="number" dataKey="y" name="Goals" domain={[0, maxVal]} tickFormatter={(v) => Math.round(v).toString()} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}>
               <Label value="Actual Goals" angle={-90} position="insideLeft" offset={-5} style={{ fontSize: 12, fill: "var(--muted-foreground)" }} />
             </YAxis>
             <ZAxis type="number" dataKey="minutes" range={[30, 200]} name="Minutes" />

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Dashboard: Trends page — removed flat-line metrics (price, ownership, form, pts/m) that showed identical values across gameweeks due to bootstrap snapshot reuse; chart now tracks FPL Score only
+- Dashboard: xG Efficiency scatter — axis labels showed corrupted numbers; capped domain to 99th percentile and added tick formatting
+- Dashboard: Differential Radar scatter — player name missing from hover tooltip; replaced default tooltip with custom content renderer
+
+### Changed
+- Dashboard: Moved xG Efficiency, Ownership vs Value, and Momentum Heatmap charts above the player rankings table for better visibility
+
 ### Added
 - Langfuse observability for curation service — `@observe(name="curate_gameweek")` tracing on the handler, matching the enrichment layer pattern
 - Bootstrap infra comment documenting rationale for `AdministratorAccess` policy with OIDC-scoped trust

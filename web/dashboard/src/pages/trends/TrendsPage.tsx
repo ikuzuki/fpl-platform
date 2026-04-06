@@ -20,29 +20,21 @@ import { TableSkeleton } from "@/components/ui/skeleton";
 import { ErrorCard } from "@/components/ui/error-card";
 import {
   cn,
-  formatPrice,
   positionColor,
   scoreColor,
   CHART_COLORS,
   TOOLTIP_STYLE,
 } from "@/lib/utils";
 
-type Metric = "fpl_score" | "price" | "ownership_pct" | "form" | "points_per_million";
-
-const METRICS: { key: Metric; label: string; format: (v: number) => string }[] = [
-  { key: "fpl_score", label: "FPL Score", format: (v) => v.toFixed(1) },
-  { key: "price", label: "Price", format: (v) => formatPrice(v) },
-  { key: "ownership_pct", label: "Ownership", format: (v) => `${v.toFixed(1)}%` },
-  { key: "form", label: "Form", format: (v) => v.toFixed(1) },
-  { key: "points_per_million", label: "Pts/M", format: (v) => v.toFixed(1) },
-];
+const METRIC_LABEL = "FPL Score";
+const METRIC_KEY = "fpl_score" as const;
+const METRIC_FORMAT = (v: number) => v.toFixed(1);
 
 export function TrendsPage() {
   const { data, loading, error } = useApi(() => api.history(), [] as PlayerHistory[]);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const search = searchParams.get("q") ?? "";
-  const metric = (searchParams.get("metric") as Metric) ?? "fpl_score";
 
   const selectedParam = searchParams.get("ids");
   const selected = useMemo(
@@ -54,12 +46,6 @@ export function TrendsPage() {
     const next = new URLSearchParams(searchParams);
     if (q) next.set("q", q);
     else next.delete("q");
-    setSearchParams(next, { replace: true });
-  };
-
-  const setMetric = (m: Metric) => {
-    const next = new URLSearchParams(searchParams);
-    next.set("metric", m);
     setSearchParams(next, { replace: true });
   };
 
@@ -101,11 +87,11 @@ export function TrendsPage() {
         const row = data.find((r) => r.player_id === pid && r.gameweek === gw);
         const player = players.find((p) => p.player_id === pid);
         const key = player?.web_name ?? `Player ${pid}`;
-        point[key] = row?.[metric] ?? 0;
+        point[key] = row?.[METRIC_KEY] ?? 0;
       });
       return point;
     });
-  }, [data, gameweeks, selected, metric, players]);
+  }, [data, gameweeks, selected, players]);
 
   const selectedNames = selected.map(
     (pid) => players.find((p) => p.player_id === pid)?.web_name ?? "",
@@ -149,8 +135,6 @@ export function TrendsPage() {
       </div>
     );
   }
-
-  const metricConfig = METRICS.find((m) => m.key === metric)!;
 
   return (
     <div className="space-y-6">
@@ -324,28 +308,9 @@ export function TrendsPage() {
         <div className="md:col-span-9">
           <Card className="h-full">
             <CardHeader>
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                <CardTitle>
-                  {selected.length === 0 ? "Select players to compare" : `${metricConfig.label} over time`}
-                </CardTitle>
-                <div className="flex gap-1 flex-wrap" role="group" aria-label="Select metric">
-                  {METRICS.map((m) => (
-                    <button
-                      key={m.key}
-                      onClick={() => setMetric(m.key)}
-                      className={cn(
-                        "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-                        metric === m.key
-                          ? "bg-[var(--accent)] text-[var(--accent-foreground)]"
-                          : "bg-[var(--muted)] text-[var(--muted-foreground)] hover:bg-[var(--border)]",
-                      )}
-                      aria-pressed={metric === m.key}
-                    >
-                      {m.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <CardTitle>
+                {selected.length === 0 ? "Select players to compare" : `${METRIC_LABEL} over time`}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               {selected.length === 0 ? (
@@ -360,7 +325,7 @@ export function TrendsPage() {
                     <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} domain={["auto", "auto"]} />
                     <Tooltip
                       contentStyle={TOOLTIP_STYLE}
-                      formatter={(value) => metricConfig.format(Number(value))}
+                      formatter={(value) => METRIC_FORMAT(Number(value))}
                     />
                     {selectedNames.map((name, i) => (
                       <Line
