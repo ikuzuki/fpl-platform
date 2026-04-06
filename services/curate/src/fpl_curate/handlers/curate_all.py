@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 import pyarrow as pa
+from langfuse import observe
 
 from fpl_curate.config import get_curate_settings
 from fpl_curate.curators.fixture_ticker import build_fixture_ticker, build_team_map
@@ -24,6 +25,23 @@ OPTIONAL_PARAMS = ["output_bucket", "force"]
 SCHEMA_VERSION = "1.0.0"
 
 
+def _init_langfuse(region: str = "eu-west-2") -> None:
+    """Initialise Langfuse with keys from Secrets Manager."""
+    import os
+
+    import boto3
+
+    if not os.environ.get("LANGFUSE_PUBLIC_KEY"):
+        client = boto3.client("secretsmanager", region_name=region)
+        resp = client.get_secret_value(SecretId="/fpl-platform/dev/langfuse-public-key")
+        os.environ["LANGFUSE_PUBLIC_KEY"] = resp["SecretString"]
+    if not os.environ.get("LANGFUSE_SECRET_KEY"):
+        client = boto3.client("secretsmanager", region_name=region)
+        resp = client.get_secret_value(SecretId="/fpl-platform/dev/langfuse-secret-key")
+        os.environ["LANGFUSE_SECRET_KEY"] = resp["SecretString"]
+
+
+@observe(name="curate_gameweek")
 async def main(
     season: str,
     gameweek: int,
@@ -210,6 +228,7 @@ async def main(
 
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """AWS Lambda entry point for data curation."""
+    _init_langfuse()
     return RunHandler(
         main_func=main,
         required_main_params=REQUIRED_PARAMS,

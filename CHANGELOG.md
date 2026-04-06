@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Langfuse observability for curation service — `@observe(name="curate_gameweek")` tracing on the handler, matching the enrichment layer pattern
+- Bootstrap infra comment documenting rationale for `AdministratorAccess` policy with OIDC-scoped trust
 - CloudFront cache invalidation: EventBridge rule triggers a Lambda to invalidate `/api/v1/*` when the pipeline succeeds, so the dashboard serves fresh data immediately
 - Dashboard v4: Captain Picker Decision Matrix page with weighted composite captaincy score
 - Dashboard v4: Differential Radar page — scatter plot + card grid for low-ownership high-value players with sparklines

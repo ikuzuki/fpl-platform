@@ -104,6 +104,8 @@ resource "aws_iam_role" "cicd" {
   assume_role_policy = data.aws_iam_policy_document.github_actions_assume.json
 }
 
+# AdministratorAccess: acceptable for personal dev account with OIDC-scoped trust.
+# Production would use least-privilege policies per service 
 resource "aws_iam_role_policy_attachment" "cicd_admin" {
   role       = aws_iam_role.cicd.name
   policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"

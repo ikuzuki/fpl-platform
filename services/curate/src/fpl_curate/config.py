@@ -22,6 +22,8 @@ DEFAULT_FPL_SCORE_WEIGHTS: dict[str, float] = {
 class CurateSettings(FPLSettings):
     """Settings for the curation service."""
 
+    LANGFUSE_PUBLIC_KEY: str = ""
+    LANGFUSE_SECRET_KEY: str = ""
     FPL_SCORE_WEIGHTS: dict[str, float] = DEFAULT_FPL_SCORE_WEIGHTS
 
 
