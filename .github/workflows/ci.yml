@@ -16,6 +16,7 @@ jobs:
       agent: ${{ steps.filter.outputs.agent }}
       infra: ${{ steps.filter.outputs.infra }}
       web: ${{ steps.filter.outputs.web }}
+      integration: ${{ steps.filter.outputs.integration }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -42,6 +43,12 @@ jobs:
               - 'infrastructure/**'
             web:
               - 'web/**'
+            integration:
+              - 'tests/**'
+              - 'libs/**'
+              - 'services/data/**'
+              - 'services/enrich/**'
+              - 'services/curate/**'
 
   lint-and-test:
     needs: detect-changes
@@ -104,6 +111,32 @@ jobs:
           else
             echo "No tests found, skipping"
           fi
+
+  integration-test:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.integration == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        run: |
+          uv pip install --system -e ".[dev]"
+          uv pip install --system -e ./libs
+          uv pip install --system -e ./services/data
+          uv pip install --system -e ./services/enrich
+          uv pip install --system -e ./services/curate
+
+      - name: Contract and integration tests
+        run: pytest tests/ -v
 
   web-ci:
     needs: detect-changes

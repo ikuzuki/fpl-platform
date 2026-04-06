@@ -27,6 +27,7 @@ dev = [
     "mypy>=1.8.0",
     "boto3-stubs[s3,dynamodb,secretsmanager]",
     "parameterized>=0.8.1",
+    "moto[s3,secretsmanager]>=5.0.0",
 ]
 
 [tool.setuptools-scm]
@@ -48,11 +49,12 @@ ignore = ["E501"]
 known-first-party = ["fpl_lib", "fpl_data", "fpl_enrich", "fpl_curate", "fpl_agent", "fpl_stream"]
 
 [tool.pytest.ini_options]
-testpaths = ["libs/tests", "services/data/tests", "services/enrich/tests", "services/curate/tests", "services/agent/tests"]
+testpaths = ["tests", "libs/tests", "services/data/tests", "services/enrich/tests", "services/curate/tests", "services/agent/tests"]
 python_files = ["test_*.py"]
 addopts = [
     "--strict-markers",
     "--strict-config",
+    "--import-mode=importlib",
 ]
 markers = [
     "slow: marks tests as slow",
