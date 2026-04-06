@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Langfuse session IDs (`{season}-gw{gameweek}`) on all enrichment and curation traces — enables grouping all traces for a gameweek run in a single Langfuse session view
+- Langfuse metadata (enricher name, prompt version, model, batch size) on every `enricher_batch_call` observation — enables filtering and comparing traces by enricher or prompt version
+- Langfuse `output_count_valid` score on each LLM batch call — flags when the model returns fewer items than requested
+- Langfuse `validation_pass_rate` score on each enricher trace — tracks what percentage of LLM outputs pass Pydantic validation
+
 ### Changed
 - ADR-0007: Added SSR (Next.js/Remix) as explicitly rejected option — documents why server-side rendering is unnecessary for a weekly-refresh personal dashboard
 

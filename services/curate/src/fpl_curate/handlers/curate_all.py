@@ -4,7 +4,7 @@ import logging
 from typing import Any
 
 import pyarrow as pa
-from langfuse import observe
+from langfuse import observe, propagate_attributes
 
 from fpl_curate.config import get_curate_settings
 from fpl_curate.curators.fixture_ticker import build_fixture_ticker, build_team_map
@@ -229,8 +229,14 @@ async def main(
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """AWS Lambda entry point for data curation."""
     _init_langfuse()
-    return RunHandler(
-        main_func=main,
-        required_main_params=REQUIRED_PARAMS,
-        optional_main_params=OPTIONAL_PARAMS,
-    ).lambda_executor(lambda_event=event)
+    season = event.get("season", "unknown")
+    gameweek = event.get("gameweek", 0)
+    with propagate_attributes(
+        session_id=f"{season}-gw{gameweek}",
+        metadata={"pipeline": "curate"},
+    ):
+        return RunHandler(
+            main_func=main,
+            required_main_params=REQUIRED_PARAMS,
+            optional_main_params=OPTIONAL_PARAMS,
+        ).lambda_executor(lambda_event=event)
