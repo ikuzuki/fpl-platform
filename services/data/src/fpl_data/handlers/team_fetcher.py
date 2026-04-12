@@ -1,7 +1,8 @@
 """Lambda handler for fetching a user's FPL squad.
 
 Invoked by the agent service via boto3 lambda_client.invoke() to retrieve
-a user's squad picks enriched with player names and positions.
+a user's raw squad picks. The agent enriches player IDs with names from
+its own Neon database.
 """
 
 import logging
@@ -18,7 +19,7 @@ async def main(
     gameweek: int,
     season: str = "2025-26",
 ) -> dict[str, Any]:
-    """Fetch and enrich a user's FPL squad.
+    """Fetch a user's FPL squad picks.
 
     Args:
         team_id: The FPL manager team ID.
@@ -26,15 +27,10 @@ async def main(
         season: Season string (currently unused, reserved for future).
 
     Returns:
-        Enriched squad dict with player names, positions, captain info.
+        Raw squad dict with picks, active_chip, automatic_subs, entry_history.
     """
     fetcher = TeamFetcher()
-
-    # Fetch bootstrap data for player name enrichment.
-    bootstrap_url = f"{TeamFetcher.FPL_BASE_URL}/bootstrap-static/"
-    bootstrap_data = await fetcher._fetch(bootstrap_url)
-
-    result = await fetcher.fetch_squad_with_names(team_id, gameweek, bootstrap_data)
+    result = await fetcher.fetch_squad(team_id, gameweek)
     logger.info(
         "Fetched squad for team %d GW%d: %d picks",
         team_id,

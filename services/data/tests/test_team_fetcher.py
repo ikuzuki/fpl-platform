@@ -76,13 +76,9 @@ def _mock_curl_response(data: dict | list, status_code: int = 200) -> MagicMock:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_fetch_squad_success(
-    fetcher: TeamFetcher, squad_response: dict
-) -> None:
+async def test_fetch_squad_success(fetcher: TeamFetcher, squad_response: dict) -> None:
     mock_response = _mock_curl_response(squad_response)
-    with patch(
-        "fpl_data.collectors.team_fetcher.AsyncSession"
-    ) as mock_session_cls:
+    with patch("fpl_data.collectors.team_fetcher.AsyncSession") as mock_session_cls:
         mock_session = AsyncMock()
         mock_session.get.return_value = mock_response
         mock_session_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
@@ -106,9 +102,7 @@ async def test_fetch_squad_with_names_enriches_picks(
     bootstrap_data: dict,
 ) -> None:
     mock_response = _mock_curl_response(squad_response)
-    with patch(
-        "fpl_data.collectors.team_fetcher.AsyncSession"
-    ) as mock_session_cls:
+    with patch("fpl_data.collectors.team_fetcher.AsyncSession") as mock_session_cls:
         mock_session = AsyncMock()
         mock_session.get.return_value = mock_response
         mock_session_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
@@ -135,9 +129,7 @@ async def test_fetch_squad_with_names_identifies_captain(
     bootstrap_data: dict,
 ) -> None:
     mock_response = _mock_curl_response(squad_response)
-    with patch(
-        "fpl_data.collectors.team_fetcher.AsyncSession"
-    ) as mock_session_cls:
+    with patch("fpl_data.collectors.team_fetcher.AsyncSession") as mock_session_cls:
         mock_session = AsyncMock()
         mock_session.get.return_value = mock_response
         mock_session_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
@@ -158,9 +150,7 @@ async def test_fetch_squad_with_names_identifies_captain(
 @pytest.mark.asyncio
 async def test_fetch_returns_404_raises_team_not_found(fetcher: TeamFetcher) -> None:
     mock_response = _mock_curl_response({}, status_code=404)
-    with patch(
-        "fpl_data.collectors.team_fetcher.AsyncSession"
-    ) as mock_session_cls:
+    with patch("fpl_data.collectors.team_fetcher.AsyncSession") as mock_session_cls:
         mock_session = AsyncMock()
         mock_session.get.return_value = mock_response
         mock_session_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
@@ -180,7 +170,9 @@ async def test_fetch_returns_403_retries_once(fetcher: TeamFetcher) -> None:
 
     with (
         patch("fpl_data.collectors.team_fetcher.AsyncSession") as mock_session_cls,
-        patch("fpl_data.collectors.team_fetcher.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        patch(
+            "fpl_data.collectors.team_fetcher.asyncio.sleep", new_callable=AsyncMock
+        ) as mock_sleep,
     ):
         mock_session = AsyncMock()
         mock_session.get.side_effect = [mock_403, mock_200]
@@ -224,7 +216,9 @@ async def test_rate_limit_enforced(fetcher: TeamFetcher) -> None:
 
     with (
         patch("fpl_data.collectors.team_fetcher.AsyncSession") as mock_session_cls,
-        patch("fpl_data.collectors.team_fetcher.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        patch(
+            "fpl_data.collectors.team_fetcher.asyncio.sleep", new_callable=AsyncMock
+        ) as mock_sleep,
     ):
         mock_session = AsyncMock()
         mock_session.get.return_value = mock_response
