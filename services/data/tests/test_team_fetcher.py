@@ -41,20 +41,6 @@ def squad_response() -> dict:
     }
 
 
-@pytest.fixture
-def bootstrap_data() -> dict:
-    return {
-        "elements": [
-            {"id": 1, "web_name": "Salah", "element_type": 3, "team": 14},
-            {"id": 2, "web_name": "Haaland", "element_type": 4, "team": 11},
-        ],
-        "teams": [
-            {"id": 14, "name": "Liverpool"},
-            {"id": 11, "name": "Man City"},
-        ],
-    }
-
-
 def _mock_curl_response(data: dict | list, status_code: int = 200) -> MagicMock:
     """Create a mock curl_cffi Response."""
     response = MagicMock(spec=CurlResponse)
@@ -89,58 +75,6 @@ async def test_fetch_squad_success(fetcher: TeamFetcher, squad_response: dict) -
     assert "picks" in result
     assert len(result["picks"]) == 2
     assert result["active_chip"] is None
-
-
-# --- fetch_squad_with_names tests ---
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_fetch_squad_with_names_enriches_picks(
-    fetcher: TeamFetcher,
-    squad_response: dict,
-    bootstrap_data: dict,
-) -> None:
-    mock_response = _mock_curl_response(squad_response)
-    with patch("fpl_data.collectors.team_fetcher.AsyncSession") as mock_session_cls:
-        mock_session = AsyncMock()
-        mock_session.get.return_value = mock_response
-        mock_session_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-
-        result = await fetcher.fetch_squad_with_names(
-            team_id=12345, gameweek=10, bootstrap_data=bootstrap_data
-        )
-
-    picks = result["picks"]
-    assert picks[0]["web_name"] == "Salah"
-    assert picks[0]["position"] == "MID"
-    assert picks[0]["team_name"] == "Liverpool"
-    assert picks[1]["web_name"] == "Haaland"
-    assert picks[1]["position"] == "FWD"
-    assert picks[1]["team_name"] == "Man City"
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_fetch_squad_with_names_identifies_captain(
-    fetcher: TeamFetcher,
-    squad_response: dict,
-    bootstrap_data: dict,
-) -> None:
-    mock_response = _mock_curl_response(squad_response)
-    with patch("fpl_data.collectors.team_fetcher.AsyncSession") as mock_session_cls:
-        mock_session = AsyncMock()
-        mock_session.get.return_value = mock_response
-        mock_session_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-
-        result = await fetcher.fetch_squad_with_names(
-            team_id=12345, gameweek=10, bootstrap_data=bootstrap_data
-        )
-
-    assert result["captain"] == "Salah"
-    assert result["vice_captain"] == "Haaland"
 
 
 # --- error handling tests ---

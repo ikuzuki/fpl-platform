@@ -15,8 +15,6 @@ from fpl_data.collectors.exceptions import FPLAccessError, TeamNotFoundError
 
 logger = logging.getLogger(__name__)
 
-POSITION_MAP = {1: "GKP", 2: "DEF", 3: "MID", 4: "FWD"}
-
 
 class TeamFetcher:
     """Fetches FPL manager squad data with Chrome TLS impersonation."""
@@ -43,47 +41,6 @@ class TeamFetcher:
         """
         url = f"{self.FPL_BASE_URL}/entry/{team_id}/event/{gameweek}/picks/"
         return await self._fetch(url, team_id=team_id)
-
-    async def fetch_squad_with_names(
-        self,
-        team_id: int,
-        gameweek: int,
-        bootstrap_data: dict[str, Any],
-    ) -> dict[str, Any]:
-        """Fetch squad and enrich picks with player names and positions.
-
-        Args:
-            team_id: The FPL manager team ID.
-            gameweek: The gameweek number.
-            bootstrap_data: FPL bootstrap-static data containing elements and teams.
-
-        Returns:
-            Enriched squad dict with player names, positions, captain, and vice_captain.
-        """
-        squad = await self.fetch_squad(team_id, gameweek)
-
-        player_lookup = {el["id"]: el for el in bootstrap_data.get("elements", [])}
-        team_lookup = {t["id"]: t["name"] for t in bootstrap_data.get("teams", [])}
-
-        captain = None
-        vice_captain = None
-
-        for pick in squad.get("picks", []):
-            element_id = pick.get("element")
-            player = player_lookup.get(element_id, {})
-            pick["web_name"] = player.get("web_name", "Unknown")
-            pick["position"] = POSITION_MAP.get(player.get("element_type", 0), "N/A")
-            pick["team_name"] = team_lookup.get(player.get("team", 0), "Unknown")
-
-            if pick.get("is_captain"):
-                captain = pick["web_name"]
-            if pick.get("is_vice_captain"):
-                vice_captain = pick["web_name"]
-
-        squad["captain"] = captain
-        squad["vice_captain"] = vice_captain
-
-        return squad
 
     async def _fetch(self, url: str, team_id: int = 0) -> dict[str, Any]:
         """Fetch JSON from the FPL API with 403 retry.
