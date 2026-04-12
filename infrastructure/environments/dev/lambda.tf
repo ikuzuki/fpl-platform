@@ -1,0 +1,181 @@
+# -----------------------------------------------------------------------------
+# Lambda Functions
+# -----------------------------------------------------------------------------
+module "lambda_fpl_collector" {
+  source             = "../../modules/lambda"
+  name               = "fpl-api-collector"
+  environment        = var.environment
+  image_uri          = "${module.ecr_data.repository_url}:latest"
+  execution_role_arn = module.lambda_role.role_arn
+  command            = ["fpl_data.handlers.fpl_api_handler.lambda_handler"]
+  timeout            = 300
+  memory_size        = 512
+  environment_variables = {
+    ENV              = var.environment
+    DATA_LAKE_BUCKET = module.data_lake.bucket_name
+  }
+}
+
+module "lambda_resolve_gameweek" {
+  source             = "../../modules/lambda"
+  name               = "resolve-gameweek"
+  environment        = var.environment
+  image_uri          = "${module.ecr_data.repository_url}:latest"
+  execution_role_arn = module.lambda_role.role_arn
+  command            = ["fpl_data.handlers.resolve_gameweek.lambda_handler"]
+  timeout            = 30
+  memory_size        = 256
+  environment_variables = {
+    ENV = var.environment
+  }
+}
+
+module "lambda_understat_collector" {
+  source             = "../../modules/lambda"
+  name               = "understat-collector"
+  environment        = var.environment
+  image_uri          = "${module.ecr_data.repository_url}:latest"
+  execution_role_arn = module.lambda_role.role_arn
+  command            = ["fpl_data.handlers.understat_handler.lambda_handler"]
+  timeout            = 300
+  memory_size        = 512
+  environment_variables = {
+    ENV              = var.environment
+    DATA_LAKE_BUCKET = module.data_lake.bucket_name
+  }
+}
+
+module "lambda_news_collector" {
+  source             = "../../modules/lambda"
+  name               = "news-collector"
+  environment        = var.environment
+  image_uri          = "${module.ecr_data.repository_url}:latest"
+  execution_role_arn = module.lambda_role.role_arn
+  command            = ["fpl_data.handlers.news_handler.lambda_handler"]
+  timeout            = 300
+  memory_size        = 512
+  environment_variables = {
+    ENV              = var.environment
+    DATA_LAKE_BUCKET = module.data_lake.bucket_name
+  }
+}
+
+module "lambda_validator" {
+  source             = "../../modules/lambda"
+  name               = "validator"
+  environment        = var.environment
+  image_uri          = "${module.ecr_data.repository_url}:latest"
+  execution_role_arn = module.lambda_role.role_arn
+  command            = ["fpl_data.handlers.validator.lambda_handler"]
+  timeout            = 300
+  memory_size        = 512
+  environment_variables = {
+    ENV              = var.environment
+    DATA_LAKE_BUCKET = module.data_lake.bucket_name
+  }
+}
+
+module "lambda_transform" {
+  source             = "../../modules/lambda"
+  name               = "transform"
+  environment        = var.environment
+  image_uri          = "${module.ecr_data.repository_url}:latest"
+  execution_role_arn = module.lambda_role.role_arn
+  command            = ["fpl_data.handlers.transform.lambda_handler"]
+  timeout            = 300
+  memory_size        = 1024
+  environment_variables = {
+    ENV              = var.environment
+    DATA_LAKE_BUCKET = module.data_lake.bucket_name
+  }
+}
+
+module "lambda_enrich_player_summary" {
+  source             = "../../modules/lambda"
+  name               = "enrich-player-summary"
+  environment        = var.environment
+  image_uri          = "${module.ecr_enrich.repository_url}:latest"
+  execution_role_arn = module.lambda_role.role_arn
+  command            = ["fpl_enrich.handlers.single_enricher.player_summary_handler"]
+  timeout            = 900
+  memory_size        = 512
+  environment_variables = {
+    ENV              = var.environment
+    DATA_LAKE_BUCKET = module.data_lake.bucket_name
+  }
+}
+
+module "lambda_enrich_injury_signal" {
+  source             = "../../modules/lambda"
+  name               = "enrich-injury-signal"
+  environment        = var.environment
+  image_uri          = "${module.ecr_enrich.repository_url}:latest"
+  execution_role_arn = module.lambda_role.role_arn
+  command            = ["fpl_enrich.handlers.single_enricher.injury_signal_handler"]
+  timeout            = 900
+  memory_size        = 512
+  environment_variables = {
+    ENV              = var.environment
+    DATA_LAKE_BUCKET = module.data_lake.bucket_name
+  }
+}
+
+module "lambda_enrich_sentiment" {
+  source             = "../../modules/lambda"
+  name               = "enrich-sentiment"
+  environment        = var.environment
+  image_uri          = "${module.ecr_enrich.repository_url}:latest"
+  execution_role_arn = module.lambda_role.role_arn
+  command            = ["fpl_enrich.handlers.single_enricher.sentiment_handler"]
+  timeout            = 900
+  memory_size        = 512
+  environment_variables = {
+    ENV              = var.environment
+    DATA_LAKE_BUCKET = module.data_lake.bucket_name
+  }
+}
+
+module "lambda_enrich_fixture_outlook" {
+  source             = "../../modules/lambda"
+  name               = "enrich-fixture-outlook"
+  environment        = var.environment
+  image_uri          = "${module.ecr_enrich.repository_url}:latest"
+  execution_role_arn = module.lambda_role.role_arn
+  command            = ["fpl_enrich.handlers.single_enricher.fixture_outlook_handler"]
+  timeout            = 900
+  memory_size        = 512
+  environment_variables = {
+    ENV              = var.environment
+    DATA_LAKE_BUCKET = module.data_lake.bucket_name
+  }
+}
+
+module "lambda_merge_enrichments" {
+  source             = "../../modules/lambda"
+  name               = "merge-enrichments"
+  environment        = var.environment
+  image_uri          = "${module.ecr_enrich.repository_url}:latest"
+  execution_role_arn = module.lambda_role.role_arn
+  command            = ["fpl_enrich.handlers.merge_enrichments.lambda_handler"]
+  timeout            = 120
+  memory_size        = 512
+  environment_variables = {
+    ENV              = var.environment
+    DATA_LAKE_BUCKET = module.data_lake.bucket_name
+  }
+}
+
+module "lambda_curate_data" {
+  source             = "../../modules/lambda"
+  name               = "curate-data"
+  environment        = var.environment
+  image_uri          = "${module.ecr_curate.repository_url}:latest"
+  execution_role_arn = module.lambda_role.role_arn
+  command            = ["fpl_curate.handlers.curate_all.lambda_handler"]
+  timeout            = 120
+  memory_size        = 512
+  environment_variables = {
+    ENV              = var.environment
+    DATA_LAKE_BUCKET = module.data_lake.bucket_name
+  }
+}

@@ -47,8 +47,9 @@ coverage.xml
 .terraform/
 terraform.tfplan
 *.tfplan
-.terraform.lock.hcl
 crash.log
+# NOTE: .terraform.lock.hcl is intentionally NOT ignored — commit lock files
+# to pin provider versions across machines.
 
 # AWS
 .aws/
