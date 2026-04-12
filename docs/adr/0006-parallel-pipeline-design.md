@@ -38,20 +38,23 @@ EnrichParallel (Parallel) ──┬── EnrichPlayerSummary (Haiku, 5 RPM)
 
 All 4 Lambdas share the same ECR image (`fpl-enrich`) but use different handler entry points. Each writes to `enriched/{enricher_name}/season={season}/gameweek={gw}/`. A merge Lambda combines the 4 outputs into the final `enriched/player_summaries/` Parquet.
 
-**Rate control:** The 3 Haiku Lambdas each target 5 RPM (15 RPM total against the 50 RPM model limit). Sonnet runs alone against its own model limit at 15 RPM. Each Lambda uses `asyncio.Semaphore(2)` for in-flight request capping and a `RateLimiter` for RPM capping.
+### Rate control
 
-**Why not a DynamoDB capacity lock?** At current scale (one weekly pipeline, ~150 API calls), a distributed lock adds DynamoDB table, capacity_manager Lambda, 3 additional Step Function states, and deadlock prevention logic — infrastructure sitting idle 99.99% of the time. The enrichment handler already catches `anthropic.RateLimitError` and falls back to cached data.
+Each enricher runs as a separate Lambda, so rate limiting is per-Lambda rather than centralised. Rate control uses dual mechanisms:
+- `asyncio.Semaphore(2)` — caps in-flight requests to avoid concurrent connection 429s
+- `RateLimiter(rpm)` — caps request rate to stay within RPM and output TPM limits
 
-### Parallel collection (straightforward)
-The 3 collectors hit independent APIs with no data dependencies — parallel execution is the obvious choice:
+| Lambda | Model | RPM | Rationale |
+|--------|-------|-----|-----------|
+| PlayerSummary | Haiku | 5 | 3 Haiku Lambdas share 50 RPM / 10K output TPM |
+| InjurySignal | Haiku | 5 | |
+| Sentiment | Haiku | 5 | |
+| FixtureOutlook | Sonnet | 15 | Runs alone against its own model limit |
 
-```
-CollectParallel (Parallel) ──┬── CollectFPLData
-                             ├── CollectUnderstat
-                             └── CollectNews
-```
+**Why not a DynamoDB capacity lock?** At current scale (one weekly pipeline, ~150 API calls), a distributed lock adds a DynamoDB table, a capacity_manager Lambda, 3 additional Step Function states, and deadlock prevention logic — infrastructure sitting idle 99.99% of the time. The enrichment handler already catches `anthropic.RateLimitError` and falls back to cached data.
 
-Reduces collection from ~45s to ~15s (limited by slowest collector). Per-collector Retry blocks handle transient API errors independently.
+### Parallel collection
+The 3 collectors hit independent APIs with no data dependencies. Parallel execution reduces collection from ~45s to ~15s (limited by slowest collector). Per-collector Retry blocks handle transient API errors independently.
 
 ## Consequences
 **Easier:**

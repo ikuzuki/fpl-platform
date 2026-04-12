@@ -61,19 +61,6 @@ class FPLEnricher(ABC):
 
 Each enricher overrides `RELEVANT_FIELDS` with exactly the fields its prompt references. This is enforced at the base class level so new enrichers get filtering by default.
 
-### Rate limiting
-
-Each enricher runs as a separate Lambda (see ADR-0006). Rate control uses dual mechanisms:
-- `asyncio.Semaphore(2)` — caps in-flight requests to avoid concurrent connection 429s
-- `RateLimiter(rpm)` — caps request rate to stay within RPM and output TPM limits
-
-| Lambda | Model | RPM | Rationale |
-|--------|-------|-----|-----------|
-| PlayerSummary | Haiku | 5 | 3 Haiku Lambdas share 50 RPM / 10K output TPM |
-| InjurySignal | Haiku | 5 | |
-| Sentiment | Haiku | 5 | |
-| FixtureOutlook | Sonnet | 15 | Runs alone against its own model limit |
-
 ### Player filtering
 
 Only the top 300 players by `selected_by_percent` are enriched. The remaining ~525 players appear in the final Parquet without enrichment columns. This reduces total API calls from ~350 (700 players) to ~150 (300 players).

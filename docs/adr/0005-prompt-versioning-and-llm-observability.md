@@ -73,56 +73,14 @@ services/enrich/src/fpl_enrich/prompts/
 ### LLM observability with Langfuse
 Integration via the `@observe` decorator on enricher methods and Lambda handlers. Session IDs and trace-level metadata are set via `propagate_attributes` in each Lambda entry point, which propagates to all child spans created within that context.
 
-**Session and metadata setup** (Lambda handler level):
-```python
-from langfuse import observe, propagate_attributes
-
-def lambda_handler(event, context):
-    _init_langfuse()
-    season = event.get("season", "unknown")
-    gameweek = event.get("gameweek", 0)
-    with propagate_attributes(
-        session_id=f"{season}-gw{gameweek}",
-        metadata={"enricher": "player_summary", "prompt_version": event.get("prompt_version", "v1")},
-    ):
-        return RunHandler(main_func=main, ...).lambda_executor(lambda_event=event)
-```
-
-**Batch-level metadata and scoring** (base enricher):
-```python
-from langfuse import Langfuse, observe
-
-@observe(name="enricher_batch_call")
-async def _call_llm(self, batch: list[dict]) -> list[dict]:
-    langfuse = Langfuse()
-    langfuse.update_current_span(
-        metadata={
-            "enricher": self.__class__.__name__,
-            "prompt_version": self.prompt_version,
-            "model": self.MODEL,
-            "batch_size": len(batch),
-        },
-    )
-    # ... LLM call and parsing ...
-    langfuse.score_current_span(
-        name="output_count_valid",
-        value=1.0 if len(parsed) == len(batch) else 0.0,
-        comment=f"expected={len(batch)}, got={len(parsed)}",
-    )
-```
-
-**Trace-level quality scoring** (after all batches complete):
-```python
-Langfuse().score_current_trace(
-    name="validation_pass_rate",
-    value=round(self.valid_count / total, 4),
-    comment=f"{self.__class__.__name__}: {self.valid_count}/{total} passed",
-)
-```
+**Implementation references:**
+- **Session and metadata setup** — each Lambda handler wraps execution in `propagate_attributes` with a `{season}-gw{gameweek}` session ID. See `services/enrich/src/fpl_enrich/handlers/single_enricher.py`.
+- **Batch-level metadata and scoring** — the `@observe(name="enricher_batch_call")` decorator on `_call_llm` records enricher name, prompt version, model, and batch size per span, then scores output count validity. See `services/enrich/src/fpl_enrich/enrichers/base.py`.
+- **Trace-level quality scoring** — after all batches complete, the base enricher scores the trace with `validation_pass_rate`. Same file as above.
 
 Keys stored in Secrets Manager (`/fpl-platform/dev/langfuse-public-key`, `/fpl-platform/dev/langfuse-secret-key`).
 
-> **Note:** This project uses Langfuse SDK v4, which replaced the v2/v3 `langfuse_context` / `langfuse.decorators` API with `Langfuse()` instance methods and the `propagate_attributes` context manager. If upgrading Langfuse, check the migration guide.
+> **Note:** This project uses Langfuse SDK v4 (`propagate_attributes`, `Langfuse()` instance methods). See the code references above for current usage patterns.
 
 **What we trace:**
 - **Per batch call:** enricher name, batch size, prompt version, model, input/output token counts, latency (all via observation metadata)

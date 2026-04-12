@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- ADR README (`docs/adr/README.md`) — skill area mapping table for portfolio readers
+
+### Changed
+- ADR-0003: Expanded LiteLLM rejection with proxy latency concern and when-to-revisit criteria
+- ADR-0004: Moved rate limiting section to ADR-0006 (keeps cost ADR focused on cost)
+- ADR-0005: Replaced inline code blocks with file references to actual implementations; condensed SDK version note
+- ADR-0006: Absorbed rate limiting table and rationale from ADR-0004; condensed collection parallelism section
+- ADR-0007: Trimmed SSR rejection; added justification for React over Astro/plain HTML
+
+### Added
 - Data: `TeamFetcher` class for fetching FPL manager squads with Chrome TLS impersonation (curl_cffi)
 - Data: Lambda handler for team fetching, invokable by the agent service via boto3
 - Data: Custom exceptions `TeamNotFoundError` and `FPLAccessError` for FPL API error handling
