@@ -3,9 +3,9 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from curl_cffi.requests import Response as CurlResponse
 
-from fpl_data.collectors.fpl_api_collector import FPL_BASE_URL, FPLAPICollector
+from fpl_data.collectors.fpl_api_collector import FPLAPICollector
+from fpl_data.collectors.http import FPL_BASE_URL
 
 
 @pytest.fixture
@@ -63,24 +63,6 @@ def player_history_response() -> dict:
     }
 
 
-def _mock_curl_response(data: dict | list, status_code: int = 200) -> MagicMock:
-    """Create a mock curl_cffi Response."""
-    import json
-
-    response = MagicMock(spec=CurlResponse)
-    response.status_code = status_code
-    response.content = json.dumps(data).encode()
-    response.json.return_value = data
-    response.raise_for_status = MagicMock()
-    if status_code >= 400:
-        from curl_cffi.requests.errors import RequestsError
-
-        response.raise_for_status.side_effect = RequestsError(
-            f"HTTP {status_code}", code=status_code
-        )
-    return response
-
-
 # --- collect_bootstrap tests ---
 
 
@@ -91,7 +73,11 @@ async def test_collect_bootstrap_success(
     mock_s3_client: MagicMock,
     bootstrap_response: dict,
 ) -> None:
-    with patch.object(collector, "_fetch", new_callable=AsyncMock, return_value=bootstrap_response):
+    with patch(
+        "fpl_data.collectors.fpl_api_collector.fpl_fetch",
+        new_callable=AsyncMock,
+        return_value=bootstrap_response,
+    ):
         result = await collector.collect_bootstrap("2025-26")
 
     assert result.status == "success"
@@ -110,7 +96,9 @@ async def test_collect_bootstrap_skips_if_exists(
         "raw/fpl-api/season=2025-26/bootstrap/existing.json"
     ]
 
-    with patch.object(collector, "_fetch", new_callable=AsyncMock) as mock_fetch:
+    with patch(
+        "fpl_data.collectors.fpl_api_collector.fpl_fetch", new_callable=AsyncMock
+    ) as mock_fetch:
         result = await collector.collect_bootstrap("2025-26")
 
     mock_fetch.assert_not_called()
@@ -129,7 +117,11 @@ async def test_collect_bootstrap_force_overwrites(
         "raw/fpl-api/season=2025-26/bootstrap/existing.json"
     ]
 
-    with patch.object(collector, "_fetch", new_callable=AsyncMock, return_value=bootstrap_response):
+    with patch(
+        "fpl_data.collectors.fpl_api_collector.fpl_fetch",
+        new_callable=AsyncMock,
+        return_value=bootstrap_response,
+    ):
         result = await collector.collect_bootstrap("2025-26", force=True)
 
     assert result.records_collected == 3
@@ -143,11 +135,12 @@ async def test_collect_bootstrap_raises_on_http_error(
 ) -> None:
     from curl_cffi.requests.errors import RequestsError
 
-    async def _raise_500(url: str) -> None:
-        raise RequestsError("HTTP 500", code=500)
-
     with (
-        patch.object(collector, "_fetch", side_effect=_raise_500),
+        patch(
+            "fpl_data.collectors.fpl_api_collector.fpl_fetch",
+            new_callable=AsyncMock,
+            side_effect=RequestsError("HTTP 500", code=500),
+        ),
         pytest.raises(RequestsError),
     ):
         await collector.collect_bootstrap("2025-26")
@@ -163,7 +156,11 @@ async def test_collect_fixtures_success(
     mock_s3_client: MagicMock,
     fixtures_response: list,
 ) -> None:
-    with patch.object(collector, "_fetch", new_callable=AsyncMock, return_value=fixtures_response):
+    with patch(
+        "fpl_data.collectors.fpl_api_collector.fpl_fetch",
+        new_callable=AsyncMock,
+        return_value=fixtures_response,
+    ):
         result = await collector.collect_fixtures("2025-26")
 
     assert result.status == "success"
@@ -180,7 +177,9 @@ async def test_collect_fixtures_skips_if_exists(
 ) -> None:
     mock_s3_client.list_objects.return_value = ["existing.json"]
 
-    with patch.object(collector, "_fetch", new_callable=AsyncMock) as mock_fetch:
+    with patch(
+        "fpl_data.collectors.fpl_api_collector.fpl_fetch", new_callable=AsyncMock
+    ) as mock_fetch:
         result = await collector.collect_fixtures("2025-26")
 
     mock_fetch.assert_not_called()
@@ -203,8 +202,10 @@ async def test_collect_gameweek_live_success(
             "_validate_gameweek_finished",
             new_callable=AsyncMock,
         ),
-        patch.object(
-            collector, "_fetch", new_callable=AsyncMock, return_value=gameweek_live_response
+        patch(
+            "fpl_data.collectors.fpl_api_collector.fpl_fetch",
+            new_callable=AsyncMock,
+            return_value=gameweek_live_response,
         ),
     ):
         result = await collector.collect_gameweek_live("2025-26", 5)
@@ -228,8 +229,10 @@ async def test_collect_gameweek_live_path_formatting(
             "_validate_gameweek_finished",
             new_callable=AsyncMock,
         ),
-        patch.object(
-            collector, "_fetch", new_callable=AsyncMock, return_value=gameweek_live_response
+        patch(
+            "fpl_data.collectors.fpl_api_collector.fpl_fetch",
+            new_callable=AsyncMock,
+            return_value=gameweek_live_response,
         ),
     ):
         result = await collector.collect_gameweek_live("2025-26", 1)
@@ -249,7 +252,11 @@ async def test_collect_gameweek_live_rejects_unfinished(
         ]
     }
     with (
-        patch.object(collector, "_fetch", new_callable=AsyncMock, return_value=bootstrap_data),
+        patch(
+            "fpl_data.collectors.fpl_api_collector.fpl_fetch",
+            new_callable=AsyncMock,
+            return_value=bootstrap_data,
+        ),
         pytest.raises(ValueError, match="has not finished yet"),
     ):
         await collector.collect_gameweek_live("2025-26", 2)
@@ -265,8 +272,10 @@ async def test_collect_player_history_success(
     mock_s3_client: MagicMock,
     player_history_response: dict,
 ) -> None:
-    with patch.object(
-        collector, "_fetch", new_callable=AsyncMock, return_value=player_history_response
+    with patch(
+        "fpl_data.collectors.fpl_api_collector.fpl_fetch",
+        new_callable=AsyncMock,
+        return_value=player_history_response,
     ):
         result = await collector.collect_player_history(1, "2025-26")
 
@@ -284,32 +293,37 @@ async def test_collect_player_history_skips_if_exists(
 ) -> None:
     mock_s3_client.list_objects.return_value = ["existing.json"]
 
-    with patch.object(collector, "_fetch", new_callable=AsyncMock) as mock_fetch:
+    with patch(
+        "fpl_data.collectors.fpl_api_collector.fpl_fetch", new_callable=AsyncMock
+    ) as mock_fetch:
         result = await collector.collect_player_history(1, "2025-26")
 
     mock_fetch.assert_not_called()
     assert result.records_collected == 0
 
 
-# --- _fetch tests ---
+# --- fpl_fetch tests (shared HTTP layer) ---
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_fetch_calls_correct_url(
-    collector: FPLAPICollector,
-    bootstrap_response: dict,
-) -> None:
-    mock_response = _mock_curl_response(bootstrap_response)
+async def test_fpl_fetch_calls_correct_url(bootstrap_response: dict) -> None:
+    import json
+
+    from fpl_data.collectors.http import fpl_fetch
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.content = json.dumps(bootstrap_response).encode()
+    mock_response.json.return_value = bootstrap_response
+
     mock_session = AsyncMock()
     mock_session.get = AsyncMock(return_value=mock_response)
 
-    with patch(
-        "fpl_data.collectors.fpl_api_collector.AsyncSession",
-    ) as mock_cls:
+    with patch("fpl_data.collectors.http.AsyncSession") as mock_cls:
         mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-        data = await collector._fetch(f"{FPL_BASE_URL}/bootstrap-static/")
+        data = await fpl_fetch(f"{FPL_BASE_URL}/bootstrap-static/")
 
     mock_session.get.assert_called_once_with(f"{FPL_BASE_URL}/bootstrap-static/")
     assert data["elements"] == bootstrap_response["elements"]
@@ -317,24 +331,29 @@ async def test_fetch_calls_correct_url(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_fetch_raises_on_server_error(
-    collector: FPLAPICollector,
-) -> None:
+async def test_fpl_fetch_raises_on_server_error() -> None:
+    import json
+
     from curl_cffi.requests.errors import RequestsError
 
-    mock_response = _mock_curl_response({}, status_code=500)
+    from fpl_data.collectors.http import fpl_fetch
+
+    mock_response = MagicMock()
+    mock_response.status_code = 500
+    mock_response.content = json.dumps({}).encode()
+    mock_response.json.return_value = {}
+    mock_response.raise_for_status.side_effect = RequestsError("HTTP 500", code=500)
+
     mock_session = AsyncMock()
     mock_session.get = AsyncMock(return_value=mock_response)
 
     with (
-        patch(
-            "fpl_data.collectors.fpl_api_collector.AsyncSession",
-        ) as mock_cls,
+        patch("fpl_data.collectors.http.AsyncSession") as mock_cls,
         pytest.raises(RequestsError),
     ):
         mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-        await collector._fetch(f"{FPL_BASE_URL}/bootstrap-static/")
+        await fpl_fetch(f"{FPL_BASE_URL}/bootstrap-static/")
 
 
 # --- handler tests ---

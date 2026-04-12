@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Data: Custom exceptions `TeamNotFoundError` and `FPLAccessError` for FPL API error handling
 
 ### Changed
+- Data: Extract shared `fpl_fetch` function into `collectors/http.py` — single FPL API fetch implementation with Cloudflare bypass used by all collectors
+- Data: Refactor `FPLAPICollector`, `GameweekResolver`, and `TeamFetcher` to use shared `fpl_fetch` instead of duplicated retry logic
+
+### Changed
 - Infra: Split monolithic `environments/dev/main.tf` (645 lines) into domain files: ecr.tf, iam.tf, lambda.tf, secrets.tf, pipeline.tf, notifications.tf, web.tf
 - Infra: Extracted `versions.tf` for both dev and bootstrap environments (separates version constraints from backend config)
 - Infra: Standardised `tags.tf` with `local.common_tags` pattern across dev and bootstrap; deleted orphaned root `infrastructure/tags.tf`

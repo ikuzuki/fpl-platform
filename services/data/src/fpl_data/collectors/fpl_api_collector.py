@@ -6,18 +6,14 @@ Uses curl_cffi to impersonate Chrome's TLS fingerprint, which prevents
 Cloudflare from blocking requests originating from AWS Lambda IPs.
 """
 
-import asyncio
 import logging
 from datetime import UTC, datetime
 
-from curl_cffi.requests import AsyncSession
-
+from fpl_data.collectors.http import FPL_BASE_URL, fpl_fetch
 from fpl_lib.clients.s3 import S3Client
 from fpl_lib.core.responses import CollectionResponse
 
 logger = logging.getLogger(__name__)
-
-FPL_BASE_URL = "https://fantasy.premierleague.com/api"
 
 
 class FPLAPICollector:
@@ -67,7 +63,7 @@ class FPLAPICollector:
             logger.info("Fixtures data already exists for season=%s, skipping", season)
             return CollectionResponse(status="success", records_collected=0, output_path=prefix)
 
-        data = await self._fetch(f"{FPL_BASE_URL}/fixtures/")
+        data = await fpl_fetch(f"{FPL_BASE_URL}/fixtures/")
         timestamp = datetime.now(UTC).isoformat()
         key = f"{prefix}{timestamp}.json"
         self.s3_client.put_json(self.output_bucket, key, data)
@@ -104,7 +100,7 @@ class FPLAPICollector:
             )
             return CollectionResponse(status="success", records_collected=0, output_path=prefix)
 
-        data = await self._fetch(f"{FPL_BASE_URL}/event/{gameweek}/live/")
+        data = await fpl_fetch(f"{FPL_BASE_URL}/event/{gameweek}/live/")
         timestamp = datetime.now(UTC).isoformat()
         key = f"{prefix}{timestamp}.json"
         self.s3_client.put_json(self.output_bucket, key, data)
@@ -140,7 +136,7 @@ class FPLAPICollector:
             )
             return CollectionResponse(status="success", records_collected=0, output_path=prefix)
 
-        data = await self._fetch(f"{FPL_BASE_URL}/element-summary/{player_id}/")
+        data = await fpl_fetch(f"{FPL_BASE_URL}/element-summary/{player_id}/")
         timestamp = datetime.now(UTC).isoformat()
         key = f"{prefix}{timestamp}.json"
         self.s3_client.put_json(self.output_bucket, key, data)
@@ -157,7 +153,7 @@ class FPLAPICollector:
     async def _fetch_bootstrap(self) -> dict:
         """Fetch bootstrap-static data, caching for reuse within the same invocation."""
         if self._bootstrap_cache is None:
-            self._bootstrap_cache = await self._fetch(f"{FPL_BASE_URL}/bootstrap-static/")
+            self._bootstrap_cache = await fpl_fetch(f"{FPL_BASE_URL}/bootstrap-static/")
         return self._bootstrap_cache
 
     async def _validate_gameweek_finished(self, gameweek: int) -> None:
@@ -185,39 +181,3 @@ class FPLAPICollector:
         """Check if any objects exist under the given S3 prefix."""
         existing = self.s3_client.list_objects(self.output_bucket, prefix)
         return len(existing) > 0
-
-    async def _fetch(self, url: str, max_retries: int = 5) -> dict | list:
-        """Fetch JSON from the FPL API with exponential backoff.
-
-        Uses curl_cffi with Chrome TLS impersonation to bypass Cloudflare
-        fingerprint-based blocking on AWS Lambda IPs.
-        """
-        async with AsyncSession(impersonate="chrome", timeout=30) as session:
-            for attempt in range(max_retries):
-                logger.info("[FPL API] GET %s (attempt %d/%d)", url, attempt + 1, max_retries)
-                response = await session.get(url)
-                logger.info(
-                    "[FPL API] %s | status=%d | size=%d bytes",
-                    url.split("/api/")[-1],
-                    response.status_code,
-                    len(response.content),
-                )
-
-                if response.status_code == 200:
-                    return response.json()
-
-                if response.status_code == 403 and attempt < max_retries - 1:
-                    wait = 2 ** (attempt + 1)  # 2, 4, 8, 16, 32 seconds
-                    logger.warning(
-                        "[FPL API] 403 Forbidden — retrying in %ds (attempt %d/%d)",
-                        wait,
-                        attempt + 1,
-                        max_retries,
-                    )
-                    await asyncio.sleep(wait)
-                    continue
-
-                response.raise_for_status()
-
-        response.raise_for_status()
-        return response.json()  # unreachable but satisfies type checker
