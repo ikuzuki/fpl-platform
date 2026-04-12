@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Step Function: Added `CheckResolveStatus` guard before `CheckShouldRun` — prevents execution crash when `ResolveGameweek` Lambda returns a non-200 status (e.g. Cloudflare 403)
+- Gameweek resolver: Added 403 retry with exponential backoff (matching `fpl_api_collector` pattern) — single-attempt fetch was failing on intermittent Cloudflare challenges
+
 ### Added
 - Langfuse session IDs (`{season}-gw{gameweek}`) on all enrichment and curation traces — enables grouping all traces for a gameweek run in a single Langfuse session view
 - Langfuse metadata (enricher name, prompt version, model, batch size) on every `enricher_batch_call` observation — enables filtering and comparing traces by enricher or prompt version

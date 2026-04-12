@@ -38,7 +38,19 @@
           "Next": "PipelineFailed"
         }
       ],
-      "Next": "CheckShouldRun"
+      "Next": "CheckResolveStatus"
+    },
+    "CheckResolveStatus": {
+      "Type": "Choice",
+      "Comment": "Guard: route to PipelineFailed if the resolve Lambda returned a non-200 status",
+      "Choices": [
+        {
+          "Variable": "$.resolved.statusCode",
+          "NumericEquals": 200,
+          "Next": "CheckShouldRun"
+        }
+      ],
+      "Default": "PipelineFailed"
     },
     "CheckShouldRun": {
       "Type": "Choice",
