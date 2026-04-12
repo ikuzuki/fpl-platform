@@ -27,7 +27,7 @@ Use LangChain's chains, output parsers, and retry decorators. Provides `ChatAnth
 ### 3. LiteLLM (rejected)
 Lightweight proxy that normalises different LLM provider APIs behind one interface.
 
-**Rejected because:** We only use Anthropic. Multi-provider abstraction adds a layer with no current benefit. If we added OpenAI later, LiteLLM would be worth revisiting.
+**Rejected because:** We only use Anthropic. Multi-provider abstraction adds a layer with no current benefit. LiteLLM also proxies requests, adding latency and a failure mode to every LLM call. If we added a second provider (e.g. OpenAI for embeddings or cheaper classification), LiteLLM would be worth revisiting — but at that point we'd evaluate whether a thin adapter in `fpl_lib` is simpler than pulling in a proxy dependency.
 
 ## Decision
 Use the `anthropic` Python SDK directly for all enrichment pipeline LLM calls.

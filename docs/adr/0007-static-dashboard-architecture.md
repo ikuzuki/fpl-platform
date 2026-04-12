@@ -24,9 +24,9 @@ React frontend calling a FastAPI service that reads curated Parquet from S3 via 
 Rejected because: The data updates weekly — a persistent API adds infrastructure cost and operational complexity (Lambda cold starts, or always-on ECS/EC2) for no functional benefit. Every dashboard request would query identical data. The API layer is justified when the LangGraph agent arrives in Phase 2, not before.
 
 ### 3. Server-side rendered React (Next.js / Remix) (rejected)
-React framework with SSR — HTML is generated on a server per request, improving SEO and initial load performance.
+React framework with SSR — HTML is generated on a server per request.
 
-Rejected because: SSR requires persistent compute (Lambda@Edge, ECS, or a Node.js server) to render pages on every request. The dashboard has no user-specific data, no auth, and updates weekly — every visitor sees identical content, so generating HTML per request is pure waste. SSR's SEO advantage is irrelevant for a personal analytics tool that doesn't need search engine indexing. The operational overhead (Node.js runtime, server monitoring, cold starts) contradicts the project's goal of zero-compute hosting.
+Rejected because: SSR requires persistent compute for content that is identical for every visitor and updates weekly. Zero-compute hosting is a project goal — SSR contradicts it for no functional benefit.
 
 ### 4. React SPA with pre-generated JSON on CloudFront (chosen)
 Static React app and pre-computed JSON data files, both served from S3 behind CloudFront.
@@ -57,7 +57,9 @@ The curated datasets (player dashboard, fixture ticker, transfer picks, team str
 
 ### Frontend stack
 
-React + TypeScript (Vite) with shadcn/ui and Tailwind — industry-standard stack with polished defaults and zero vendor lock-in (shadcn components are copied into the project, not installed as a dependency). Recharts for data visualisation, TanStack Table for sortable/filterable player tables.
+React + TypeScript (Vite) with shadcn/ui and Tailwind. Recharts for data visualisation, TanStack Table for sortable/filterable player tables.
+
+**Why React over Astro or plain HTML:** The dashboard has interactive features that go beyond static rendering — client-side sorting/filtering across 300 players, expandable detail panels, URL-synced filter state, and eventually an agent chat UI in Phase 2. Astro excels at content sites but adds friction for heavy client interactivity. Plain HTML would require hand-rolling the table interactions that TanStack Table provides out of the box. shadcn/ui components are copied into the project (not installed as a dependency), so there's no vendor lock-in.
 
 ### Coexistence with Phase 2 agent API
 
