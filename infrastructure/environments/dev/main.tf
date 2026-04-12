@@ -17,28 +17,6 @@ provider "aws" {
 }
 
 # -----------------------------------------------------------------------------
-# Remote state — bootstrap stack (OIDC provider, CICD role, budget alerts)
-#
-# TODO: Uncomment after migrating bootstrap local state to S3:
-#   cd infrastructure/bootstrap
-#   terraform init -migrate-state \
-#     -backend-config="bucket=fpl-dev-tf-state" \
-#     -backend-config="key=bootstrap/terraform.tfstate" \
-#     -backend-config="region=eu-west-2" \
-#     -backend-config="dynamodb_table=fpl-dev-tf-lock-table" \
-#     -backend-config="encrypt=true"
-# -----------------------------------------------------------------------------
-# data "terraform_remote_state" "bootstrap" {
-#   backend = "s3"
-#
-#   config = {
-#     bucket = "fpl-dev-tf-state"
-#     key    = "bootstrap/terraform.tfstate"
-#     region = "eu-west-2"
-#   }
-# }
-
-# -----------------------------------------------------------------------------
 # S3 Data Lake
 # -----------------------------------------------------------------------------
 module "data_lake" {
