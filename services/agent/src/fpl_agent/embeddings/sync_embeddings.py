@@ -66,8 +66,7 @@ async def sync_embeddings(
     start = time.time()
 
     key = (
-        f"curated/player_dashboard/season={season}"
-        f"/gameweek={gameweek:02d}/player_dashboard.parquet"
+        f"curated/player_dashboard/season={season}/gameweek={gameweek:02d}/player_dashboard.parquet"
     )
     logger.info("Reading curated data from s3://%s/%s", bucket, key)
     table = s3_client.read_parquet(bucket, key)
@@ -75,7 +74,11 @@ async def sync_embeddings(
 
     if not players:
         logger.warning("No players found in curated data for %s GW%d", season, gameweek)
-        return {"players_synced": 0, "embedding_dim": PlayerEmbedder.EMBEDDING_DIM, "duration_seconds": 0.0}
+        return {
+            "players_synced": 0,
+            "embedding_dim": PlayerEmbedder.EMBEDDING_DIM,
+            "duration_seconds": 0.0,
+        }
 
     logger.info("Building profile texts for %d players", len(players))
     texts = [embedder.build_profile_text(p) for p in players]
