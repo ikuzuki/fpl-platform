@@ -2,20 +2,13 @@
 
 The FPL API bootstrap-static endpoint contains an `events` array where each
 event has `id` (gameweek number), `finished` (bool), and `is_current` (bool).
-
-Uses curl_cffi to impersonate Chrome's TLS fingerprint, which prevents
-Cloudflare from blocking requests originating from AWS Lambda IPs.
 """
 
-import asyncio
 import logging
 
-from curl_cffi.requests import AsyncSession
+from fpl_data.collectors.http import FPL_BASE_URL, fpl_fetch
 
 logger = logging.getLogger(__name__)
-
-FPL_BOOTSTRAP_URL = "https://fantasy.premierleague.com/api/bootstrap-static/"
-MAX_RETRIES = 5
 
 
 class GameweekInfo:
@@ -47,27 +40,7 @@ async def resolve_gameweek(season: str = "2025-26") -> GameweekInfo:
     Raises:
         ValueError: If no gameweek data is found in the API response.
     """
-    async with AsyncSession(impersonate="chrome", timeout=30) as session:
-        for attempt in range(MAX_RETRIES):
-            response = await session.get(FPL_BOOTSTRAP_URL)
-
-            if response.status_code == 200:
-                break
-
-            if response.status_code == 403 and attempt < MAX_RETRIES - 1:
-                wait = 2 ** (attempt + 1)  # 2, 4, 8, 16, 32 seconds
-                logger.warning(
-                    "[FPL API] 403 Forbidden — retrying in %ds (attempt %d/%d)",
-                    wait,
-                    attempt + 1,
-                    MAX_RETRIES,
-                )
-                await asyncio.sleep(wait)
-                continue
-
-            response.raise_for_status()
-
-        data = response.json()
+    data = await fpl_fetch(f"{FPL_BASE_URL}/bootstrap-static/")
 
     events = data.get("events", [])
     if not events:
