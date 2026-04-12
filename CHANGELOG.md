@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Data: `TeamFetcher` class for fetching FPL manager squads with Chrome TLS impersonation (curl_cffi)
 - Data: Lambda handler for team fetching, invokable by the agent service via boto3
 - Data: Custom exceptions `TeamNotFoundError` and `FPLAccessError` for FPL API error handling
+- Agent: `NeonClient` async Postgres wrapper in shared lib (`fpl_lib.clients.neon`) for Neon pgvector operations
+- Agent: `PlayerEmbedder` class using sentence-transformers all-MiniLM-L6-v2 for 384-dim player profile embeddings
+- Agent: `sync_embeddings` function to read curated S3 data, generate embeddings, and upsert into Neon pgvector
+- Agent: Lambda handler (`sync_handler`) for triggering embedding sync via Step Functions
+- Agent: `player_embeddings` schema with IVFFlat vector index and structured filtering indexes
 
 ### Changed
 - Data: Extract shared `fpl_fetch` function into `collectors/http.py` — single FPL API fetch implementation with Cloudflare bypass used by all collectors
