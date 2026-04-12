@@ -15,7 +15,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Infra: `modules/lambda-role/` — reusable IAM execution role module for pipeline Lambdas (S3, Secrets Manager, CloudWatch Logs, SNS policies)
-- Infra: `terraform_remote_state` data source for bootstrap stack in dev environment (requires bootstrap state migration to S3 — see comment in main.tf)
 - Infra: Comment on Secrets Manager resources documenting manual console population workflow
 - `.gitignore`: Stopped ignoring `.terraform.lock.hcl` — lock files should be committed to pin provider versions
 
