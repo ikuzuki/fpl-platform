@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Data: `TeamFetcher` class for fetching FPL manager squads with Chrome TLS impersonation (curl_cffi)
+- Data: Lambda handler for team fetching, invokable by the agent service via boto3
+- Data: Custom exceptions `TeamNotFoundError` and `FPLAccessError` for FPL API error handling
+
 ### Changed
 - Infra: Split monolithic `environments/dev/main.tf` (645 lines) into domain files: ecr.tf, iam.tf, lambda.tf, secrets.tf, pipeline.tf, notifications.tf, web.tf
 - Infra: Extracted `versions.tf` for both dev and bootstrap environments (separates version constraints from backend config)
