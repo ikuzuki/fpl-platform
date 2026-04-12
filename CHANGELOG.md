@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gameweek resolver: Added 403 retry with exponential backoff (matching `fpl_api_collector` pattern) — single-attempt fetch was failing on intermittent Cloudflare challenges
 
 ### Added
+- Pipeline email notifications via EventBridge → SNS — sends email on pipeline success, failure, timeout, or abort
 - Langfuse session IDs (`{season}-gw{gameweek}`) on all enrichment and curation traces — enables grouping all traces for a gameweek run in a single Langfuse session view
 - Langfuse metadata (enricher name, prompt version, model, batch size) on every `enricher_batch_call` observation — enables filtering and comparing traces by enricher or prompt version
 - Langfuse `output_count_valid` score on each LLM batch call — flags when the model returns fewer items than requested
