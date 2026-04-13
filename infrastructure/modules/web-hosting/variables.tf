@@ -28,3 +28,9 @@ variable "price_class" {
     error_message = "price_class must be PriceClass_100, PriceClass_200, or PriceClass_All."
   }
 }
+
+variable "agent_api_domain" {
+  description = "Bare host (no scheme) of the agent API Gateway endpoint, e.g. 'abc123.execute-api.eu-west-2.amazonaws.com'. Empty string disables the /api/agent/* behaviour — useful when the agent stack isn't deployed yet."
+  type        = string
+  default     = ""
+}

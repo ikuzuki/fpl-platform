@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Infra: `modules/api-gateway/` — HTTP API v2 with Lambda proxy integration, CORS, throttling (10 req/s, 20 burst), CloudWatch access logs
+- Infra: Agent Lambda (`fpl-agent-dev`) wired to agent ECR image and shared Lambda role (1024 MB, 60s timeout)
+- Infra: DynamoDB table `fpl-agent-usage-dev` for monthly token/cost tracking and budget kill-switch
+- Infra: Neon database URL Secrets Manager shell (`/fpl-platform/dev/neon-database-url`) — populated manually post-apply
+- Infra: CloudFront `/api/agent/*` behaviour routing to API Gateway (CachingDisabled, AllViewerExceptHostHeader) — gated on `agent_api_domain` input
+- Agent: Stub `api_handler` returning 200 on `/health` and 501 elsewhere — lets Wave 2 provision infra end-to-end ahead of Wave 3 agent logic
 - ADR README (`docs/adr/README.md`) — skill area mapping table for portfolio readers
 
 ### Changed
