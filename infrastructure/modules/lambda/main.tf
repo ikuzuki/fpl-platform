@@ -16,6 +16,14 @@ resource "aws_lambda_function" "this" {
   environment {
     variables = var.environment_variables
   }
+
+  # image_uri is bootstrapped here with `:latest` but CI owns it thereafter —
+  # the deploy workflow pushes commit-SHA tags and updates each Lambda directly
+  # via `aws lambda update-function-code`. Without this, every `terraform apply`
+  # would reset Lambdas back to `:latest` and fight CI forever.
+  lifecycle {
+    ignore_changes = [image_uri]
+  }
 }
 
 # Internal IAM role — only created when no external role is provided

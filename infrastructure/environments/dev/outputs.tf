@@ -12,3 +12,8 @@ output "app_bucket_name" {
   description = "S3 bucket to upload the Vite build output (dist/) to"
   value       = module.web_hosting.app_bucket_name
 }
+
+output "agent_api_endpoint" {
+  description = "Direct API Gateway endpoint for the Scout Agent. Use this for testing before CloudFront propagates. Production traffic goes via /api/agent/* on the dashboard URL."
+  value       = module.api_gateway.api_endpoint
+}

@@ -179,3 +179,22 @@ module "lambda_curate_data" {
     DATA_LAKE_BUCKET = module.data_lake.bucket_name
   }
 }
+
+module "lambda_agent" {
+  source             = "../../modules/lambda"
+  name               = "agent"
+  environment        = var.environment
+  image_uri          = "${module.ecr_agent.repository_url}:latest"
+  execution_role_arn = module.lambda_role.role_arn
+  command            = ["fpl_agent.handlers.api_handler.lambda_handler"]
+  timeout            = 60
+  memory_size        = 1024
+  environment_variables = {
+    ENV                            = var.environment
+    NEON_SECRET_ARN                = aws_secretsmanager_secret.neon_database_url.arn
+    ANTHROPIC_SECRET_ARN           = aws_secretsmanager_secret.anthropic_api_key.arn
+    LANGFUSE_PUBLIC_KEY_SECRET_ARN = aws_secretsmanager_secret.langfuse_public_key.arn
+    LANGFUSE_SECRET_KEY_SECRET_ARN = aws_secretsmanager_secret.langfuse_secret_key.arn
+    USAGE_TABLE_NAME               = aws_dynamodb_table.agent_usage.name
+  }
+}

@@ -7,6 +7,7 @@ module "web_hosting" {
   environment           = var.environment
   data_lake_bucket_name = module.data_lake.bucket_name
   data_lake_bucket_arn  = module.data_lake.bucket_arn
+  agent_api_domain      = module.api_gateway.api_domain
 }
 
 # -----------------------------------------------------------------------------

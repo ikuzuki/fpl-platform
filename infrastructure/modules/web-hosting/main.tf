@@ -77,6 +77,25 @@ resource "aws_cloudfront_distribution" "dashboard" {
     origin_access_control_id = aws_cloudfront_origin_access_control.data.id
   }
 
+  # --- Agent API origin (conditional — only when agent_api_domain is set) ---
+  # API Gateway is a standard HTTPS endpoint, so we use custom_origin_config
+  # (OAC is S3-only). Host header is stripped via AllViewerExceptHostHeader
+  # policy on the cache behaviour below.
+  dynamic "origin" {
+    for_each = var.agent_api_domain != "" ? [1] : []
+    content {
+      origin_id   = "agent_api"
+      domain_name = var.agent_api_domain
+
+      custom_origin_config {
+        http_port              = 80
+        https_port             = 443
+        origin_protocol_policy = "https-only"
+        origin_ssl_protocols   = ["TLSv1.2"]
+      }
+    }
+  }
+
   # --- /api/v1/* → data lake (short cache — data updates weekly) ---
   ordered_cache_behavior {
     path_pattern           = "/api/v1/*"
@@ -89,6 +108,25 @@ resource "aws_cloudfront_distribution" "dashboard" {
     # AWS managed cache policy: CachingOptimized (86400s default TTL)
     # Data updates weekly so a 24h cache is acceptable; pipeline invalidates on deploy
     cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+  }
+
+  # --- /api/agent/* → agent API Gateway (no caching; SSE streams must pass through) ---
+  dynamic "ordered_cache_behavior" {
+    for_each = var.agent_api_domain != "" ? [1] : []
+    content {
+      path_pattern           = "/api/agent/*"
+      target_origin_id       = "agent_api"
+      viewer_protocol_policy = "redirect-to-https"
+      allowed_methods        = ["GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"]
+      cached_methods         = ["GET", "HEAD"]
+      compress               = true
+
+      # AWS managed: CachingDisabled — streaming LLM responses must not be cached
+      cache_policy_id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
+      # AWS managed: AllViewerExceptHostHeader — forwards everything (auth, body, query)
+      # but strips Host so API Gateway accepts the request.
+      origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac"
+    }
   }
 
   # --- /* → app bucket (long cache; deploy triggers invalidation) ---
