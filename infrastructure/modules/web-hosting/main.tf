@@ -126,6 +126,15 @@ resource "aws_cloudfront_distribution" "dashboard" {
       # AWS managed: AllViewerExceptHostHeader — forwards everything (auth, body, query)
       # but strips Host so API Gateway accepts the request.
       origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac"
+
+      # Strip the /api/agent prefix before forwarding to API Gateway.
+      # CloudFront's path_pattern selects which origin to use but doesn't
+      # rewrite the URL — so without this function, API Gateway would
+      # receive GET /api/agent/health instead of GET /health and 404.
+      function_association {
+        event_type   = "viewer-request"
+        function_arn = aws_cloudfront_function.strip_agent_prefix[0].arn
+      }
     }
   }
 
@@ -165,6 +174,35 @@ resource "aws_cloudfront_distribution" "dashboard" {
   viewer_certificate {
     cloudfront_default_certificate = true
   }
+}
+
+# -----------------------------------------------------------------------------
+# CloudFront Function — strip /api/agent prefix before forwarding to API Gateway
+#
+# CloudFront's ordered_cache_behavior.path_pattern selects the origin but does
+# not modify the URL. API Gateway's routes are /health and /chat (no prefix),
+# so the prefix has to be stripped on the way out.
+#
+# Runs at viewer-request (every request), ~1ms latency, free up to 10M/month.
+# -----------------------------------------------------------------------------
+resource "aws_cloudfront_function" "strip_agent_prefix" {
+  count = var.agent_api_domain != "" ? 1 : 0
+
+  name    = "fpl-${var.environment}-strip-agent-prefix"
+  runtime = "cloudfront-js-2.0"
+  publish = true
+  comment = "Strips /api/agent from the request URI before forwarding to API Gateway"
+
+  code = <<-EOT
+    function handler(event) {
+      var request = event.request;
+      request.uri = request.uri.replace(/^\/api\/agent/, '');
+      if (request.uri === '') {
+        request.uri = '/';
+      }
+      return request;
+    }
+  EOT
 }
 
 # -----------------------------------------------------------------------------

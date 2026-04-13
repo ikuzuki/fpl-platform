@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Infra: Lambda module now sets `lifecycle.ignore_changes = [image_uri]` — hands image tag ownership to CI (which pushes commit-SHA tags via `aws lambda update-function-code`). Prevents Terraform from resetting all Lambdas to `:latest` on every apply.
 
+### Fixed
+- Infra: CloudFront Function strips `/api/agent` prefix before forwarding to API Gateway — without this, the agent route returned the dashboard SPA HTML via the 404 fallback (API Gateway has no `/api/agent/*` routes, only `/chat` and `/health`).
+
 ### Changed
 - ADR-0003: Expanded LiteLLM rejection with proxy latency concern and when-to-revisit criteria
 - ADR-0004: Moved rate limiting section to ADR-0006 (keeps cost ADR focused on cost)
