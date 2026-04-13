@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ADR README (`docs/adr/README.md`) — skill area mapping table for portfolio readers
 
 ### Changed
+- Infra: Lambda module now sets `lifecycle.ignore_changes = [image_uri]` — hands image tag ownership to CI (which pushes commit-SHA tags via `aws lambda update-function-code`). Prevents Terraform from resetting all Lambdas to `:latest` on every apply.
+
+### Changed
 - ADR-0003: Expanded LiteLLM rejection with proxy latency concern and when-to-revisit criteria
 - ADR-0004: Moved rate limiting section to ADR-0006 (keeps cost ADR focused on cost)
 - ADR-0005: Replaced inline code blocks with file references to actual implementations; condensed SDK version note
