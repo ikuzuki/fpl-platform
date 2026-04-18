@@ -95,9 +95,7 @@ async def test_collect_bootstrap_always_fetches_even_if_exists(
 ) -> None:
     """Bootstrap is season-volatile (prices, status, news), so a prior snapshot
     under the prefix must not cause the collector to skip."""
-    mock_s3_client.list_objects.return_value = [
-        "raw/fpl-api/season=2025-26/bootstrap/earlier.json"
-    ]
+    mock_s3_client.list_objects.return_value = ["raw/fpl-api/season=2025-26/bootstrap/earlier.json"]
 
     with patch(
         "fpl_data.collectors.fpl_api_collector.fpl_fetch",
@@ -161,9 +159,7 @@ async def test_collect_fixtures_always_fetches_even_if_exists(
 ) -> None:
     """Fixtures change (kickoff times, postponements, per-match stats), so a
     prior snapshot must not cause the collector to skip."""
-    mock_s3_client.list_objects.return_value = [
-        "raw/fpl-api/season=2025-26/fixtures/earlier.json"
-    ]
+    mock_s3_client.list_objects.return_value = ["raw/fpl-api/season=2025-26/fixtures/earlier.json"]
 
     with patch(
         "fpl_data.collectors.fpl_api_collector.fpl_fetch",
