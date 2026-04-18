@@ -188,3 +188,33 @@ class TestBuildPlayerDashboard:
         )
         rows = build_player_dashboard(df, team_map, fixture_fdr, None, "2025-26", 31)
         assert len(rows) == 0
+
+    def test_advice_gameweek_is_included_when_supplied(
+        self,
+        sample_enriched_df: pd.DataFrame,
+        team_map: dict[int, dict[str, str]],
+        fixture_fdr: dict[int, dict[str, float]],
+    ) -> None:
+        """Every row must carry the advice_gameweek label for the Captain Picker UI."""
+        rows = build_player_dashboard(
+            sample_enriched_df,
+            team_map,
+            fixture_fdr,
+            None,
+            "2025-26",
+            31,
+            advice_gameweek=32,
+        )
+        assert all(r["advice_gameweek"] == 32 for r in rows)
+        assert all(r["gameweek"] == 31 for r in rows), "source gameweek must remain unchanged"
+
+    def test_advice_gameweek_defaults_to_none(
+        self,
+        sample_enriched_df: pd.DataFrame,
+        team_map: dict[int, dict[str, str]],
+        fixture_fdr: dict[int, dict[str, float]],
+    ) -> None:
+        rows = build_player_dashboard(
+            sample_enriched_df, team_map, fixture_fdr, None, "2025-26", 31
+        )
+        assert all(r["advice_gameweek"] is None for r in rows)

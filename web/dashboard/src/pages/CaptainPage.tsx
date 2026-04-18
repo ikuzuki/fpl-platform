@@ -148,7 +148,10 @@ export function CaptainPage() {
     };
   }, [top15]);
 
-  const gameweek = players[0]?.gameweek ?? "?";
+  const first = players[0];
+  const gameweek =
+    first?.advice_gameweek ??
+    (first?.gameweek !== undefined ? first.gameweek + 1 : "?");
 
   if (loading) return <TableSkeleton rows={12} />;
   if (error) return <ErrorCard message={error} />;

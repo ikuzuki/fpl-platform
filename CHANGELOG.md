@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Infra: CloudFront Function strips `/api/agent` prefix before forwarding to API Gateway — without this, the agent route returned the dashboard SPA HTML via the 404 fallback (API Gateway has no `/api/agent/*` routes, only `/chat` and `/health`).
+- Data: `FPLAPICollector.collect_bootstrap` and `collect_fixtures` no longer skip when prior output exists under the S3 prefix. Their source data (prices, player status, news, kickoff times, per-match stats) changes throughout the season, so every weekly pipeline run now writes a fresh timestamped snapshot. Downstream consumers already pick the latest via `sorted(list_objects(prefix))[-1]`. Gameweek-live and player-history keep their skip (both are frozen once captured).
+- Web: Briefing and Captain Picker pages now label themselves with the *upcoming* gameweek instead of the finished gameweek the underlying data was collected from. Curator writes a new `advice_gameweek` field (`gameweek + 1`, capped at 38) into `gameweek_briefing.json` and each `player_dashboard.json` row; the UI prefers that field and falls back to `gameweek + 1` when reading older JSON. Processed-GW stays in the `gameweek` field for Parquet analytics.
 
 ### Changed
 - ADR-0003: Expanded LiteLLM rejection with proxy latency concern and when-to-revisit criteria

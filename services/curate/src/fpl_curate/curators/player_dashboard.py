@@ -18,6 +18,7 @@ def build_player_dashboard(
     weights: dict[str, float] | None,
     season: str,
     gameweek: int,
+    advice_gameweek: int | None = None,
 ) -> list[dict[str, Any]]:
     """Build the player dashboard curated dataset.
 
@@ -27,7 +28,10 @@ def build_player_dashboard(
         fixture_fdr: Team ID -> {"next_3", "next_6"} FDR averages.
         weights: FPL score component weights.
         season: Season identifier.
-        gameweek: Current gameweek number.
+        gameweek: Gameweek the underlying data was collected for (finished GW).
+        advice_gameweek: Gameweek this dashboard advises on — typically
+            ``gameweek + 1``. ``None`` at end-of-season. The Captain Picker UI
+            renders this instead of ``gameweek``.
 
     Returns:
         List of dicts ready for Pydantic validation / Parquet write.
@@ -124,6 +128,7 @@ def build_player_dashboard(
                 # Partition
                 "season": season,
                 "gameweek": gameweek,
+                "advice_gameweek": advice_gameweek,
             }
         )
 

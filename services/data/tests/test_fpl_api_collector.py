@@ -88,44 +88,25 @@ async def test_collect_bootstrap_success(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_collect_bootstrap_skips_if_exists(
-    collector: FPLAPICollector,
-    mock_s3_client: MagicMock,
-) -> None:
-    mock_s3_client.list_objects.return_value = [
-        "raw/fpl-api/season=2025-26/bootstrap/existing.json"
-    ]
-
-    with patch(
-        "fpl_data.collectors.fpl_api_collector.fpl_fetch", new_callable=AsyncMock
-    ) as mock_fetch:
-        result = await collector.collect_bootstrap("2025-26")
-
-    mock_fetch.assert_not_called()
-    mock_s3_client.put_json.assert_not_called()
-    assert result.records_collected == 0
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_collect_bootstrap_force_overwrites(
+async def test_collect_bootstrap_always_fetches_even_if_exists(
     collector: FPLAPICollector,
     mock_s3_client: MagicMock,
     bootstrap_response: dict,
 ) -> None:
-    mock_s3_client.list_objects.return_value = [
-        "raw/fpl-api/season=2025-26/bootstrap/existing.json"
-    ]
+    """Bootstrap is season-volatile (prices, status, news), so a prior snapshot
+    under the prefix must not cause the collector to skip."""
+    mock_s3_client.list_objects.return_value = ["raw/fpl-api/season=2025-26/bootstrap/earlier.json"]
 
     with patch(
         "fpl_data.collectors.fpl_api_collector.fpl_fetch",
         new_callable=AsyncMock,
         return_value=bootstrap_response,
-    ):
-        result = await collector.collect_bootstrap("2025-26", force=True)
+    ) as mock_fetch:
+        result = await collector.collect_bootstrap("2025-26")
 
-    assert result.records_collected == 3
+    mock_fetch.assert_called_once()
     mock_s3_client.put_json.assert_called_once()
+    assert result.records_collected == 3
 
 
 @pytest.mark.unit
@@ -171,19 +152,25 @@ async def test_collect_fixtures_success(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_collect_fixtures_skips_if_exists(
+async def test_collect_fixtures_always_fetches_even_if_exists(
     collector: FPLAPICollector,
     mock_s3_client: MagicMock,
+    fixtures_response: list,
 ) -> None:
-    mock_s3_client.list_objects.return_value = ["existing.json"]
+    """Fixtures change (kickoff times, postponements, per-match stats), so a
+    prior snapshot must not cause the collector to skip."""
+    mock_s3_client.list_objects.return_value = ["raw/fpl-api/season=2025-26/fixtures/earlier.json"]
 
     with patch(
-        "fpl_data.collectors.fpl_api_collector.fpl_fetch", new_callable=AsyncMock
+        "fpl_data.collectors.fpl_api_collector.fpl_fetch",
+        new_callable=AsyncMock,
+        return_value=fixtures_response,
     ) as mock_fetch:
         result = await collector.collect_fixtures("2025-26")
 
-    mock_fetch.assert_not_called()
-    assert result.records_collected == 0
+    mock_fetch.assert_called_once()
+    mock_s3_client.put_json.assert_called_once()
+    assert result.records_collected == 2
 
 
 # --- collect_gameweek_live tests ---

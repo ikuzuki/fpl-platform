@@ -112,6 +112,19 @@ class TestBuildGameweekBriefing:
         assert "summary_stats" in result
         assert result["season"] == "2025-26"
         assert result["gameweek"] == 31
+        # advice_gameweek defaults to None when the caller omits it
+        assert result["advice_gameweek"] is None
+
+    def test_advice_gameweek_is_propagated(
+        self,
+        sample_data: tuple,
+    ) -> None:
+        dashboard, transfers, fdr, teams = sample_data
+        result = build_gameweek_briefing(
+            dashboard, transfers, fdr, teams, "2025-26", 31, advice_gameweek=32
+        )
+        assert result["advice_gameweek"] == 32
+        assert result["gameweek"] == 31, "source gameweek must remain unchanged"
 
     def test_top_picks_are_buy_recommendations(
         self,

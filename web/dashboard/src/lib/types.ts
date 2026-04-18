@@ -50,6 +50,7 @@ export interface PlayerDashboard {
   score_injury: number | null;
   season: string;
   gameweek: number;
+  advice_gameweek?: number | null;
 }
 
 export interface BriefingPick {
@@ -84,6 +85,7 @@ export interface BriefingFixture {
 export interface GameweekBriefing {
   season: string;
   gameweek: number;
+  advice_gameweek?: number | null;
   top_picks: BriefingPick[];
   sell_alerts: { player_id: number; web_name: string; team_short: string; position: string; fpl_score: number; reasons: string[] }[];
   injury_alerts: BriefingAlert[];

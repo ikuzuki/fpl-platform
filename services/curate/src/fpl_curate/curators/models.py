@@ -78,6 +78,10 @@ class PlayerDashboardRow(BaseModel):
     season: str
     gameweek: int
 
+    # Gameweek the dashboard advises on (typically gameweek + 1; None at end-of-season).
+    # Used by the Captain Picker UI as its page label.
+    advice_gameweek: int | None = None
+
 
 class FixtureTickerRow(BaseModel):
     """One row in the fixture ticker — one team's fixture in one gameweek."""
