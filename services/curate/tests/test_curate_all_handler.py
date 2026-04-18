@@ -115,6 +115,79 @@ class TestCurateAllHandler:
         assert mock_s3_client.write_parquet.call_count == 4
 
     @pytest.mark.asyncio
+    async def test_briefing_carries_advice_gameweek(
+        self,
+        mock_s3_client: MagicMock,
+        mock_settings: CurateSettings,
+        sample_enriched_df: pd.DataFrame,
+        sample_bootstrap: dict[str, Any],
+        sample_fixtures: list[dict[str, Any]],
+    ) -> None:
+        """The briefing JSON published for the UI must label itself with the
+        advice-target GW (processed GW + 1), not the processed GW."""
+        table = pa.Table.from_pandas(sample_enriched_df)
+        mock_s3_client.read_parquet.return_value = table
+        mock_s3_client.list_objects.side_effect = [
+            ["raw/fpl-api/season=2025-26/fixtures/2026-04-05.json"],
+            ["raw/fpl-api/season=2025-26/bootstrap/2026-04-05.json"],
+        ]
+        mock_s3_client.read_json.side_effect = [sample_fixtures, sample_bootstrap]
+
+        with (
+            patch("fpl_curate.handlers.curate_all.S3Client", return_value=mock_s3_client),
+            patch("fpl_curate.handlers.curate_all.get_curate_settings", return_value=mock_settings),
+        ):
+            await main(season="2025-26", gameweek=31, force=True)
+
+        briefing_call = next(
+            c
+            for c in mock_s3_client.put_json.call_args_list
+            if c.args[1] == "public/api/v1/gameweek_briefing.json"
+        )
+        briefing = briefing_call.args[2]
+        assert briefing["gameweek"] == 31
+        assert briefing["advice_gameweek"] == 32
+
+        dashboard_call = next(
+            c
+            for c in mock_s3_client.put_json.call_args_list
+            if c.args[1] == "public/api/v1/player_dashboard.json"
+        )
+        dashboard_rows = dashboard_call.args[2]
+        assert all(r["advice_gameweek"] == 32 for r in dashboard_rows)
+
+    @pytest.mark.asyncio
+    async def test_advice_gameweek_none_at_season_end(
+        self,
+        mock_s3_client: MagicMock,
+        mock_settings: CurateSettings,
+        sample_enriched_df: pd.DataFrame,
+        sample_bootstrap: dict[str, Any],
+        sample_fixtures: list[dict[str, Any]],
+    ) -> None:
+        """Processing GW38 (final GW) has no next GW — advice label must be None."""
+        table = pa.Table.from_pandas(sample_enriched_df)
+        mock_s3_client.read_parquet.return_value = table
+        mock_s3_client.list_objects.side_effect = [
+            ["raw/fpl-api/season=2025-26/fixtures/k.json"],
+            ["raw/fpl-api/season=2025-26/bootstrap/k.json"],
+        ]
+        mock_s3_client.read_json.side_effect = [sample_fixtures, sample_bootstrap]
+
+        with (
+            patch("fpl_curate.handlers.curate_all.S3Client", return_value=mock_s3_client),
+            patch("fpl_curate.handlers.curate_all.get_curate_settings", return_value=mock_settings),
+        ):
+            await main(season="2025-26", gameweek=38, force=True)
+
+        briefing_call = next(
+            c
+            for c in mock_s3_client.put_json.call_args_list
+            if c.args[1] == "public/api/v1/gameweek_briefing.json"
+        )
+        assert briefing_call.args[2]["advice_gameweek"] is None
+
+    @pytest.mark.asyncio
     async def test_fails_when_no_fixtures(
         self,
         mock_s3_client: MagicMock,

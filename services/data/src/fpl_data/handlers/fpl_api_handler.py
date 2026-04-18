@@ -30,7 +30,9 @@ async def main(
         gameweek: Gameweek number (1-38).
         output_bucket: S3 bucket for output.
         endpoints: List of endpoints to collect. Defaults to bootstrap + fixtures + live.
-        force: If True, overwrite existing data.
+        force: If True, re-collect the gameweek-live snapshot even if one already
+            exists. Bootstrap and fixtures are always re-fetched (their data is
+            season-volatile), so this flag does not affect them.
 
     Returns:
         Dict with list of CollectionResponse results.
@@ -43,9 +45,9 @@ async def main(
 
     for endpoint in active_endpoints:
         if endpoint == "bootstrap":
-            resp = await collector.collect_bootstrap(season, force=force)
+            resp = await collector.collect_bootstrap(season)
         elif endpoint == "fixtures":
-            resp = await collector.collect_fixtures(season, force=force)
+            resp = await collector.collect_fixtures(season)
         elif endpoint == "live":
             resp = await collector.collect_gameweek_live(season, gameweek, force=force)
         else:

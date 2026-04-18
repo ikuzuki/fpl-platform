@@ -54,13 +54,15 @@ export function BriefingPage() {
     );
   }
 
+  const displayGw = data.advice_gameweek ?? data.gameweek + 1;
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-3xl font-bold">
-            GW{data.gameweek} Briefing
+            GW{displayGw} Briefing
           </h1>
           <p className="text-[var(--muted-foreground)] text-sm mt-1">
             {data.summary_stats.total_players} players analysed &middot;{" "}

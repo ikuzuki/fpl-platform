@@ -16,6 +16,7 @@ def build_gameweek_briefing(
     team_map: dict[int, dict[str, str]],
     season: str,
     gameweek: int,
+    advice_gameweek: int | None = None,
 ) -> dict[str, Any]:
     """Build a gameweek briefing from existing curated data.
 
@@ -25,7 +26,10 @@ def build_gameweek_briefing(
         fixture_fdr: Team ID -> {"next_3", "next_6"} FDR averages.
         team_map: Team ID -> {"name", "short_name"} mapping.
         season: Season identifier.
-        gameweek: Current gameweek number.
+        gameweek: Gameweek the underlying data was collected for (finished GW).
+        advice_gameweek: Gameweek this briefing gives advice for — typically
+            ``gameweek + 1``. ``None`` at end-of-season. UI renders this as the
+            page label so users see next-GW advice.
 
     Returns:
         Structured briefing dict for JSON serialisation.
@@ -144,6 +148,7 @@ def build_gameweek_briefing(
     briefing = {
         "season": season,
         "gameweek": gameweek,
+        "advice_gameweek": advice_gameweek,
         "top_picks": top_picks,
         "sell_alerts": sell_alerts,
         "injury_alerts": injury_alerts[:5],

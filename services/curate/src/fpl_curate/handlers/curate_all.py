@@ -25,6 +25,26 @@ OPTIONAL_PARAMS = ["output_bucket", "force"]
 SCHEMA_VERSION = "1.0.0"
 
 
+def _log_advice_gameweek_sanity(
+    bootstrap_data: dict[str, Any], gameweek: int, advice_gameweek: int | None
+) -> None:
+    """Warn if bootstrap's is_next disagrees with our derived advice_gameweek.
+
+    Derived value is always ``gameweek + 1`` (capped at 38). Bootstrap's ``is_next``
+    reflects the *current* live state, which only matches for weekly scheduled runs —
+    a manual backfill of an old GW will disagree and that's expected.
+    """
+    events = bootstrap_data.get("events", [])
+    next_from_bootstrap = next((e["id"] for e in events if e.get("is_next")), None)
+    if next_from_bootstrap is not None and next_from_bootstrap != advice_gameweek:
+        logger.info(
+            "advice_gameweek=%s (gw+1) differs from bootstrap is_next=%s — "
+            "likely a manual backfill of a past GW",
+            advice_gameweek,
+            next_from_bootstrap,
+        )
+
+
 def _init_langfuse(region: str = "eu-west-2") -> None:
     """Initialise Langfuse with keys from Secrets Manager."""
     import os
@@ -105,6 +125,14 @@ async def main(
 
     team_map = build_team_map(bootstrap_data)
 
+    # Advice pages (Briefing, Captain Picker) label themselves with the *upcoming*
+    # GW, not the GW whose data we processed. `gameweek + 1` works for both scheduled
+    # runs and manual backfills (backfilling GW25 produces a briefing labelled GW26,
+    # matching what would have been advised at that point in history). None at season
+    # end — the UI hides the label if absent.
+    advice_gameweek = gameweek + 1 if gameweek < 38 else None
+    _log_advice_gameweek_sanity(bootstrap_data, gameweek, advice_gameweek)
+
     # --- Build curated datasets ---
 
     # 1. Fixture ticker (needed first — provides FDR lookup for scoring)
@@ -123,6 +151,7 @@ async def main(
         weights=settings.FPL_SCORE_WEIGHTS,
         season=season,
         gameweek=gameweek,
+        advice_gameweek=advice_gameweek,
     )
 
     # 3. Transfer picks (derived from dashboard)
@@ -149,6 +178,7 @@ async def main(
         team_map=team_map,
         season=season,
         gameweek=gameweek,
+        advice_gameweek=advice_gameweek,
     )
 
     # --- Write outputs ---

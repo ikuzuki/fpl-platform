@@ -24,21 +24,20 @@ class FPLAPICollector:
         self.output_bucket = output_bucket
         self._bootstrap_cache: dict | None = None
 
-    async def collect_bootstrap(self, season: str, *, force: bool = False) -> CollectionResponse:
+    async def collect_bootstrap(self, season: str) -> CollectionResponse:
         """Collect bootstrap-static data (all players, teams, gameweeks).
+
+        Always re-fetches: bootstrap fields (prices, status, news, event flags) change
+        throughout the season, so every run writes a fresh timestamped snapshot.
+        Downstream consumers pick the latest by lexical sort of the prefix.
 
         Args:
             season: Season identifier, e.g. "2025-26".
-            force: If True, overwrite existing data.
 
         Returns:
             CollectionResponse with records_collected = number of player elements.
         """
         prefix = f"raw/fpl-api/season={season}/bootstrap/"
-        if not force and self._output_exists(prefix):
-            logger.info("Bootstrap data already exists for season=%s, skipping", season)
-            return CollectionResponse(status="success", records_collected=0, output_path=prefix)
-
         data = await self._fetch_bootstrap()
         timestamp = datetime.now(UTC).isoformat()
         key = f"{prefix}{timestamp}.json"
@@ -48,21 +47,20 @@ class FPLAPICollector:
         logger.info("Collected bootstrap: %d players for season=%s", records, season)
         return CollectionResponse(status="success", records_collected=records, output_path=key)
 
-    async def collect_fixtures(self, season: str, *, force: bool = False) -> CollectionResponse:
+    async def collect_fixtures(self, season: str) -> CollectionResponse:
         """Collect all fixtures for the season.
+
+        Always re-fetches: fixture kickoff times, postponements, and per-match stats
+        (populated as matches play) change throughout the season. Each run writes a
+        fresh timestamped snapshot; downstream consumers pick the latest by lexical sort.
 
         Args:
             season: Season identifier, e.g. "2025-26".
-            force: If True, overwrite existing data.
 
         Returns:
             CollectionResponse with records_collected = number of fixtures.
         """
         prefix = f"raw/fpl-api/season={season}/fixtures/"
-        if not force and self._output_exists(prefix):
-            logger.info("Fixtures data already exists for season=%s, skipping", season)
-            return CollectionResponse(status="success", records_collected=0, output_path=prefix)
-
         data = await fpl_fetch(f"{FPL_BASE_URL}/fixtures/")
         timestamp = datetime.now(UTC).isoformat()
         key = f"{prefix}{timestamp}.json"
