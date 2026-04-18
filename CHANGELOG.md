@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Agent: 4-node LangGraph state machine (`planner` → `tool_executor` → `reflector` → `recommender`) with a conditional loop capped at 3 iterations — replaces the Wave 2 stub handler for /chat
+- Agent: `AgentState` TypedDict with per-field reducers (`operator.add` for `tool_calls_made`, `merge_dicts` for `gathered_data`); Pydantic response models `ScoutReport`, `PlayerAnalysis`, `ComparisonResult`, `ReflectionResult`, `AgentResponse`
+- Agent: Six async tools over Neon pgvector (`query_player`, `search_similar_players`, `query_players_by_criteria`, `get_fixture_outlook`, `get_injury_signals`) plus `fetch_user_squad` via boto3 invoke of the team-fetcher Lambda
+- Agent: Versioned prompt templates under `services/agent/src/fpl_agent/graph/prompts/v1/` (planner, reflector, recommender)
+- Agent: Anthropic tool-use for structured output at every LLM node — schemas derive from Pydantic so malformed JSON can't reach the parser
+- Agent: Langfuse `@observe()` decorators on all nodes and tools (runtime client init lands in #93)
 - Infra: `modules/api-gateway/` — HTTP API v2 with Lambda proxy integration, CORS, throttling (10 req/s, 20 burst), CloudWatch access logs
 - Infra: Agent Lambda (`fpl-agent-dev`) wired to agent ECR image and shared Lambda role (1024 MB, 60s timeout)
 - Infra: DynamoDB table `fpl-agent-usage-dev` for monthly token/cost tracking and budget kill-switch
