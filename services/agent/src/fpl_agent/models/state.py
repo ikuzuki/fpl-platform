@@ -52,10 +52,13 @@ class AgentState(TypedDict, total=False):
 
     ``total=False`` so partial state dicts are valid during graph execution —
     nodes only need to populate the fields they actually change.
+
+    User squad data (when :func:`fetch_user_squad` is called) lives under
+    ``gathered_data["fetch_user_squad(...)"]`` — it is not hoisted into a
+    dedicated state key. Every tool result is treated uniformly.
     """
 
     question: str
-    user_squad: dict[str, Any] | None
     plan: list[ToolCall]
     gathered_data: Annotated[dict[str, Any], merge_dicts]
     tool_calls_made: Annotated[list[str], operator.add]
@@ -74,7 +77,6 @@ def initial_state(question: str) -> AgentState:
     """
     return {
         "question": question,
-        "user_squad": None,
         "plan": [],
         "gathered_data": {},
         "tool_calls_made": [],

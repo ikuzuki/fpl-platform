@@ -20,10 +20,10 @@ You are the **Recommender** for an FPL scout agent. Your job is to read the user
 ## Question
 {question}
 
-## User squad (may be null)
-{user_squad_json}
-
 ## Gathered data
+
+Each top-level key is a tool invocation (e.g. `query_player(name=Salah)`); the value is that call's result. If `fetch_user_squad(...)` appears, treat its result as the user's current FPL squad.
+
 {gathered_data_json}
 
 Respond by calling the `record_scout_report` tool.

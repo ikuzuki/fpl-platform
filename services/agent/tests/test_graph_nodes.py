@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -89,17 +88,23 @@ async def test_planner_returns_valid_plan() -> None:
 
 
 @pytest.mark.asyncio
-async def test_planner_rejects_unknown_tool() -> None:
+async def test_planner_rejects_unknown_tool_and_clears_stale_plan() -> None:
     payload = {"plan": [{"name": "search_for_goats", "args": {}}]}
     response = _tool_use_response("record_plan", payload)
     client = _mock_client(response)
-    state = initial_state("Nonsense")
+    # Simulate a second iteration where iter 1's plan is still in state.
+    state: AgentState = {
+        **initial_state("Nonsense"),
+        "plan": [ToolCall(name="query_player", args={"name": "Salah"})],
+    }
 
     update = await planner_node(state, client=client)
 
-    # Unknown tool fails Literal validation → planner records error, no plan
     assert "error" in update
     assert "planner failed" in update["error"]
+    # Critical: plan must be cleared, else the executor re-runs iter N-1's plan.
+    assert update["plan"] == []
+    assert update["tool_calls_made"] == []
 
 
 @pytest.mark.asyncio
@@ -133,24 +138,38 @@ async def test_planner_logs_token_usage(caplog: pytest.LogCaptureFixture) -> Non
 # ============================================================================
 @pytest.mark.asyncio
 async def test_tool_executor_runs_tools_concurrently() -> None:
-    async def slow_tool(**_: Any) -> dict[str, Any]:
-        await asyncio.sleep(0.05)
-        return {"ok": True}
+    # Two events: each tool awaits the other's "started" before returning.
+    # If the executor serialises, the second tool's started event is never
+    # set (first is still awaiting it) and the whole test deadlocks until
+    # its gather timeout. If the executor runs in parallel, both start,
+    # both see the other's event, both return immediately.
+    started_a = asyncio.Event()
+    started_b = asyncio.Event()
 
-    tools = {"query_player": slow_tool, "get_fixture_outlook": slow_tool}
+    async def tool_a(**_: Any) -> dict[str, Any]:
+        started_a.set()
+        await asyncio.wait_for(started_b.wait(), timeout=1.0)
+        return {"a": True}
+
+    async def tool_b(**_: Any) -> dict[str, Any]:
+        started_b.set()
+        await asyncio.wait_for(started_a.wait(), timeout=1.0)
+        return {"b": True}
+
+    tools = {"query_player": tool_a, "get_fixture_outlook": tool_b}
     plan = [
         ToolCall(name="query_player", args={"name": "Salah"}),
         ToolCall(name="get_fixture_outlook", args={"player_name": "Salah"}),
     ]
     state: AgentState = {**initial_state("q"), "plan": plan}
 
-    start = time.perf_counter()
     update = await tool_executor_node(state, tools=tools)
-    elapsed = time.perf_counter() - start
 
-    # Concurrent: elapsed ≈ max(sleeps) not sum. 0.05s each, so < 0.09s is a safe bound.
-    assert elapsed < 0.09
-    assert set(update["gathered_data"].keys()) == {"query_player", "get_fixture_outlook"}
+    # If both tools returned, concurrency is proven (they rendezvoused on events).
+    assert set(update["gathered_data"].keys()) == {
+        "query_player(name=Salah)",
+        "get_fixture_outlook(player_name=Salah)",
+    }
 
 
 @pytest.mark.asyncio
@@ -170,8 +189,8 @@ async def test_tool_executor_records_errors_without_cancelling_siblings() -> Non
 
     update = await tool_executor_node(state, tools=tools)
 
-    assert update["gathered_data"]["query_player"] == {"error": "boom"}
-    assert update["gathered_data"]["get_fixture_outlook"] == {"ok": True}
+    assert update["gathered_data"]["query_player(name=X)"] == {"error": "boom"}
+    assert update["gathered_data"]["get_fixture_outlook(player_name=X)"] == {"ok": True}
 
 
 @pytest.mark.asyncio
@@ -188,7 +207,7 @@ async def test_tool_executor_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
 
     update = await tool_executor_node(state, tools=tools)
 
-    assert "timed out" in update["gathered_data"]["query_player"]["error"]
+    assert "timed out" in update["gathered_data"]["query_player(name=X)"]["error"]
 
 
 @pytest.mark.asyncio
@@ -294,3 +313,84 @@ def test_route_after_reflector_done() -> None:
 
 def test_route_after_reflector_short_circuits_on_error() -> None:
     assert route_after_reflector({"should_continue": True, "error": "boom"}) == "done"
+
+
+# ============================================================================
+# tool_executor: duplicate tool calls in one plan produce distinct entries
+# ============================================================================
+@pytest.mark.asyncio
+async def test_tool_executor_keys_duplicate_calls_by_args() -> None:
+    """A plan with two ``query_player`` calls for different names must produce
+    two entries in ``gathered_data`` — comparison questions are a first-class
+    use case per ADR-0009."""
+
+    async def fake_query(name: str) -> dict[str, Any]:
+        return {"name_echo": name}
+
+    plan = [
+        ToolCall(name="query_player", args={"name": "Salah"}),
+        ToolCall(name="query_player", args={"name": "Palmer"}),
+    ]
+    state: AgentState = {**initial_state("compare"), "plan": plan}
+
+    update = await tool_executor_node(state, tools={"query_player": fake_query})
+
+    assert set(update["gathered_data"].keys()) == {
+        "query_player(name=Salah)",
+        "query_player(name=Palmer)",
+    }
+    assert update["gathered_data"]["query_player(name=Salah)"]["name_echo"] == "Salah"
+    assert update["gathered_data"]["query_player(name=Palmer)"]["name_echo"] == "Palmer"
+
+
+@pytest.mark.asyncio
+async def test_tool_executor_no_args_key_is_just_name() -> None:
+    async def fake(**_: Any) -> dict[str, Any]:
+        return {"ok": True}
+
+    plan = [ToolCall(name="query_players_by_criteria", args={})]
+    state: AgentState = {**initial_state("q"), "plan": plan}
+
+    update = await tool_executor_node(state, tools={"query_players_by_criteria": fake})
+
+    assert set(update["gathered_data"].keys()) == {"query_players_by_criteria"}
+
+
+# ============================================================================
+# recommender: short-circuits on state["error"]
+# ============================================================================
+@pytest.mark.asyncio
+async def test_recommender_short_circuits_when_state_has_error() -> None:
+    client = _mock_client(_tool_use_response("record_scout_report", _valid_scout_report_payload()))
+    state: AgentState = {**initial_state("Is Salah worth it?"), "error": "planner failed: boom"}
+
+    update = await recommender_node(state, client=client)
+
+    # No LLM call — saves Sonnet cost on every failure path
+    client.messages.create.assert_not_awaited()
+    report = update["final_response"]
+    assert report.question == "Is Salah worth it?"
+    assert "boom" in report.recommendation
+    assert report.caveats  # error is flagged for the UI
+
+
+# ============================================================================
+# stop_reason logging
+# ============================================================================
+@pytest.mark.asyncio
+async def test_log_usage_warns_on_max_tokens_truncation(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    payload = {"plan": [{"name": "query_player", "args": {"name": "Salah"}}]}
+    response = _tool_use_response("record_plan", payload)
+    response.stop_reason = "max_tokens"
+    client = _mock_client(response)
+
+    with caplog.at_level(logging.INFO, logger="fpl_agent.graph.nodes"):
+        await planner_node(initial_state("q"), client=client)
+
+    messages = "\n".join(r.message for r in caplog.records)
+    assert "stop_reason=max_tokens" in messages
+    assert any(
+        "hit max_tokens" in r.message and r.levelno == logging.WARNING for r in caplog.records
+    )

@@ -14,13 +14,23 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 FixtureOutlook = Literal["green", "amber", "red"]
 
 
+# ``extra='forbid'`` makes every generated JSON Schema include
+# ``additionalProperties: false``. Anthropic's tool-use decoder respects
+# that, so the LLM cannot emit unknown fields — any schema drift becomes a
+# Pydantic ValidationError at the node boundary instead of a silent typo
+# that survives to the client.
+_STRICT_CONFIG = ConfigDict(extra="forbid")
+
+
 class PlayerAnalysis(BaseModel):
     """Per-player verdict that appears inside a ScoutReport."""
+
+    model_config = _STRICT_CONFIG
 
     player_name: str
     position: str = Field(description="GKP / DEF / MID / FWD")
@@ -36,6 +46,8 @@ class PlayerAnalysis(BaseModel):
 class ComparisonResult(BaseModel):
     """Head-to-head comparison when the question asks to compare players."""
 
+    model_config = _STRICT_CONFIG
+
     players: list[PlayerAnalysis]
     winner: str | None = Field(
         default=None,
@@ -46,6 +58,8 @@ class ComparisonResult(BaseModel):
 
 class ScoutReport(BaseModel):
     """The agent's final structured answer to a user's question."""
+
+    model_config = _STRICT_CONFIG
 
     question: str
     analysis: str = Field(description="The core analytical narrative (3-6 sentences)")
@@ -65,6 +79,8 @@ class ScoutReport(BaseModel):
 class ReflectionResult(BaseModel):
     """Output of the reflector node — gates the loop-back edge."""
 
+    model_config = _STRICT_CONFIG
+
     sufficient: bool = Field(description="True if gathered data is enough to answer the question")
     missing: str | None = Field(
         default=None,
@@ -76,6 +92,8 @@ class ReflectionResult(BaseModel):
 class AgentResponse(BaseModel):
     """Thin envelope returned by the API handler — wraps the ScoutReport
     with execution metadata the frontend can surface for transparency."""
+
+    model_config = _STRICT_CONFIG
 
     report: ScoutReport
     iterations_used: int

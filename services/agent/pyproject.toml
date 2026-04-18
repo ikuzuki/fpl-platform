@@ -32,3 +32,8 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# Prompts must ship in the wheel — otherwise the Lambda can't find them at
+# runtime. Default setuptools wheels drop non-Python files.
+[tool.setuptools.package-data]
+fpl_agent = ["graph/prompts/v1/*.md"]

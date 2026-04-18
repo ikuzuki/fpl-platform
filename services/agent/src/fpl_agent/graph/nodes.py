@@ -9,10 +9,11 @@ planner):
 * :func:`recommender_node` — Sonnet. Produces the final ScoutReport.
 
 **Structured output.** Every LLM call uses Anthropic tool-use as the
-structured-output mechanism (see plan doc). Each node declares a fake tool
-with ``input_schema`` derived from a Pydantic model, forces the model to
-invoke it via ``tool_choice``, and reads ``response.content[<tool_use>].input``
-as a dict. Server-side schema enforcement eliminates JSON syntax failures.
+structured-output mechanism (see walkthrough doc). Each node declares a
+fake tool with ``input_schema`` derived from a Pydantic model, forces the
+model to invoke it via ``tool_choice``, and reads
+``response.content[<tool_use>].input`` as a dict. Server-side schema
+enforcement eliminates JSON syntax failures.
 
 **Dependencies.** Nodes receive their Anthropic client (and, for
 ``tool_executor``, the tool registry) via keyword arguments. The graph
@@ -25,7 +26,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from pathlib import Path
+from functools import lru_cache
+from importlib.resources import files
 from typing import Any
 
 from anthropic import AsyncAnthropic
@@ -48,11 +50,21 @@ from fpl_agent.tools.player_tools import ToolError, ToolFn
 
 logger = logging.getLogger(__name__)
 
-_PROMPTS_DIR = Path(__file__).parent / "prompts" / "v1"
 
-
+@lru_cache(maxsize=8)
 def _load_prompt(name: str) -> str:
-    return (_PROMPTS_DIR / f"{name}.md").read_text(encoding="utf-8")
+    """Read a versioned prompt template.
+
+    Uses ``importlib.resources`` so the lookup works identically whether the
+    package is installed as a wheel (Lambda), installed editable (dev), or
+    running from source (tests). ``Path(__file__).parent`` would silently
+    break under ``pip install`` because setuptools excludes non-Python files
+    by default; the wheel's ``package-data`` declaration plus this loader
+    keep both paths honest.
+
+    Cached because prompts don't change between calls within a Lambda's life.
+    """
+    return (files("fpl_agent.graph.prompts.v1") / f"{name}.md").read_text(encoding="utf-8")
 
 
 # ----------------------------------------------------------------------------
@@ -61,7 +73,9 @@ def _load_prompt(name: str) -> str:
 # Each node forces the model to call one of these fake tools. The
 # ``input_schema`` is generated from the corresponding Pydantic model so the
 # schema is the single source of truth — changing a response field is a
-# one-line Pydantic edit.
+# one-line Pydantic edit. ``extra='forbid'`` on the models emits
+# ``additionalProperties: false`` in the schemas, so Anthropic's server-side
+# decoder rejects any unknown fields at sampling time.
 
 _PLAN_LIST_SCHEMA = TypeAdapter(list[ToolCall]).json_schema()
 
@@ -72,6 +86,7 @@ _PLAN_TOOL = {
         "type": "object",
         "properties": {"plan": _PLAN_LIST_SCHEMA},
         "required": ["plan"],
+        "additionalProperties": False,
     },
 }
 
@@ -88,13 +103,16 @@ _SCOUT_REPORT_TOOL = {
 }
 
 
+# ----------------------------------------------------------------------------
+# Helpers
+# ----------------------------------------------------------------------------
 def _extract_tool_input(response: Any, expected_name: str) -> dict[str, Any]:
     """Pull the first ``tool_use`` content block matching ``expected_name``.
 
-    Anthropic guarantees a ``tool_use`` block is present when
-    ``tool_choice`` forces a specific tool. We still defensively check
-    — a malformed response should surface as a ``ToolError`` rather than
-    an ``AttributeError`` halfway through parsing.
+    Anthropic guarantees a ``tool_use`` block is present when ``tool_choice``
+    forces a specific tool. We still defensively check — a malformed response
+    should surface as a :class:`ToolError` rather than an ``AttributeError``
+    halfway through parsing.
     """
     for block in response.content:
         if getattr(block, "type", None) == "tool_use" and block.name == expected_name:
@@ -103,15 +121,65 @@ def _extract_tool_input(response: Any, expected_name: str) -> dict[str, Any]:
 
 
 def _log_usage(node: str, response: Any) -> None:
-    """Emit input/output token counts for downstream cost tracking."""
+    """Emit input/output token counts + stop_reason for cost + debugging.
+
+    ``stop_reason`` is worth logging because ``"max_tokens"`` means the
+    tool_use block was truncated; downstream Pydantic will raise with an
+    unhelpful "missing field X" error. Having the stop_reason in the log
+    tells future-you to raise ``*_MAX_TOKENS`` instead of hunting phantom
+    data bugs.
+    """
     usage = getattr(response, "usage", None)
-    if usage is None:
-        return
+    stop_reason = getattr(response, "stop_reason", None)
     logger.info(
-        "llm_usage node=%s input_tokens=%s output_tokens=%s",
+        "llm_usage node=%s stop_reason=%s input_tokens=%s output_tokens=%s",
         node,
-        getattr(usage, "input_tokens", None),
-        getattr(usage, "output_tokens", None),
+        stop_reason,
+        getattr(usage, "input_tokens", None) if usage else None,
+        getattr(usage, "output_tokens", None) if usage else None,
+    )
+    if stop_reason == "max_tokens":
+        logger.warning(
+            "node %s hit max_tokens — output likely truncated, Pydantic validation may fail",
+            node,
+        )
+
+
+def _result_key(tc: ToolCall) -> str:
+    """Build a unique, human-readable key for a tool result.
+
+    Keyed by name + arg values so ``[query_player(Salah), query_player(Palmer)]``
+    produce two distinct entries in ``gathered_data`` instead of the second
+    overwriting the first. The format is the LLM-facing label the recommender
+    prompt references — readable for traces, stable for the model.
+
+    Args are flattened to ``name=value`` pairs. Long arg combinations fall back
+    to a hash suffix to keep keys bounded.
+    """
+    if not tc.args:
+        return tc.name
+    arg_summary = ",".join(f"{k}={v}" for k, v in sorted(tc.args.items()))
+    if len(arg_summary) > 80:
+        return f"{tc.name}#{abs(hash(arg_summary)) % 10000}"
+    return f"{tc.name}({arg_summary})"
+
+
+def _error_report(state: AgentState) -> ScoutReport:
+    """Construct a minimal ScoutReport for the error short-circuit path.
+
+    Called by :func:`recommender_node` when ``state["error"]`` is set — saves
+    a Sonnet call (and avoids feeding Sonnet partial/broken data, which
+    tends to produce a second layer of Pydantic failures).
+    """
+    err = state.get("error") or "unknown error"
+    return ScoutReport(
+        question=state.get("question", ""),
+        analysis="The agent could not produce a full report for this question.",
+        players=[],
+        comparison=None,
+        recommendation=f"Please retry. Upstream error: {err}",
+        caveats=[f"Agent failed upstream: {err}"],
+        data_sources=[],
     )
 
 
@@ -144,7 +212,15 @@ async def planner_node(
         plan = TypeAdapter(list[ToolCall]).validate_python(raw["plan"])
     except (ValidationError, ToolError, KeyError) as exc:
         logger.exception("planner failed to produce a valid plan")
-        return {"error": f"planner failed: {exc}"}
+        # Explicitly clear `plan` so the executor doesn't re-run the previous
+        # iteration's plan (default reducer is overwrite, but an un-returned
+        # key means "don't change it"). `tool_calls_made` uses operator.add,
+        # so returning [] is a no-op append — safe either way.
+        return {
+            "error": f"planner failed: {exc}",
+            "plan": [],
+            "tool_calls_made": [],
+        }
 
     return {
         "plan": plan,
@@ -163,37 +239,38 @@ async def tool_executor_node(
 ) -> dict[str, Any]:
     """Run every :class:`ToolCall` in the current plan concurrently.
 
-    Uses :func:`asyncio.gather` with ``return_exceptions=True`` so one
-    failing tool does not cancel its siblings — the reflector sees the
-    error in ``gathered_data`` and can re-plan.
+    Uses :func:`asyncio.gather` so one slow tool does not block the others.
+    Each tool's exceptions are caught inside :func:`_run` and surfaced as an
+    ``{"error": ...}`` dict in ``gathered_data`` — siblings are unaffected.
+
+    Results are keyed by ``_result_key(tool_call)`` so duplicate tool calls
+    with different args (e.g. ``query_player("Salah")`` and
+    ``query_player("Palmer")`` in the same plan) produce distinct entries.
     """
     plan: list[ToolCall] = state.get("plan", [])
     if not plan:
         return {"gathered_data": {}}
 
     async def _run(tc: ToolCall) -> tuple[str, Any]:
+        key = _result_key(tc)
         if tc.name not in tools:
-            return tc.name, {"error": f"unknown tool '{tc.name}'"}
+            return key, {"error": f"unknown tool '{tc.name}'"}
         try:
             result = await asyncio.wait_for(
                 tools[tc.name](**tc.args),
                 timeout=TOOL_TIMEOUT_SECONDS,
             )
-            return tc.name, result
+            return key, result
         except TimeoutError:
-            return tc.name, {"error": f"tool '{tc.name}' timed out"}
+            return key, {"error": f"tool '{tc.name}' timed out"}
         except ToolError as exc:
-            return tc.name, {"error": str(exc)}
+            return key, {"error": str(exc)}
         except Exception as exc:  # noqa: BLE001 — surface unexpected failures into state
             logger.exception("tool %s raised unexpectedly", tc.name)
-            return tc.name, {"error": f"unexpected failure: {exc}"}
+            return key, {"error": f"unexpected failure: {exc}"}
 
     results = await asyncio.gather(*(_run(tc) for tc in plan))
-    gathered: dict[str, Any] = {}
-    for name, value in results:
-        # If the same tool is called twice in one iteration (different args)
-        # we keep the later result — simple and matches "latest data wins".
-        gathered[name] = value
+    gathered: dict[str, Any] = {key: value for key, value in results}
     return {"gathered_data": gathered}
 
 
@@ -210,7 +287,7 @@ async def reflector_node(
 
     Hard-caps the loop at :data:`MAX_ITERATIONS` before calling the LLM —
     once we're at the cap, further reflection is wasted cost since the
-    conditional edge will be forced to ``continue`` regardless.
+    conditional edge will be forced to ``done`` regardless.
     """
     next_iteration = state.get("iteration_count", 0) + 1
 
@@ -258,10 +335,20 @@ async def recommender_node(
     *,
     client: AsyncAnthropic,
 ) -> dict[str, Any]:
-    """Synthesise the gathered data into a structured :class:`ScoutReport`."""
+    """Synthesise the gathered data into a structured :class:`ScoutReport`.
+
+    Short-circuits when ``state["error"]`` is set — feeding Sonnet broken or
+    empty ``gathered_data`` tends to produce a second Pydantic failure and
+    wastes the most expensive call in the graph. Instead, return a minimal
+    error report so the API handler has a valid :class:`ScoutReport` to
+    render.
+    """
+    if state.get("error"):
+        logger.info("recommender: short-circuiting due to state.error=%r", state["error"])
+        return {"final_response": _error_report(state)}
+
     prompt = _load_prompt("recommender").format(
         question=state["question"],
-        user_squad_json=json.dumps(state.get("user_squad"), default=str),
         gathered_data_json=json.dumps(state.get("gathered_data", {}), default=str),
     )
 

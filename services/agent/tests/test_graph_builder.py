@@ -86,7 +86,7 @@ async def test_graph_invoke_end_to_end_with_mocks() -> None:
     final_state = await graph.ainvoke(initial_state("Is Salah worth it?"))
 
     assert final_state["final_response"].recommendation == "Keep Salah."
-    assert final_state["gathered_data"]["query_player"]["web_name"] == "Salah"
+    assert final_state["gathered_data"]["query_player(name=Salah)"]["web_name"] == "Salah"
     assert "query_player" in final_state["tool_calls_made"]
     # 3 LLM calls: planner, reflector, recommender
     assert client.messages.create.await_count == 3
@@ -131,7 +131,10 @@ async def test_graph_loops_when_reflector_says_continue() -> None:
     final_state = await graph.ainvoke(initial_state("Salah fixture outlook?"))
 
     assert final_state["iteration_count"] == 2
-    assert set(final_state["gathered_data"].keys()) == {"query_player", "get_fixture_outlook"}
+    assert set(final_state["gathered_data"].keys()) == {
+        "query_player(name=Salah)",
+        "get_fixture_outlook(player_name=Salah)",
+    }
     assert final_state["tool_calls_made"] == ["query_player", "get_fixture_outlook"]
     # 5 LLM calls: planner x2, reflector x2, recommender x1
     assert client.messages.create.await_count == 5
