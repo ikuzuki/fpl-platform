@@ -11,6 +11,7 @@ import { CaptainPage } from "@/pages/CaptainPage";
 import { DifferentialsPage } from "@/pages/DifferentialsPage";
 import { PlannerPage } from "@/pages/PlannerPage";
 import { AboutPage } from "@/pages/AboutPage";
+import { ChatPage } from "@/pages/chat/ChatPage";
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
             <Route path="captain" element={<CaptainPage />} />
             <Route path="differentials" element={<DifferentialsPage />} />
             <Route path="planner" element={<PlannerPage />} />
+            <Route path="chat" element={<ChatPage />} />
             <Route path="about" element={<AboutPage />} />
           </Route>
         </Routes>
