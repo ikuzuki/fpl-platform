@@ -1,0 +1,360 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2026-04-19T00:00:00.000Z" agent="Claude" version="24.0.0">
+  <diagram name="FE to BE Wiring" id="fe-be-wiring">
+    <mxGraphModel dx="1600" dy="2200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1500" pageHeight="2200">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ================ STAGE OVERLAY BOXES ================ -->
+
+        <mxCell id="stage-client" value="&lt;b&gt;CLIENT&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8fafa;strokeColor=#99d4d4;strokeWidth=2;verticalAlign=top;align=left;fontSize=13;fontColor=#4a9999;spacingTop=5;spacingLeft=10;opacity=50;" vertex="1" parent="1">
+          <mxGeometry x="80" y="100" width="1340" height="190" as="geometry" />
+        </mxCell>
+
+        <mxCell id="stage-routing" value="&lt;b&gt;ROUTING — differs by environment&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#dddddd;strokeWidth=2;verticalAlign=top;align=left;fontSize=13;fontColor=#aaaaaa;spacingTop=5;spacingLeft=10;opacity=50;" vertex="1" parent="1">
+          <mxGeometry x="80" y="300" width="1340" height="220" as="geometry" />
+        </mxCell>
+
+        <mxCell id="stage-edge" value="&lt;b&gt;EDGE — one CloudFront distribution, three origins&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5eef5;strokeColor=#d4c4d4;strokeWidth=2;verticalAlign=top;align=left;fontSize=13;fontColor=#a88fa8;spacingTop=5;spacingLeft=10;opacity=50;" vertex="1" parent="1">
+          <mxGeometry x="80" y="530" width="1340" height="360" as="geometry" />
+        </mxCell>
+
+        <mxCell id="stage-lambda" value="&lt;b&gt;AGENT LAMBDA — fpl-agent-dev (container image, 1024MB, 60s)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eef6ff;strokeColor=#b8d4f0;strokeWidth=2;verticalAlign=top;align=left;fontSize=13;fontColor=#7fadd4;spacingTop=5;spacingLeft=10;opacity=50;" vertex="1" parent="1">
+          <mxGeometry x="80" y="900" width="1340" height="590" as="geometry" />
+        </mxCell>
+
+        <mxCell id="stage-backing" value="&lt;b&gt;BACKING SERVICES&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0faf0;strokeColor=#b8dab8;strokeWidth=2;verticalAlign=top;align=left;fontSize=13;fontColor=#7cb87c;spacingTop=5;spacingLeft=10;opacity=50;" vertex="1" parent="1">
+          <mxGeometry x="80" y="1500" width="1340" height="260" as="geometry" />
+        </mxCell>
+
+        <!-- ================ TITLE + LEGEND ================ -->
+
+        <mxCell id="title" value="&lt;b&gt;Frontend ↔ Backend Wiring&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px;color:#666666&quot;&gt;One chat message: browser → CloudFront → Function URL → FastAPI → SSE back&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=18;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="400" y="15" width="560" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fafafa;strokeColor=#cccccc;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="20" width="360" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-fe" value="" style="rounded=1;fillColor=#d0f0f0;strokeColor=#4a9999;" vertex="1" parent="1">
+          <mxGeometry x="1112" y="32" width="16" height="12" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-fe-t" value="Frontend" style="text;html=1;strokeColor=none;fillColor=none;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1132" y="29" width="60" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-lambda" value="" style="rounded=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="32" width="16" height="12" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-lambda-t" value="Lambda / FastAPI" style="text;html=1;strokeColor=none;fillColor=none;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1220" y="29" width="95" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-aws" value="" style="rounded=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="1325" y="32" width="16" height="12" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-aws-t" value="AWS managed edge" style="text;html=1;strokeColor=none;fillColor=none;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1345" y="29" width="105" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-data" value="" style="rounded=1;fillColor=#f0f0f0;strokeColor=#999999;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="1112" y="55" width="16" height="12" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-data-t" value="Data store" style="text;html=1;strokeColor=none;fillColor=none;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1132" y="52" width="65" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-obs" value="" style="rounded=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="55" width="16" height="12" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-obs-t" value="Observability" style="text;html=1;strokeColor=none;fillColor=none;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1220" y="52" width="80" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="leg-sse" value="" style="endArrow=classic;html=1;strokeColor=#4a9999;strokeWidth=3;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1325" y="61" as="sourcePoint" />
+            <mxPoint x="1345" y="61" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="leg-sse-t" value="SSE stream back" style="text;html=1;strokeColor=none;fillColor=none;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1350" y="52" width="100" height="18" as="geometry" />
+        </mxCell>
+
+        <!-- ================ CLIENT STAGE ================ -->
+
+        <mxCell id="browser" value="&lt;b&gt;React 19 SPA in browser&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Vite-built static bundle served from S3 + CloudFront&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d0f0f0;strokeColor=#4a9999;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="180" y="130" width="1140" height="45" as="geometry" />
+        </mxCell>
+
+        <mxCell id="chat-panel" value="&lt;b&gt;ChatPanel.send(question)&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;web/dashboard/src/pages/chat/ChatPanel.tsx&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e6f7f7;strokeColor=#4a9999;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="210" y="195" width="280" height="55" as="geometry" />
+        </mxCell>
+
+        <mxCell id="agent-api" value="&lt;b&gt;agentApi.streamChat()&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;async generator · hand-parses SSE&lt;br&gt;(EventSource doesn't support POST)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e6f7f7;strokeColor=#4a9999;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="530" y="195" width="280" height="55" as="geometry" />
+        </mxCell>
+
+        <mxCell id="fetch-call" value="&lt;b&gt;fetch POST /api/agent/chat&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;X-Session-Id, Accept: text/event-stream&lt;br&gt;body: { question, squad? }&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e6f7f7;strokeColor=#4a9999;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="850" y="195" width="280" height="55" as="geometry" />
+        </mxCell>
+
+        <mxCell id="a-panel-api" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#4a9999;strokeWidth=2;endArrow=classic;" edge="1" parent="1" source="chat-panel" target="agent-api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-api-fetch" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#4a9999;strokeWidth=2;endArrow=classic;" edge="1" parent="1" source="agent-api" target="fetch-call">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="relative-note" value="&lt;b&gt;const AGENT_BASE = &quot;/api/agent&quot;&lt;/b&gt;&lt;br&gt;&lt;i&gt;relative path — resolves against whatever origin the page loaded from&lt;/i&gt;" style="text;html=1;strokeColor=#999999;fillColor=#fffef0;align=center;fontSize=10;fontColor=#666666;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="1170" y="195" width="220" height="55" as="geometry" />
+        </mxCell>
+
+        <!-- ================ ROUTING STAGE ================ -->
+
+        <!-- DEV branch -->
+        <mxCell id="dev-label" value="&lt;b&gt;DEV — localhost:5173&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=11;fontColor=#999999;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="180" y="335" width="240" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="vite-proxy" value="&lt;b&gt;Vite dev proxy&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;vite.config.ts · reads VITE_AGENT_PROXY_TARGET&lt;br&gt;from .env.development.local (gitignored)&lt;br&gt;forwards /api/agent/* → CloudFront&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d0f0f0;strokeColor=#4a9999;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="180" y="365" width="240" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="dev-why" value="&lt;i&gt;Browser sees same-origin.&lt;br&gt;CORS preflight sidestepped.&lt;/i&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=9;fontColor=#999999;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="180" y="445" width="240" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- PROD branch -->
+        <mxCell id="prod-label" value="&lt;b&gt;PROD — same origin as the SPA&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=11;fontColor=#999999;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1080" y="335" width="320" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="prod-origin" value="&lt;b&gt;Same-origin request&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;page loaded from https://&amp;lt;cloudfront&amp;gt;.cloudfront.net,&lt;br&gt;so /api/agent/chat resolves to that same host&lt;br&gt;— no proxy, no CORS&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d0f0f0;strokeColor=#4a9999;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1080" y="365" width="320" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="a-fetch-vite" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#4a9999;strokeWidth=2;endArrow=classic;" edge="1" parent="1" source="fetch-call" target="vite-proxy">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-fetch-prod" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#4a9999;strokeWidth=2;endArrow=classic;" edge="1" parent="1" source="fetch-call" target="prod-origin">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ================ EDGE STAGE (CloudFront) ================ -->
+
+        <mxCell id="cloudfront" value="&lt;b&gt;CloudFront Distribution&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;infrastructure/modules/web-hosting/main.tf — path-based routing&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="450" y="570" width="600" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- 3 origins -->
+        <mxCell id="cf-spa" value="&lt;b&gt;/*  &amp;nbsp; (default)&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;origin: S3 SPA bucket&lt;br&gt;long TTL, invalidated on deploy&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#999999;fontSize=10;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="180" y="650" width="260" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="cf-data" value="&lt;b&gt;/api/v1/*&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;origin: S3 data lake /public/&lt;br&gt;24h TTL&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#999999;fontSize=10;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="470" y="650" width="260" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="cf-agent" value="&lt;b&gt;/api/agent/*&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;origin: Lambda Function URL&lt;br&gt;Lambda OAC (SigV4 signs every origin request)&lt;br&gt;CachingDisabled · AllViewerExceptHostHeader&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="760" y="650" width="260" height="65" as="geometry" />
+        </mxCell>
+
+        <mxCell id="a-cf-spa" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#999999;strokeWidth=1;endArrow=classic;dashed=1;" edge="1" parent="1" source="cloudfront" target="cf-spa">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-cf-data" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#999999;strokeWidth=1;endArrow=classic;dashed=1;" edge="1" parent="1" source="cloudfront" target="cf-data">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-cf-agent" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#9673a6;strokeWidth=2;endArrow=classic;" edge="1" parent="1" source="cloudfront" target="cf-agent">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="a-vite-cf" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#4a9999;strokeWidth=2;endArrow=classic;" edge="1" parent="1" source="vite-proxy" target="cloudfront">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="300" y="560" />
+              <mxPoint x="750" y="560" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="a-prod-cf" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#4a9999;strokeWidth=2;endArrow=classic;" edge="1" parent="1" source="prod-origin" target="cloudfront">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1240" y="560" />
+              <mxPoint x="750" y="560" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- CloudFront Function (path rewrite) -->
+        <mxCell id="cf-function" value="&lt;b&gt;CloudFront Function (viewer-request)&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;strips /api/agent prefix:&lt;br&gt;&lt;code&gt;/api/agent/chat&lt;/code&gt; → &lt;code&gt;/chat&lt;/code&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="760" y="740" width="260" height="55" as="geometry" />
+        </mxCell>
+
+        <mxCell id="a-cfagent-fn" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#9673a6;strokeWidth=2;endArrow=classic;" edge="1" parent="1" source="cf-agent" target="cf-function">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Behavior notes -->
+        <mxCell id="cf-notes" value="&lt;b&gt;Agent behaviour settings (critical)&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;&lt;b&gt;• compress = false&lt;/b&gt; — gzip would buffer the SSE stream&lt;br&gt;&lt;b&gt;• CachingDisabled&lt;/b&gt; — POST, per-user responses&lt;br&gt;&lt;b&gt;• AllViewerExceptHostHeader&lt;/b&gt; — forwards X-Session-Id + body&lt;br&gt;&lt;b&gt;• allowed_methods&lt;/b&gt; — includes POST + OPTIONS&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffef0;strokeColor=#d6b656;fontSize=10;align=left;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="1080" y="640" width="320" height="140" as="geometry" />
+        </mxCell>
+
+        <mxCell id="adr10-ref" value="&lt;i&gt;see ADR-0010 for the&lt;br&gt;API Gateway → Function URL rationale&lt;/i&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;fontSize=9;fontColor=#a88fa8;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="170" y="740" width="280" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="auth-gotcha" value="&lt;b&gt;🔒 Function URL is CloudFront-only&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;AuthType=AWS_IAM + Lambda OAC on the origin.&lt;br&gt;CloudFront signs each origin request (SigV4).&lt;br&gt;Resource policy grants invoke only to&lt;br&gt;cloudfront.amazonaws.com scoped by SourceArn.&lt;br&gt;Direct curl to *.lambda-url.* returns 403.&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f9f0;strokeColor=#82b366;fontSize=10;align=center;" vertex="1" parent="1">
+          <mxGeometry x="170" y="800" width="280" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- ================ LAMBDA STAGE ================ -->
+
+        <mxCell id="function-url" value="&lt;b&gt;aws_lambda_function_url&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;invoke_mode = RESPONSE_STREAM&lt;br&gt;authorization_type = AWS_IAM&lt;br&gt;(rejects anything not SigV4-signed by CloudFront)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="580" y="935" width="340" height="65" as="geometry" />
+        </mxCell>
+
+        <mxCell id="a-fn-furl" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#9673a6;strokeWidth=2;endArrow=classic;" edge="1" parent="1" source="cf-function" target="function-url">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="lwa" value="&lt;b&gt;AWS Lambda Web Adapter (LWA) sidecar&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;public.ecr.aws/awsguru/aws-lambda-adapter:0.9.0&lt;br&gt;translates RESPONSE_STREAM ↔ local HTTP&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="580" y="1015" width="340" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="a-furl-lwa" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#6c8ebf;strokeWidth=2;endArrow=classic;" edge="1" parent="1" source="function-url" target="lwa">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="uvicorn" value="&lt;b&gt;uvicorn on 127.0.0.1:8000&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="580" y="1095" width="340" height="35" as="geometry" />
+        </mxCell>
+
+        <mxCell id="a-lwa-uvi" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#6c8ebf;strokeWidth=2;endArrow=classic;" edge="1" parent="1" source="lwa" target="uvicorn">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="fastapi" value="&lt;b&gt;FastAPI · @app.post(&quot;/chat&quot;)&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;services/agent/src/fpl_agent/api.py&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="580" y="1150" width="340" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="a-uvi-fast" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#6c8ebf;strokeWidth=2;endArrow=classic;" edge="1" parent="1" source="uvicorn" target="fastapi">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Dependency chain -->
+        <mxCell id="dep-budget" value="&lt;b&gt;Depends: check_budget&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;DynamoDB GetItem&lt;br&gt;429 if monthly cap hit&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eef6ff;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="150" y="1225" width="220" height="55" as="geometry" />
+        </mxCell>
+
+        <mxCell id="dep-ratelimit" value="&lt;b&gt;Depends: check_rate_limit&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;in-memory sliding window&lt;br&gt;5/min, 20/hr per X-Session-Id&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eef6ff;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="640" y="1225" width="220" height="55" as="geometry" />
+        </mxCell>
+
+        <mxCell id="dep-graph" value="&lt;b&gt;Depends: get_graph&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;compiled LangGraph from lifespan&lt;br&gt;(reused across warm invokes)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eef6ff;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1130" y="1225" width="220" height="55" as="geometry" />
+        </mxCell>
+
+        <mxCell id="a-fast-budget" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#6c8ebf;strokeWidth=1;endArrow=classic;" edge="1" parent="1" source="fastapi" target="dep-budget">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-fast-rl" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#6c8ebf;strokeWidth=1;endArrow=classic;" edge="1" parent="1" source="fastapi" target="dep-ratelimit">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-fast-graph" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#6c8ebf;strokeWidth=1;endArrow=classic;" edge="1" parent="1" source="fastapi" target="dep-graph">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- LangGraph reference -->
+        <mxCell id="langgraph" value="&lt;b&gt;LangGraph StateGraph · graph.astream()&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Planner → Tool Executor → Reflector ⇄ (loop ≤3) → Recommender&lt;br&gt;yields one SSE &quot;step&quot; frame per node, one &quot;result&quot; frame at end&lt;br&gt;&lt;i&gt;internals: see agent-architecture.md&lt;/i&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="440" y="1320" width="620" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="a-graph-lg" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#6c8ebf;strokeWidth=2;endArrow=classic;" edge="1" parent="1" source="dep-graph" target="langgraph">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- EventSourceResponse -->
+        <mxCell id="esr" value="&lt;b&gt;EventSourceResponse&lt;/b&gt; (sse-starlette)&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;yield _sse(&quot;step&quot;, {&quot;node&quot;: ...})&lt;br&gt;yield _sse(&quot;result&quot;, AgentResponse.model_dump())&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="440" y="1420" width="620" height="55" as="geometry" />
+        </mxCell>
+
+        <mxCell id="a-lg-esr" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#6c8ebf;strokeWidth=2;endArrow=classic;" edge="1" parent="1" source="langgraph" target="esr">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ================ BACKING SERVICES ================ -->
+
+        <mxCell id="ddb" value="&lt;b&gt;DynamoDB&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;fpl-agent-usage-dev&lt;br&gt;monthly token spend + cap&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#999999;fontSize=10;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="150" y="1540" width="200" height="65" as="geometry" />
+        </mxCell>
+
+        <mxCell id="neon" value="&lt;b&gt;Neon Postgres + pgvector&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;player_embeddings (384-dim)&lt;br&gt;tools: query_player, search_similar, ...&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0f0f0;strokeColor=#999999;fontSize=10;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="380" y="1540" width="240" height="65" as="geometry" />
+        </mxCell>
+
+        <mxCell id="team-fetcher" value="&lt;b&gt;team-fetcher Lambda&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;boto3.invoke from agent Lambda&lt;br&gt;called by GET /team only&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="650" y="1540" width="220" height="65" as="geometry" />
+        </mxCell>
+
+        <mxCell id="langfuse" value="&lt;b&gt;Langfuse (SaaS)&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;@observe traces · session grouping&lt;br&gt;by X-Session-Id · token usage per node&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="900" y="1540" width="240" height="65" as="geometry" />
+        </mxCell>
+
+        <mxCell id="secrets" value="&lt;b&gt;Secrets Manager&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;ANTHROPIC_API_KEY, NEON_DATABASE_URL,&lt;br&gt;LANGFUSE_* · fetched at cold-start&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1170" y="1540" width="230" height="65" as="geometry" />
+        </mxCell>
+
+        <!-- Arrows from Lambda to backing services -->
+        <mxCell id="a-budget-ddb" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#999999;strokeWidth=1;endArrow=classic;dashed=1;" edge="1" parent="1" source="dep-budget" target="ddb">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-lg-neon" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#999999;strokeWidth=1;endArrow=classic;dashed=1;" edge="1" parent="1" source="langgraph" target="neon">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-lg-tf" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#6c8ebf;strokeWidth=1;endArrow=classic;" edge="1" parent="1" source="langgraph" target="team-fetcher">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-lg-lf" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#d6b656;strokeWidth=1;endArrow=classic;dashed=1;" edge="1" parent="1" source="langgraph" target="langfuse">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-lg-ddb" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#999999;strokeWidth=1;endArrow=classic;dashed=1;" edge="1" parent="1" source="esr" target="ddb">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="250" y="1447" />
+              <mxPoint x="250" y="1540" />
+            </Array>
+          </mxGeometry>
+          <mxPoint x="250" y="1540" as="targetPoint" />
+        </mxCell>
+
+        <!-- Secrets cold-start arrow -->
+        <mxCell id="a-lwa-secrets" value="cold-start" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#9673a6;strokeWidth=1;endArrow=classic;dashed=1;fontSize=9;fontColor=#a88fa8;" edge="1" parent="1" source="lwa" target="secrets">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1285" y="1045" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ================ RETURN STREAM ================ -->
+
+        <mxCell id="return-note" value="&lt;b&gt;SSE stream back to the browser&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot;&gt;Same HTTP response, chunked frames, no buffering at any layer.&lt;br&gt;ChatPanel reducer dispatches STEP per node, then RESULT with the ScoutReport.&lt;br&gt;&lt;i&gt;Break compression=false, break LWA RESPONSE_STREAM, or use API Gateway — stream degrades to one big blob.&lt;/i&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f0fbfb;strokeColor=#4a9999;fontSize=10;align=center;" vertex="1" parent="1">
+          <mxGeometry x="380" y="1800" width="740" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Bold green arrow from ESR all the way back up to browser, representing the SSE stream -->
+        <mxCell id="a-sse-return" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#4a9999;strokeWidth=3;endArrow=classic;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="esr" target="fetch-call">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1440" y="1447" />
+              <mxPoint x="1440" y="222" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="sse-label" value="&lt;b&gt;SSE&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=#ffffff;align=center;fontSize=10;fontColor=#4a9999;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1415" y="820" width="50" height="20" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -8,6 +8,11 @@ output "cloudfront_distribution_id" {
   value       = aws_cloudfront_distribution.dashboard.id
 }
 
+output "cloudfront_distribution_arn" {
+  description = "CloudFront distribution ARN. Used by the agent Lambda resource policy to scope invoke permission to this distribution only (OAC signing alone does not identify the caller to Lambda)."
+  value       = aws_cloudfront_distribution.dashboard.arn
+}
+
 output "app_bucket_name" {
   description = "Name of the S3 bucket that holds the React app build output. Upload dist/ here after each build."
   value       = aws_s3_bucket.app.id
