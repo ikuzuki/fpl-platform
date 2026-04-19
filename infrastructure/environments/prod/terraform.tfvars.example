@@ -1,0 +1,6 @@
+# Copy to terraform.tfvars and fill in real values before `terraform apply`.
+# Named `.example` (not `terraform.tfvars`) so a stray `terraform apply` in
+# this directory errors out on the missing variable rather than silently
+# using a placeholder email.
+environment        = "prod"
+notification_email = "ops@example.com"
