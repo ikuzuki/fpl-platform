@@ -34,7 +34,7 @@ class TestInitLangfuse:
             {"SecretString": "pk-test"},
             {"SecretString": "sk-test"},
         ]
-        with patch("fpl_lib.observability.boto3.client", return_value=mock_client):
+        with patch("fpl_lib.secrets.boto3.client", return_value=mock_client):
             result = init_langfuse(environment="dev")
 
         assert result is True
@@ -47,7 +47,7 @@ class TestInitLangfuse:
         monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "existing-pk")
         monkeypatch.setenv("LANGFUSE_SECRET_KEY", "existing-sk")
 
-        with patch("fpl_lib.observability.boto3.client") as mock_boto:
+        with patch("fpl_lib.secrets.boto3.client") as mock_boto:
             result = init_langfuse()
 
         assert result is True
@@ -59,7 +59,7 @@ class TestInitLangfuse:
         mock_client = MagicMock()
         mock_client.get_secret_value.side_effect = RuntimeError("AWS blew up")
 
-        with patch("fpl_lib.observability.boto3.client", return_value=mock_client):
+        with patch("fpl_lib.secrets.boto3.client", return_value=mock_client):
             result = init_langfuse(environment="dev")
 
         assert result is False
@@ -70,7 +70,7 @@ class TestInitLangfuse:
     def test_respects_secret_prefix_and_environment(self) -> None:
         mock_client = MagicMock()
         mock_client.get_secret_value.return_value = {"SecretString": "x"}
-        with patch("fpl_lib.observability.boto3.client", return_value=mock_client):
+        with patch("fpl_lib.secrets.boto3.client", return_value=mock_client):
             init_langfuse(environment="prod", secret_prefix="/custom")
 
         ids = [

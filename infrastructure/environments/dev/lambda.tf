@@ -209,13 +209,14 @@ module "lambda_agent" {
   # Gateway's 10rps/20-burst throttling after ADR-0010 removed API Gateway
   # from the agent stack. See docs/architecture/security-architecture.md.
   reserved_concurrent_executions = 10
+  # Secrets are fetched at cold-start by path (``/fpl-platform/{env}/<name>``)
+  # via ``fpl_lib.secrets.resolve_secret_to_env`` — the ``lambda_role`` policy
+  # already scopes ``GetSecretValue`` to that prefix, so the only per-Lambda
+  # wiring needed is ``ENV``. Adding a new secret is a pure Terraform +
+  # resolver-call change; no new env var here.
   environment_variables = {
-    ENV                            = var.environment
-    NEON_SECRET_ARN                = aws_secretsmanager_secret.neon_database_url.arn
-    ANTHROPIC_SECRET_ARN           = aws_secretsmanager_secret.anthropic_api_key.arn
-    LANGFUSE_PUBLIC_KEY_SECRET_ARN = aws_secretsmanager_secret.langfuse_public_key.arn
-    LANGFUSE_SECRET_KEY_SECRET_ARN = aws_secretsmanager_secret.langfuse_secret_key.arn
-    USAGE_TABLE_NAME               = aws_dynamodb_table.agent_usage.name
-    TEAM_FETCHER_FUNCTION_NAME     = module.lambda_team_fetcher.function_name
+    ENV                        = var.environment
+    AGENT_USAGE_TABLE          = aws_dynamodb_table.agent_usage.name
+    TEAM_FETCHER_FUNCTION_NAME = module.lambda_team_fetcher.function_name
   }
 }

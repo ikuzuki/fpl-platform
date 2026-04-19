@@ -24,19 +24,19 @@ another singleton would add indirection without functionality.
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any
 
-import boto3
 from langfuse import Langfuse, observe, propagate_attributes
+
+from fpl_lib.secrets import DEFAULT_REGION, DEFAULT_SECRET_PREFIX, resolve_secret_to_env
 
 logger = logging.getLogger(__name__)
 
 
 def init_langfuse(
     environment: str = "dev",
-    region: str = "eu-west-2",
-    secret_prefix: str = "/fpl-platform",
+    region: str = DEFAULT_REGION,
+    secret_prefix: str = DEFAULT_SECRET_PREFIX,
 ) -> bool:
     """Populate ``LANGFUSE_PUBLIC_KEY`` / ``LANGFUSE_SECRET_KEY`` from Secrets Manager.
 
@@ -44,33 +44,31 @@ def init_langfuse(
     fetched this call or already set), ``False`` if secrets could not be
     loaded. A ``False`` return means ``@observe`` decorators continue to
     no-op — the service will run, just without tracing. This is deliberate:
-    observability must never block the request path.
+    observability must never block the request path, which is why we
+    wrap the shared resolver in try/except here rather than letting the
+    exception propagate the way required-secret callers do.
 
     Idempotent: a second call with the env vars already set is a cheap
     string check. Safe to call on every Lambda invocation.
-
-    Args:
-        environment: ``dev`` or ``prod`` — selects the secret path suffix.
-        region: AWS region for Secrets Manager.
-        secret_prefix: Path prefix under which the two Langfuse secrets live.
     """
-    if os.environ.get("LANGFUSE_PUBLIC_KEY") and os.environ.get("LANGFUSE_SECRET_KEY"):
-        return True
-
     try:
-        client = boto3.client("secretsmanager", region_name=region)
-        if not os.environ.get("LANGFUSE_PUBLIC_KEY"):
-            os.environ["LANGFUSE_PUBLIC_KEY"] = client.get_secret_value(
-                SecretId=f"{secret_prefix}/{environment}/langfuse-public-key"
-            )["SecretString"]
-        if not os.environ.get("LANGFUSE_SECRET_KEY"):
-            os.environ["LANGFUSE_SECRET_KEY"] = client.get_secret_value(
-                SecretId=f"{secret_prefix}/{environment}/langfuse-secret-key"
-            )["SecretString"]
+        resolve_secret_to_env(
+            environment,
+            "langfuse-public-key",
+            "LANGFUSE_PUBLIC_KEY",
+            region=region,
+            secret_prefix=secret_prefix,
+        )
+        resolve_secret_to_env(
+            environment,
+            "langfuse-secret-key",
+            "LANGFUSE_SECRET_KEY",
+            region=region,
+            secret_prefix=secret_prefix,
+        )
     except Exception as exc:  # noqa: BLE001 — any AWS failure is non-fatal
         logger.warning("Langfuse init failed, tracing disabled: %s", exc)
         return False
-
     return True
 
 

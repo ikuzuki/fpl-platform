@@ -52,13 +52,14 @@ from fpl_lib.observability import (
 from fpl_lib.observability import (
     flush as langfuse_flush,
 )
+from fpl_lib.secrets import resolve_secret_to_env
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Configuration (read once at import time so unit tests can monkeypatch)
 # ---------------------------------------------------------------------------
-ENVIRONMENT = os.environ.get("ENVIRONMENT", "dev")
+ENVIRONMENT = os.environ.get("ENV", "dev")
 BUDGET_TABLE = os.environ.get("AGENT_USAGE_TABLE", f"fpl-agent-usage-{ENVIRONMENT}")
 MONTHLY_BUDGET_USD = float(os.environ.get("AGENT_MONTHLY_BUDGET_USD", "5.0"))
 NEON_DATABASE_URL_ENV = "NEON_DATABASE_URL"
@@ -83,11 +84,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     The Neon pool is the only resource that needs explicit teardown —
     boto3 clients and the in-memory rate limiter are fine to drop.
 
-    Langfuse is initialised here so every ``@observe`` span in the graph
-    and tools picks up the keys on first use. If Secrets Manager is
-    unreachable, ``init_langfuse`` logs a warning and returns — the
-    service still runs, just without tracing.
+    Secret resolution runs first and must complete before ``AsyncAnthropic()``
+    reads ``ANTHROPIC_API_KEY``. The Anthropic key is required — if the fetch
+    fails we let the exception propagate so cold-start dies loudly rather
+    than silently 500-ing every chat request. Neon is tolerant: the health
+    endpoint must still boot without it, so the missing-key path degrades
+    to a graph-less app that returns 503 on ``/chat`` and ``/team``.
+    Langfuse is best-effort by design — ``init_langfuse`` swallows its own
+    failures so tracing outages never block the request path.
     """
+    resolve_secret_to_env(ENVIRONMENT, "anthropic-api-key", "ANTHROPIC_API_KEY")
+    try:
+        resolve_secret_to_env(ENVIRONMENT, "neon-database-url", NEON_DATABASE_URL_ENV)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Neon secret fetch failed, chat/team will return 503: %s", exc)
     init_langfuse(environment=ENVIRONMENT)
 
     database_url = os.environ.get(NEON_DATABASE_URL_ENV)
