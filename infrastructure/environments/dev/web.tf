@@ -7,10 +7,11 @@ module "web_hosting" {
   environment           = var.environment
   data_lake_bucket_name = module.data_lake.bucket_name
   data_lake_bucket_arn  = module.data_lake.bucket_arn
-  # Function URL returns "https://xxxxxxxx.lambda-url.eu-west-2.on.aws/". The
-  # CloudFront origin needs the bare host. `regex` strips the scheme and
-  # trailing slash; `trimsuffix` is a belt-and-braces defence if AWS ever
-  # emits the URL without the trailing slash.
+  # enable_agent_api is a statically-known bool so CloudFront's count/for_each
+  # on the agent behaviour can be resolved at plan time. agent_api_domain is
+  # a computed attribute (the Function URL is unknown until apply) — that's
+  # fine once the module no longer gates its resources on the string itself.
+  enable_agent_api = true
   agent_api_domain = trimsuffix(replace(aws_lambda_function_url.agent.function_url, "https://", ""), "/")
 }
 

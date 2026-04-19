@@ -82,7 +82,7 @@ resource "aws_cloudfront_distribution" "dashboard" {
   # (OAC is S3-only). Host header is stripped via AllViewerExceptHostHeader
   # policy on the cache behaviour below.
   dynamic "origin" {
-    for_each = var.agent_api_domain != "" ? [1] : []
+    for_each = var.enable_agent_api ? [1] : []
     content {
       origin_id   = "agent_api"
       domain_name = var.agent_api_domain
@@ -112,7 +112,7 @@ resource "aws_cloudfront_distribution" "dashboard" {
 
   # --- /api/agent/* → agent Lambda Function URL (streaming; see ADR-0010) ---
   dynamic "ordered_cache_behavior" {
-    for_each = var.agent_api_domain != "" ? [1] : []
+    for_each = var.enable_agent_api ? [1] : []
     content {
       path_pattern           = "/api/agent/*"
       target_origin_id       = "agent_api"
@@ -188,7 +188,7 @@ resource "aws_cloudfront_distribution" "dashboard" {
 # Runs at viewer-request (every request), ~1ms latency, free up to 10M/month.
 # -----------------------------------------------------------------------------
 resource "aws_cloudfront_function" "strip_agent_prefix" {
-  count = var.agent_api_domain != "" ? 1 : 0
+  count = var.enable_agent_api ? 1 : 0
 
   name    = "fpl-${var.environment}-strip-agent-prefix"
   runtime = "cloudfront-js-2.0"

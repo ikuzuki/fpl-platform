@@ -29,8 +29,14 @@ variable "price_class" {
   }
 }
 
+variable "enable_agent_api" {
+  description = "Whether to wire the /api/agent/* CloudFront behaviour to the agent endpoint. Must be a statically-known bool (not derived from a computed attribute) so count/for_each can be evaluated at plan time."
+  type        = bool
+  default     = false
+}
+
 variable "agent_api_domain" {
-  description = "Bare host (no scheme) of the agent API Gateway endpoint, e.g. 'abc123.execute-api.eu-west-2.amazonaws.com'. Empty string disables the /api/agent/* behaviour — useful when the agent stack isn't deployed yet."
+  description = "Bare host (no scheme) of the agent endpoint, e.g. the Lambda Function URL host 'abc123.lambda-url.eu-west-2.on.aws'. Only read when enable_agent_api is true. May be a computed attribute — Terraform defers resolution to apply-time."
   type        = string
   default     = ""
 }
