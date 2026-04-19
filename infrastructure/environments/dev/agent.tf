@@ -63,13 +63,15 @@ resource "aws_iam_role_policy" "lambda_agent_invoke_team_fetcher" {
   })
 }
 
-# Lambda Function URL with response streaming. `AuthType = NONE` because
-# CloudFront is the only fronting origin in production — never called directly.
-# A future hardening step is moving to AWS_IAM with CloudFront OAC signing
-# requests (flagged in docs/architecture/security-architecture.md).
+# Lambda Function URL with response streaming. `AuthType = AWS_IAM` means
+# the URL rejects any request that isn't SigV4-signed. CloudFront signs every
+# origin request via the Lambda OAC in the web-hosting module, so CloudFront
+# is the only caller that can reach this Lambda — hitting the Function URL
+# directly (e.g. `curl https://<host>.lambda-url.eu-west-2.on.aws/`) returns
+# 403 "signature missing". See #123 and docs/architecture/security-architecture.md.
 resource "aws_lambda_function_url" "agent" {
   function_name      = module.lambda_agent.function_name
-  authorization_type = "NONE"
+  authorization_type = "AWS_IAM"
   invoke_mode        = "RESPONSE_STREAM"
 
   # CORS is handled at the FastAPI application layer so the dashboard and
@@ -81,20 +83,21 @@ resource "aws_lambda_function_url" "agent" {
 # Resource-based policy paired with the URL above. Function URLs have two
 # independent access gates AND'd together: the URL's `authorization_type`
 # (SigV4 check) and the function's resource policy (allowed principals).
-# `authorization_type = "NONE"` only skips the SigV4 step — it does NOT
-# grant invoke permission. Without this `aws_lambda_permission` every
-# request hits the URL and returns 403 because the resource policy is
-# empty. AWS keeps the gates decoupled so opening a function to the
-# public internet stays an explicit, auditable action.
+# Both gates must pass.
 #
-# CloudFront masks the 403 with the SPA error-page fallback (403 →
-# /index.html with HTTP 200), so the symptom presents as the dashboard
-# receiving HTML instead of JSON and throwing SyntaxError on
-# response.json(). Hence the explicit public grant here.
-resource "aws_lambda_permission" "agent_function_url_public" {
-  statement_id           = "FunctionURLAllowPublicAccess"
+# This policy grants `lambda:InvokeFunctionUrl` to the CloudFront service
+# principal, scoped by `aws:SourceArn` to our one distribution. Combined with
+# `authorization_type = "AWS_IAM"` and the Lambda OAC on the CloudFront
+# origin, the only SigV4-signed caller the URL will accept is this
+# distribution. The Function URL is therefore not publicly reachable:
+#   - direct curl → 403 (no SigV4 signature)
+#   - curl signed by another account/role → 403 (principal mismatch)
+#   - CloudFront origin request → 200 (OAC signs with the right principal)
+resource "aws_lambda_permission" "agent_function_url_cloudfront" {
+  statement_id           = "AllowCloudFrontInvokeFunctionUrl"
   action                 = "lambda:InvokeFunctionUrl"
   function_name          = module.lambda_agent.function_name
-  principal              = "*"
-  function_url_auth_type = "NONE"
+  principal              = "cloudfront.amazonaws.com"
+  source_arn             = module.web_hosting.cloudfront_distribution_arn
+  function_url_auth_type = "AWS_IAM"
 }

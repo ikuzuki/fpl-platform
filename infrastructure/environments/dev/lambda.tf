@@ -208,14 +208,7 @@ module "lambda_agent" {
   # Hardware-level backpressure for the public agent endpoint. Replaces API
   # Gateway's 10rps/20-burst throttling after ADR-0010 removed API Gateway
   # from the agent stack. See docs/architecture/security-architecture.md.
-  #
-  # TEMPORARILY DISABLED — see #121.
-  # The fpl-dev account ships with a 10-concurrent-execution Lambda quota
-  # (new-account default; AWS standard is 1000). AWS enforces
-  # UnreservedConcurrentExecutions >= 10, so reserving any concurrency on a
-  # single function fails with InvalidParameterValueException. Restore the
-  # line below once the Service Quotas case raises the account quota to 1000.
-  # reserved_concurrent_executions = 10
+  reserved_concurrent_executions = 10
   environment_variables = {
     ENV                            = var.environment
     NEON_SECRET_ARN                = aws_secretsmanager_secret.neon_database_url.arn

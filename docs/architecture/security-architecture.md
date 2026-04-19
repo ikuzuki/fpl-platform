@@ -28,7 +28,7 @@ graph LR
         CF["CloudFront<br/><i>Shield Standard · TLS</i>"]
     end
     subgraph Infra["AWS infrastructure"]
-        FU["Function URL<br/><i>AuthType=NONE</i>"]
+        FU["Function URL<br/><i>AuthType=AWS_IAM</i><br/>only CloudFront-signed<br/>requests accepted"]
         LC["Lambda reserved<br/>concurrency = 10"]
     end
     subgraph App["Application layer (FastAPI)"]
@@ -51,12 +51,14 @@ Automatic and free whenever traffic flows through CloudFront. Covers SYN floods,
 - Geo restrictions currently off; available as a one-line distribution setting if abuse patterns warrant.
 
 ### 3. Lambda Function URL — transport
-`AuthType = NONE`. Public by design. Never called directly in production — CloudFront is the only fronting origin. A future hardening step is moving to `AuthType = AWS_IAM` and signing requests from CloudFront via Origin Access Control; deferred until the endpoint is considered production.
+`AuthType = AWS_IAM`. The Function URL rejects any request that isn't SigV4-signed. CloudFront signs every origin request via a Lambda Origin Access Control (`origin_access_control_origin_type = "lambda"`, `signing_behavior = "always"`), and the Lambda resource policy only grants `lambda:InvokeFunctionUrl` to the `cloudfront.amazonaws.com` principal scoped by `aws:SourceArn` to our one distribution.
+
+Net effect: the Function URL's `*.lambda-url.eu-west-2.on.aws` host is not publicly reachable. A direct `curl` returns 403 "signature missing"; a request signed by any other AWS account or distribution returns 403 "principal mismatch". The only path to the agent is through this CloudFront distribution.
+
+This closes the edge-bypass class of attack: any future WAF rule, rate-based policy, geo-block, or edge logging added to the CloudFront `/api/agent/*` behaviour cannot be sidestepped by hitting the Function URL directly.
 
 ### 4. Lambda reserved concurrency — infrastructure backpressure
-**Status: temporarily disabled — see [#121](https://github.com/ikuzuki/fpl-platform/issues/121).** The `fpl-dev` AWS account ships with the new-account default Lambda concurrency quota of `10` (the AWS default elsewhere is `1000`). AWS enforces `UnreservedConcurrentExecutions >= 10`, so reserving any concurrency on a single function fails with `InvalidParameterValueException`. A Service Quotas case has been opened to raise the account quota; the reservation will be restored once approved.
-
-When restored: `reserved_concurrent_executions = 10` on the agent Lambda. When more than 10 requests are in-flight concurrently, Lambda itself returns 429 without invoking the function. This replaces API Gateway's endpoint throttling (removed per ADR-0010) with infrastructure-level enforcement.
+`reserved_concurrent_executions = 10` on the agent Lambda. When more than 10 requests are in-flight concurrently, Lambda itself returns 429 without invoking the function. This replaces API Gateway's endpoint throttling (removed per ADR-0010) with infrastructure-level enforcement.
 
 Properties:
 - **Cap blast radius.** A 100-rps flood gets 10 concurrent Lambdas; the other 90 rps hit 429 without cost.
@@ -103,7 +105,6 @@ Explicit non-goals for the current scope, with the trigger that would change the
 | **VPC-isolated Lambdas** | Compliance requirement OR Neon → private networking (currently Neon is accessed via public endpoint with TLS) |
 | **AWS Shield Advanced** | Production SLA requirements; £££/month cost |
 | **Per-IP rate limiting at the edge** | Session-ID rotation abuse observed |
-| **CloudFront Origin Access Control to Function URL (IAM-signed requests)** | Endpoint promoted from demo to production |
 | **Automated secret rotation** | Long-lived production deployment |
 
 ## Observability and incident response

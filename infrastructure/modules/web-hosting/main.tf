@@ -44,6 +44,21 @@ resource "aws_cloudfront_origin_access_control" "data" {
   signing_protocol                  = "sigv4"
 }
 
+# Lambda OAC — CloudFront signs every request to the agent Function URL with
+# SigV4. Paired with `authorization_type = "AWS_IAM"` on the Function URL and a
+# CloudFront-scoped resource policy on the Lambda, this makes the Function URL
+# unreachable directly — the only path to the agent is through this distribution.
+# Requires AWS provider >= 5.40.0 (lambda origin type); we're on 5.100.0.
+resource "aws_cloudfront_origin_access_control" "agent" {
+  count = var.enable_agent_api ? 1 : 0
+
+  name                              = "fpl-${var.environment}-agent-oac"
+  description                       = "OAC for agent Lambda Function URL"
+  origin_access_control_origin_type = "lambda"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
 # -----------------------------------------------------------------------------
 # CloudFront distribution
 #
@@ -78,14 +93,18 @@ resource "aws_cloudfront_distribution" "dashboard" {
   }
 
   # --- Agent API origin (conditional — only when agent_api_domain is set) ---
-  # API Gateway is a standard HTTPS endpoint, so we use custom_origin_config
-  # (OAC is S3-only). Host header is stripped via AllViewerExceptHostHeader
-  # policy on the cache behaviour below.
+  # The Lambda Function URL is a standard HTTPS endpoint, so we use
+  # custom_origin_config alongside the Lambda OAC. The OAC makes CloudFront
+  # sign every origin request with SigV4; the Function URL's
+  # `authorization_type = "AWS_IAM"` rejects any unsigned request, so the
+  # only way to reach the agent is through this distribution. Host header
+  # is stripped via AllViewerExceptHostHeader policy on the cache behaviour.
   dynamic "origin" {
     for_each = var.enable_agent_api ? [1] : []
     content {
-      origin_id   = "agent_api"
-      domain_name = var.agent_api_domain
+      origin_id                = "agent_api"
+      domain_name              = var.agent_api_domain
+      origin_access_control_id = aws_cloudfront_origin_access_control.agent[0].id
 
       custom_origin_config {
         http_port              = 80
@@ -179,11 +198,11 @@ resource "aws_cloudfront_distribution" "dashboard" {
 }
 
 # -----------------------------------------------------------------------------
-# CloudFront Function — strip /api/agent prefix before forwarding to API Gateway
+# CloudFront Function — strip /api/agent prefix before forwarding to the agent
 #
 # CloudFront's ordered_cache_behavior.path_pattern selects the origin but does
-# not modify the URL. API Gateway's routes are /health and /chat (no prefix),
-# so the prefix has to be stripped on the way out.
+# not modify the URL. FastAPI's routes are /health, /chat, /team, /budget (no
+# prefix), so the prefix has to be stripped on the way out.
 #
 # Runs at viewer-request (every request), ~1ms latency, free up to 10M/month.
 # -----------------------------------------------------------------------------
@@ -193,7 +212,7 @@ resource "aws_cloudfront_function" "strip_agent_prefix" {
   name    = "fpl-${var.environment}-strip-agent-prefix"
   runtime = "cloudfront-js-2.0"
   publish = true
-  comment = "Strips /api/agent from the request URI before forwarding to API Gateway"
+  comment = "Strips /api/agent from the request URI before forwarding to the agent Function URL"
 
   code = <<-EOT
     function handler(event) {
