@@ -14,6 +14,6 @@ output "app_bucket_name" {
 }
 
 output "agent_api_endpoint" {
-  description = "Direct API Gateway endpoint for the Scout Agent. Use this for testing before CloudFront propagates. Production traffic goes via /api/agent/* on the dashboard URL."
-  value       = module.api_gateway.api_endpoint
+  description = "Direct Lambda Function URL for the Scout Agent. Use this for testing before CloudFront propagates. Production traffic goes via /api/agent/* on the dashboard URL."
+  value       = aws_lambda_function_url.agent.function_url
 }

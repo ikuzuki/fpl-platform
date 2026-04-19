@@ -13,6 +13,23 @@ We needed to decide: what kind of agent, what architecture, which models at whic
 
 ## Options Considered
 
+### Framework choice
+
+ADR-0003 rejected LangChain for the enrichment pipeline and flagged agentic orchestration as the likely exception. This is that exception — worth making the boundary explicit rather than leaving it as a footnote.
+
+**1. Hand-rolled state machine (rejected)**
+Implement the 4-node graph directly with a dispatch loop, a state dict, and manual tool-call plumbing against the Anthropic SDK.
+
+Rejected because: rebuilding conditional edges, checkpointing, tool-schema generation, and streaming event emission for no gain over a well-maintained library. The same arguments that made direct SDK calls *right* for batch enrichment (simple request-response, full prompt control) make them *wrong* here — agent execution has non-trivial control flow that a framework expresses better than bespoke code.
+
+**2. Pydantic AI (rejected)**
+Type-first agent framework built around Pydantic models and a single-agent execution loop.
+
+Rejected because: at the time of choosing, its graph primitives were less developed than LangGraph's — the multi-node reflection loop with conditional routing is exactly what LangGraph is built for. Pydantic AI is a strong fit for single-agent tool-calling; less natural for this shape.
+
+**3. LangGraph (chosen)**
+State machine with typed state, conditional edges, streaming, and tool-calling primitives. Used only for the agent — the enrichment pipeline continues to call the Anthropic SDK directly per ADR-0003.
+
 ### Agent framing
 
 **1. Transfer recommender — "give me your team, I'll suggest transfers" (rejected)**
@@ -62,6 +79,8 @@ START → Planner → Tool Executor → Reflector ─┐
 
 **Tool Executor** — no LLM. Dispatches tool calls from the plan, executes concurrently where independent, accumulates results. Tools include: `query_player`, `search_similar_players`, `query_players_by_criteria`, `get_fixture_outlook`, `get_injury_signals`, `fetch_user_squad`.
 
+**Tool constraint: no user-controlled URLs.** Every current tool is a parameterised Neon query or an internal Lambda invoke — no tool fetches an arbitrary URL. Any future tool that needs URL fetching (news enrichment, image OCR, link summarisation) must (a) validate the destination IP against a loopback / link-local / RFC1918 blocklist before connecting, (b) resolve-then-connect-by-IP so the check can't be bypassed via DNS rebinding, and (c) be scoped to an explicit domain allowlist. Without this, a prompt-injection attack could coerce the agent into fetching `http://169.254.169.254/latest/meta-data/iam/security-credentials/` and streaming the Lambda's IAM credentials back to the client (the SSRF-to-IMDS pivot behind the 2019 Capital One breach). See [`docs/architecture/security-architecture.md`](../architecture/security-architecture.md).
+
 **Reflector** — evaluates whether the gathered data is sufficient to answer the question. If not, identifies what's missing and sends it back to the planner. Maximum 3 iterations to bound latency and cost. Uses Haiku.
 
 **Recommender** — synthesises all gathered data into a structured `ScoutReport` (analysis, player cards, recommendation, caveats, data sources). This is the only node that uses Sonnet, because it requires deep reasoning across multiple data points.
@@ -85,9 +104,9 @@ The agent endpoint is publicly accessible — anyone with the URL can send quest
 
 **Three layers of protection:**
 
-1. **API Gateway throttling** — 10 requests/second, 20 burst. First line of defence, zero code, configured in Terraform.
+1. **Lambda reserved concurrency + per-session rate limiter** — reserved concurrency caps parallel Lambda invocations (hardware-level backpressure); the in-app `RateLimiter` caps per-session request rate. Replaced API Gateway throttling after ADR-0010 moved the transport to Lambda Function URL. Full security posture documented in `docs/architecture/security-architecture.md`.
 
-2. **DynamoDB budget kill-switch** — tracks cumulative token usage per month. At the start of each request, check if monthly spend exceeds $5. If yes, return 429 with "demo has hit its monthly limit." This is the hard cap — even if rate limiting fails, spend is bounded.
+2. **DynamoDB budget kill-switch** — tracks cumulative token usage per month. At the start of each request, check if monthly spend exceeds $5. If yes, return 429 with "demo has hit its monthly limit." This is the hard cap — even if rate limiting fails, spend is bounded. Langfuse (ADR-0005) is the observability layer for tracing and post-hoc cost analysis; enforcement stays on DynamoDB because the check is on the hot request path and must not depend on third-party SaaS availability. DynamoDB also gives atomic `UpdateItem ADD` increments, which a batched telemetry pipeline cannot — two concurrent requests would both read stale "before" spend from Langfuse and both proceed past the cap.
 
 3. **Max 3 agent iterations** — the reflector loop is capped. Most queries resolve in 2 iterations. This bounds per-request cost regardless of question complexity.
 
@@ -103,7 +122,7 @@ No authentication required. For a portfolio project, aggressive throttling plus 
 **Harder:**
 - 4 nodes + tools is more complex than a simple chain — more code to maintain
 - Latency is 10-15 seconds per query (3-4 sequential LLM calls) — mitigated by streaming intermediate steps via SSE
-- Lambda's 29-second API Gateway timeout constrains agent execution time — acceptable given the 3-iteration cap
+- Lambda's 60-second timeout bounds agent execution (up from the 29s API Gateway cliff after ADR-0010); 3-iteration cap keeps typical runs well under that
 - DynamoDB budget tracking adds a read + write per request — minor latency and another infrastructure component
 - Max 3 iterations means some complex questions may get incomplete analysis — acceptable trade-off for cost control
 

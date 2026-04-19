@@ -186,9 +186,15 @@ module "lambda_agent" {
   environment        = var.environment
   image_uri          = "${module.ecr_agent.repository_url}:latest"
   execution_role_arn = module.lambda_role.role_arn
-  command            = ["fpl_agent.handlers.api_handler.lambda_handler"]
-  timeout            = 60
-  memory_size        = 1024
+  # No `command` override — the container image runs uvicorn via its own CMD,
+  # with the AWS Lambda Web Adapter extension translating Function URL
+  # RESPONSE_STREAM events into local HTTP. See ADR-0010.
+  timeout     = 60
+  memory_size = 1024
+  # Hardware-level backpressure for the public agent endpoint. Replaces API
+  # Gateway's 10rps/20-burst throttling after ADR-0010 removed API Gateway
+  # from the agent stack. See docs/architecture/security-architecture.md.
+  reserved_concurrent_executions = 10
   environment_variables = {
     ENV                            = var.environment
     NEON_SECRET_ARN                = aws_secretsmanager_secret.neon_database_url.arn

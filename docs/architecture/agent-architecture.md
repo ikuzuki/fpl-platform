@@ -11,11 +11,11 @@ graph TB
     USER["User question<br/><i>'Is Salah worth it?'</i>"]
 
     subgraph Edge["Edge"]
-        CF["CloudFront<br/><i>/api/agent/*</i><br/>strip prefix, no cache"]
-        APIGW["API Gateway v2<br/><i>10 RPS · 20 burst</i>"]
+        CF["CloudFront<br/><i>/api/agent/*</i><br/>strip prefix, no cache, compress=false"]
+        FU["Lambda Function URL<br/><i>RESPONSE_STREAM · ADR-0010</i>"]
     end
 
-    subgraph Lambda["Agent Lambda · fpl-agent-dev · 1024 MB · 60s"]
+    subgraph Lambda["Agent Lambda · fpl-agent-dev · 1024 MB · 60s · reserved concurrency=10"]
         subgraph Graph["LangGraph StateGraph"]
             PLAN["Planner<br/><i>Haiku · tool-use</i>"]
             EXEC["Tool Executor<br/><i>asyncio.gather</i>"]
@@ -34,7 +34,7 @@ graph TB
         LF["Langfuse<br/><i>@observe traces</i>"]
     end
 
-    USER --> CF --> APIGW --> Lambda
+    USER --> CF --> FU --> Lambda
     PLAN --> EXEC --> REFL
     REFL -.needs more.-> PLAN
     REFL -.sufficient.-> REC
@@ -127,11 +127,12 @@ The agent endpoint is publicly accessible — anyone with the CloudFront URL can
 
 | Layer | Where | Configuration | Purpose |
 |-------|-------|---------------|---------|
-| API Gateway throttling | Terraform (`modules/api-gateway`) | 10 RPS sustained, 20 burst | First line of defence — zero code, absorbs most abuse |
+| Lambda reserved concurrency | Terraform (`modules/lambda`) | `reserved_concurrent_executions = 10` | Hardware-level backpressure; replaces API Gateway throttling after ADR-0010 |
+| Application rate limiter | `middleware/rate_limit.py` | 5/min + 20/hour per session | Per-session fairness; in-memory per Lambda container |
 | Reflector iteration cap | `graph/config.py` | `MAX_ITERATIONS = 3` | Bounds per-request LLM calls at 7 (3 planner + 3 reflector + 1 recommender). Most queries resolve in 2 iterations (5 calls) |
 | DynamoDB budget kill-switch | `fpl-agent-usage-dev` | Monthly `$5` cap enforced at request entry | Hard cap on monthly spend. Returns 429 "demo has hit its monthly limit" when exceeded |
 
-No authentication. For a portfolio project, aggressive throttling + a hard monthly cap is sufficient.
+No authentication. For a portfolio project, this layered defence + a hard monthly cap is sufficient. Full security posture in [docs/architecture/security-architecture.md](security-architecture.md).
 
 **Per-query cost estimate (ADR-0009 target range):**
 
@@ -193,5 +194,5 @@ Runtime Langfuse client init (env vars, session IDs, cost attribution) lands in 
 - `services/agent/src/fpl_agent/tools/player_tools.py` — 6 async tools + `make_tools` factory
 - `services/agent/src/fpl_agent/models/state.py` — `AgentState` TypedDict, reducers, `ToolCall`
 - `services/agent/src/fpl_agent/models/responses.py` — `ScoutReport`, `PlayerAnalysis`, `ComparisonResult`, `ReflectionResult`, `AgentResponse`
-- `infrastructure/environments/dev/agent.tf` — API Gateway + DynamoDB + IAM
+- `infrastructure/environments/dev/agent.tf` — Lambda Function URL + DynamoDB + IAM
 - `infrastructure/modules/api-gateway/` — HTTP API v2 module with CORS and throttling

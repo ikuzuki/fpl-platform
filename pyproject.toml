@@ -45,6 +45,21 @@ target-version = "py311"
 select = ["E", "W", "F", "I", "N", "UP", "B", "SIM"]
 ignore = ["E501"]
 
+# FastAPI's idiomatic pattern uses Depends/Header/Query/etc. as argument
+# defaults; they're not mutable sentinels, so B008 doesn't apply.
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Header",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.Security",
+    "fastapi.Cookie",
+    "fastapi.Form",
+    "fastapi.File",
+]
+
 [tool.ruff.lint.isort]
 known-first-party = ["fpl_lib", "fpl_data", "fpl_enrich", "fpl_curate", "fpl_agent", "fpl_stream"]
 

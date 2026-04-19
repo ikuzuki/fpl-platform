@@ -48,6 +48,9 @@ coverage.xml
 terraform.tfplan
 *.tfplan
 crash.log
+# archive_file build artefacts — regenerated from source on every apply/plan,
+# never source-of-truth.
+infrastructure/lambdas/**/*.zip
 # NOTE: .terraform.lock.hcl is intentionally NOT ignored — commit lock files
 # to pin provider versions across machines.
 

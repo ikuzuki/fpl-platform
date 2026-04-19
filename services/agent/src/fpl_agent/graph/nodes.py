@@ -120,29 +120,39 @@ def _extract_tool_input(response: Any, expected_name: str) -> dict[str, Any]:
     raise ToolError(f"Anthropic response did not contain a '{expected_name}' tool_use block")
 
 
-def _log_usage(node: str, response: Any) -> None:
-    """Emit input/output token counts + stop_reason for cost + debugging.
+def _record_usage(node: str, model: str, response: Any) -> dict[str, Any]:
+    """Log usage and return a dict suitable for the ``llm_usage`` state field.
 
-    ``stop_reason`` is worth logging because ``"max_tokens"`` means the
-    tool_use block was truncated; downstream Pydantic will raise with an
-    unhelpful "missing field X" error. Having the stop_reason in the log
-    tells future-you to raise ``*_MAX_TOKENS`` instead of hunting phantom
-    data bugs.
+    Budget enforcement in ``middleware/budget.py`` consumes the returned
+    dicts after graph execution. Logging ``stop_reason`` is worth doing
+    because ``"max_tokens"`` means the tool_use block was truncated;
+    downstream Pydantic then raises with an unhelpful "missing field X"
+    error. Having stop_reason in the log tells future-you to raise
+    ``*_MAX_TOKENS`` instead of hunting phantom data bugs.
     """
     usage = getattr(response, "usage", None)
     stop_reason = getattr(response, "stop_reason", None)
+    input_tokens = getattr(usage, "input_tokens", 0) if usage else 0
+    output_tokens = getattr(usage, "output_tokens", 0) if usage else 0
     logger.info(
-        "llm_usage node=%s stop_reason=%s input_tokens=%s output_tokens=%s",
+        "llm_usage node=%s model=%s stop_reason=%s input_tokens=%s output_tokens=%s",
         node,
+        model,
         stop_reason,
-        getattr(usage, "input_tokens", None) if usage else None,
-        getattr(usage, "output_tokens", None) if usage else None,
+        input_tokens,
+        output_tokens,
     )
     if stop_reason == "max_tokens":
         logger.warning(
             "node %s hit max_tokens — output likely truncated, Pydantic validation may fail",
             node,
         )
+    return {
+        "node": node,
+        "model": model,
+        "input_tokens": int(input_tokens or 0),
+        "output_tokens": int(output_tokens or 0),
+    }
 
 
 def _result_key(tc: ToolCall) -> str:
@@ -205,7 +215,7 @@ async def planner_node(
         tool_choice={"type": "tool", "name": "record_plan"},
         messages=[{"role": "user", "content": prompt}],
     )
-    _log_usage("planner", response)
+    usage = _record_usage("planner", PLANNER_MODEL, response)
 
     try:
         raw = _extract_tool_input(response, "record_plan")
@@ -220,11 +230,13 @@ async def planner_node(
             "error": f"planner failed: {exc}",
             "plan": [],
             "tool_calls_made": [],
+            "llm_usage": [usage],
         }
 
     return {
         "plan": plan,
         "tool_calls_made": [tc.name for tc in plan],
+        "llm_usage": [usage],
     }
 
 
@@ -309,7 +321,7 @@ async def reflector_node(
         tool_choice={"type": "tool", "name": "record_reflection"},
         messages=[{"role": "user", "content": prompt}],
     )
-    _log_usage("reflector", response)
+    usage = _record_usage("reflector", REFLECTOR_MODEL, response)
 
     try:
         raw = _extract_tool_input(response, "record_reflection")
@@ -318,11 +330,16 @@ async def reflector_node(
         # If the reflector output itself is malformed, proceed to the
         # recommender with whatever we have. Safer than looping blind.
         logger.warning("reflector failed to validate (%s); proceeding to recommender", exc)
-        return {"should_continue": False, "iteration_count": next_iteration}
+        return {
+            "should_continue": False,
+            "iteration_count": next_iteration,
+            "llm_usage": [usage],
+        }
 
     return {
         "should_continue": not result.sufficient,
         "iteration_count": next_iteration,
+        "llm_usage": [usage],
     }
 
 
@@ -359,16 +376,16 @@ async def recommender_node(
         tool_choice={"type": "tool", "name": "record_scout_report"},
         messages=[{"role": "user", "content": prompt}],
     )
-    _log_usage("recommender", response)
+    usage = _record_usage("recommender", RECOMMENDER_MODEL, response)
 
     try:
         raw = _extract_tool_input(response, "record_scout_report")
         report = ScoutReport.model_validate(raw)
     except (ValidationError, ToolError) as exc:
         logger.exception("recommender produced an invalid ScoutReport")
-        return {"error": f"recommender failed: {exc}"}
+        return {"error": f"recommender failed: {exc}", "llm_usage": [usage]}
 
-    return {"final_response": report}
+    return {"final_response": report, "llm_usage": [usage]}
 
 
 # ----------------------------------------------------------------------------
