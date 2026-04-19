@@ -22,8 +22,9 @@ from fpl_agent.api import (
     check_rate_limit,
     get_budget,
     get_graph,
+    get_neon,
 )
-from fpl_agent.models.responses import ScoutReport
+from fpl_agent.models.responses import ScoutReport, SquadPick, UserSquad
 
 pytestmark = pytest.mark.unit
 
@@ -115,6 +116,7 @@ def client(fake_budget: _FakeBudget):
     """TestClient with all runtime deps overridden."""
     graph = _mock_graph_for_happy_path()
     app.dependency_overrides[get_graph] = lambda: graph
+    app.dependency_overrides[get_neon] = lambda: MagicMock()
     app.dependency_overrides[get_budget] = lambda: fake_budget
     app.dependency_overrides[check_budget] = lambda: fake_budget
     app.dependency_overrides[check_rate_limit] = lambda: None
@@ -371,3 +373,134 @@ def _patch_langfuse(side_effect: Exception | None = None):
         mock_cls = MagicMock(return_value=mock_instance)
     with _patch("fpl_agent.api.Langfuse", mock_cls):
         yield mock_instance
+
+
+# ---------------------------------------------------------------------------
+# /team endpoint + ChatRequest squad plumbing
+# ---------------------------------------------------------------------------
+def _user_squad_fixture() -> UserSquad:
+    return UserSquad(
+        team_id=5767400,
+        gameweek=33,
+        picks=[
+            SquadPick(
+                element_id=430,
+                web_name="Haaland",
+                team_name="Man City",
+                position=1,
+                element_type=4,
+                multiplier=2,
+                is_captain=True,
+                is_vice_captain=False,
+                price=14.2,
+            )
+        ],
+        bank=3.2,
+        total_value=103.1,
+        active_chip="freehit",
+        overall_rank=493_581,
+        total_points=1871,
+    )
+
+
+def test_chat_request_rejects_legacy_team_id_field(client: TestClient) -> None:
+    """team_id at the body root is dropped (extra='forbid'); squad carries it."""
+    resp = client.post("/chat/sync", json={"question": "hi", "team_id": 5767400})
+    assert resp.status_code == 422
+
+
+def test_chat_request_rejects_legacy_session_id_field(client: TestClient) -> None:
+    """session_id moved to the X-Session-Id header (PR #93); body field is gone."""
+    resp = client.post("/chat/sync", json={"question": "hi", "session_id": "abc"})
+    assert resp.status_code == 422
+
+
+def test_chat_sync_accepts_squad_in_body(client: TestClient) -> None:
+    """Squad in body is accepted and the run completes normally."""
+    payload = {
+        "question": "Should I captain Haaland?",
+        "squad": _user_squad_fixture().model_dump(mode="json"),
+    }
+    resp = client.post("/chat/sync", json=payload)
+    assert resp.status_code == 200
+
+
+def test_get_team_happy_path_returns_enriched_squad(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TEAM_FETCHER_FUNCTION_NAME", "fpl-dev-team-fetcher")
+    fake_squad = _user_squad_fixture()
+
+    async def fake_loader(**_kwargs: Any) -> UserSquad:
+        return fake_squad
+
+    with _patch("fpl_agent.api.load_user_squad", new=fake_loader):
+        resp = client.get("/team", params={"team_id": 5767400, "gameweek": 33})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["team_id"] == 5767400
+    assert body["picks"][0]["web_name"] == "Haaland"
+    assert body["bank"] == 3.2
+
+
+def test_get_team_returns_404_when_team_not_found(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TEAM_FETCHER_FUNCTION_NAME", "fpl-dev-team-fetcher")
+    from fpl_agent.squad_loader import SquadNotFoundError
+
+    async def failing(**_kwargs: Any) -> UserSquad:
+        raise SquadNotFoundError("team not found")
+
+    with _patch("fpl_agent.api.load_user_squad", new=failing):
+        resp = client.get("/team", params={"team_id": 99999, "gameweek": 33})
+
+    assert resp.status_code == 404
+
+
+def test_get_team_returns_502_on_upstream_failure(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TEAM_FETCHER_FUNCTION_NAME", "fpl-dev-team-fetcher")
+    from fpl_agent.squad_loader import SquadFetchError
+
+    async def failing(**_kwargs: Any) -> UserSquad:
+        raise SquadFetchError("FPL is down")
+
+    with _patch("fpl_agent.api.load_user_squad", new=failing):
+        resp = client.get("/team", params={"team_id": 1, "gameweek": 33})
+
+    assert resp.status_code == 502
+
+
+def test_get_team_503_when_function_name_env_missing(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """If the team-fetcher Lambda isn't wired in, surface 503 — not 500."""
+    monkeypatch.delenv("TEAM_FETCHER_FUNCTION_NAME", raising=False)
+    resp = client.get("/team", params={"team_id": 1, "gameweek": 33})
+    assert resp.status_code == 503
+
+
+def test_get_team_rejects_invalid_query_params(client: TestClient) -> None:
+    """Pydantic + FastAPI Query constraints reject obvious garbage."""
+    # team_id must be >= 1; gameweek must be 1..38.
+    assert client.get("/team", params={"team_id": 0, "gameweek": 1}).status_code == 422
+    assert client.get("/team", params={"team_id": 1, "gameweek": 99}).status_code == 422
+
+
+def test_chat_trace_metadata_includes_team_when_squad_present() -> None:
+    """propagate_attributes carries team_id + gameweek when squad is loaded."""
+    from fpl_agent.api import _chat_trace_metadata
+    from fpl_agent.models.requests import ChatRequest
+
+    req_with = ChatRequest(question="q", squad=_user_squad_fixture())
+    meta_with = _chat_trace_metadata(req_with, "sync")
+    assert meta_with["team_id"] == "5767400"
+    assert meta_with["gameweek"] == "33"
+
+    req_without = ChatRequest(question="q")
+    meta_without = _chat_trace_metadata(req_without, "sync")
+    assert "team_id" not in meta_without
+    assert "gameweek" not in meta_without

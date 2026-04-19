@@ -18,6 +18,13 @@ def fetcher() -> TeamFetcher:
 
 @pytest.fixture
 def squad_response() -> dict:
+    """Mirror the real FPL API shape captured against team_id=5767400 GW33.
+
+    Notable fields the v1 fixture omitted: ``element_type`` on each pick
+    (1=GK, 2=DEF, 3=MID, 4=FWD), and the rich ``entry_history`` block with
+    ``bank`` / ``value`` (in tenths of millions on the wire) plus
+    ``overall_rank``.
+    """
     return {
         "picks": [
             {
@@ -26,6 +33,7 @@ def squad_response() -> dict:
                 "multiplier": 2,
                 "is_captain": True,
                 "is_vice_captain": False,
+                "element_type": 1,
             },
             {
                 "element": 2,
@@ -33,11 +41,25 @@ def squad_response() -> dict:
                 "multiplier": 1,
                 "is_captain": False,
                 "is_vice_captain": True,
+                "element_type": 2,
             },
         ],
         "active_chip": None,
         "automatic_subs": [],
-        "entry_history": {"points": 65, "total_points": 1200, "rank": 50000},
+        "entry_history": {
+            "event": 33,
+            "points": 65,
+            "total_points": 1200,
+            "rank": 50000,
+            "rank_sort": 51000,
+            "overall_rank": 493581,
+            "percentile_rank": 10,
+            "bank": 32,
+            "value": 1031,
+            "event_transfers": 0,
+            "event_transfers_cost": 0,
+            "points_on_bench": 13,
+        },
     }
 
 

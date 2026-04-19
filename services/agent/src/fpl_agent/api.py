@@ -28,7 +28,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from anthropic import AsyncAnthropic
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pgvector.asyncpg import register_vector
@@ -38,8 +38,9 @@ from fpl_agent.graph.builder import build_agent_graph
 from fpl_agent.middleware.budget import BudgetTracker
 from fpl_agent.middleware.rate_limit import RateLimiter
 from fpl_agent.models.requests import ChatRequest
-from fpl_agent.models.responses import AgentResponse, ScoutReport
+from fpl_agent.models.responses import AgentResponse, ScoutReport, UserSquad
 from fpl_agent.models.state import initial_state
+from fpl_agent.squad_loader import SquadFetchError, SquadNotFoundError, load_user_squad
 from fpl_agent.tools.player_tools import make_tools
 from fpl_lib.clients.neon import NeonClient
 from fpl_lib.observability import (
@@ -61,6 +62,7 @@ ENVIRONMENT = os.environ.get("ENVIRONMENT", "dev")
 BUDGET_TABLE = os.environ.get("AGENT_USAGE_TABLE", f"fpl-agent-usage-{ENVIRONMENT}")
 MONTHLY_BUDGET_USD = float(os.environ.get("AGENT_MONTHLY_BUDGET_USD", "5.0"))
 NEON_DATABASE_URL_ENV = "NEON_DATABASE_URL"
+TEAM_FETCHER_FUNCTION_NAME_ENV = "TEAM_FETCHER_FUNCTION_NAME"
 
 # Production traffic is same-origin via CloudFront — the browser hits the
 # dashboard domain and proxies to /api/agent/*, so CORS mostly matters for
@@ -146,6 +148,20 @@ def get_graph(request: Request) -> Any:
     return graph
 
 
+def get_neon(request: Request) -> NeonClient:
+    """Return the live NeonClient, or 503 if Neon isn't configured.
+
+    Used by ``/team`` (squad enrichment) — chat routes go through ``get_graph``
+    and inherit Neon via the tool registry.
+    """
+    neon = getattr(request.app.state, "neon", None)
+    if neon is None:
+        raise HTTPException(
+            status_code=503, detail="agent not configured (NEON_DATABASE_URL missing)"
+        )
+    return neon
+
+
 def get_budget(request: Request) -> BudgetTracker:
     return request.app.state.budget
 
@@ -210,6 +226,47 @@ async def budget_status(budget: BudgetTracker = Depends(get_budget)) -> dict[str
     }
 
 
+@app.get("/team")
+@observe(name="get_team")
+async def get_team(
+    team_id: int = Query(..., ge=1, description="FPL manager team ID"),
+    gameweek: int = Query(..., ge=1, le=38, description="Gameweek number 1-38"),
+    neon: NeonClient = Depends(get_neon),
+    _rl: None = Depends(check_rate_limit),
+) -> UserSquad:
+    """Fetch and enrich a user's FPL squad.
+
+    Two-step under the hood: invoke the team-fetcher Lambda to get raw picks
+    from FPL, then join against Neon ``player_embeddings`` to attach names,
+    teams, and prices. The dashboard echoes the returned :class:`UserSquad`
+    back on every chat request so the agent never has to refetch.
+
+    Not subject to ``check_budget`` — this endpoint costs no LLM tokens.
+    Tracing wraps it as a generic span so squad-load failures show up next
+    to chat traces in the same Langfuse timeline.
+    """
+    function_name = os.environ.get(TEAM_FETCHER_FUNCTION_NAME_ENV)
+    if not function_name:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{TEAM_FETCHER_FUNCTION_NAME_ENV} not set — squad lookups are unavailable",
+        )
+
+    try:
+        return await load_user_squad(
+            team_id=team_id,
+            gameweek=gameweek,
+            neon=neon,
+            function_name=function_name,
+        )
+    except SquadNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except SquadFetchError as exc:
+        # 502 — upstream (FPL via Lambda, or Neon) failed. Distinct from 500
+        # so the dashboard can render "FPL is down" instead of "agent is broken".
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
 def _agent_response(final_state: dict[str, Any]) -> AgentResponse:
     """Build the API envelope from a graph's final state."""
     report = final_state.get("final_response")
@@ -229,8 +286,22 @@ def _agent_response(final_state: dict[str, Any]) -> AgentResponse:
     )
 
 
-async def _run_graph(graph: Any, question: str) -> dict[str, Any]:
-    return await graph.ainvoke(initial_state(question))
+async def _run_graph(graph: Any, question: str, squad: UserSquad | None) -> dict[str, Any]:
+    return await graph.ainvoke(initial_state(question, squad))
+
+
+def _chat_trace_metadata(req: ChatRequest, transport: str) -> dict[str, str]:
+    """Build the metadata dict pushed into the Langfuse trace via propagate_attributes.
+
+    Includes ``team_id`` / ``gameweek`` when the request carried a squad so the
+    Langfuse UI can filter / group by team for debugging "why did the agent
+    recommend X for team 12345".
+    """
+    meta = {"question_length": str(len(req.question)), "transport": transport}
+    if req.squad is not None:
+        meta["team_id"] = str(req.squad.team_id)
+        meta["gameweek"] = str(req.squad.gameweek)
+    return meta
 
 
 def _emit_quality_scores(final_state: dict[str, Any]) -> None:
@@ -303,10 +374,10 @@ async def chat_sync(
         session_id=x_session_id or "anon",
         user_id="anon",
         tags=_trace_tags(),
-        metadata={"question_length": str(len(req.question)), "transport": "sync"},
+        metadata=_chat_trace_metadata(req, "sync"),
     ):
         try:
-            final_state = await _run_graph(graph, req.question)
+            final_state = await _run_graph(graph, req.question, req.squad)
         except Exception as exc:  # noqa: BLE001 — surface any agent failure as 500
             logger.exception("agent run failed")
             langfuse_flush()
@@ -346,19 +417,16 @@ async def chat_stream(
     """
 
     async def event_generator() -> AsyncIterator[dict[str, str]]:
-        final_state: dict[str, Any] = dict(initial_state(req.question))
+        final_state: dict[str, Any] = dict(initial_state(req.question, req.squad))
         with propagate_attributes(
             session_id=x_session_id or "anon",
             user_id="anon",
             tags=_trace_tags(),
-            metadata={
-                "question_length": str(len(req.question)),
-                "transport": "sse",
-            },
+            metadata=_chat_trace_metadata(req, "sse"),
         ):
             try:
                 async for update in graph.astream(
-                    initial_state(req.question), stream_mode="updates"
+                    initial_state(req.question, req.squad), stream_mode="updates"
                 ):
                     # update is {node_name: partial_dict}; typically one key per tick.
                     for node_name, partial in update.items():

@@ -165,6 +165,20 @@ module "lambda_merge_enrichments" {
   }
 }
 
+module "lambda_team_fetcher" {
+  source             = "../../modules/lambda"
+  name               = "team-fetcher"
+  environment        = var.environment
+  image_uri          = "${module.ecr_data.repository_url}:latest"
+  execution_role_arn = module.lambda_role.role_arn
+  command            = ["fpl_data.handlers.team_fetcher.lambda_handler"]
+  timeout            = 30
+  memory_size        = 256
+  environment_variables = {
+    ENV = var.environment
+  }
+}
+
 module "lambda_curate_data" {
   source             = "../../modules/lambda"
   name               = "curate-data"
@@ -202,5 +216,6 @@ module "lambda_agent" {
     LANGFUSE_PUBLIC_KEY_SECRET_ARN = aws_secretsmanager_secret.langfuse_public_key.arn
     LANGFUSE_SECRET_KEY_SECRET_ARN = aws_secretsmanager_secret.langfuse_secret_key.arn
     USAGE_TABLE_NAME               = aws_dynamodb_table.agent_usage.name
+    TEAM_FETCHER_FUNCTION_NAME     = module.lambda_team_fetcher.function_name
   }
 }

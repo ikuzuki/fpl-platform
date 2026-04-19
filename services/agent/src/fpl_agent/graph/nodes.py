@@ -43,7 +43,7 @@ from fpl_agent.graph.config import (
     REFLECTOR_MODEL,
     TOOL_TIMEOUT_SECONDS,
 )
-from fpl_agent.models.responses import ReflectionResult, ScoutReport
+from fpl_agent.models.responses import ReflectionResult, ScoutReport, UserSquad
 from fpl_agent.models.state import AgentState, ToolCall
 from fpl_agent.tools.player_tools import ToolError, ToolFn
 from fpl_lib.observability import observe, record_llm_usage
@@ -194,6 +194,31 @@ def _result_key(tc: ToolCall) -> str:
     return f"{tc.name}({arg_summary})"
 
 
+def _summarise_squad(squad: UserSquad | None) -> str:
+    """Render the squad block for the planner prompt.
+
+    The planner doesn't need the full 15-row payload (the recommender does
+    later, via state["user_squad"] flowing through into its prompt). Here we
+    just need enough for the planner to know whether to call
+    ``fetch_user_squad`` and whether the question references the user's team.
+    """
+    if squad is None:
+        return (
+            "No user squad has been loaded for this session. The "
+            "`fetch_user_squad` tool is unavailable — give generic "
+            "recommendations rather than personalised ones."
+        )
+    captain = next((p for p in squad.picks if p.is_captain), None)
+    captain_name = captain.web_name if captain else "(none)"
+    return (
+        f"The user's squad is already loaded for GW{squad.gameweek}: "
+        f"{len(squad.picks)} players, captain={captain_name}, "
+        f"bank=£{squad.bank:.1f}m, value=£{squad.total_value:.1f}m, "
+        f"chip={squad.active_chip or 'none'}. "
+        f"Do **not** call `fetch_user_squad` — the squad is already in context."
+    )
+
+
 def _error_report(state: AgentState) -> ScoutReport:
     """Construct a minimal ScoutReport for the error short-circuit path.
 
@@ -226,6 +251,7 @@ async def planner_node(
     prompt = _load_prompt("planner").format(
         question=state["question"],
         gathered_data_json=json.dumps(state.get("gathered_data", {}), default=str),
+        user_squad_block=_summarise_squad(state.get("user_squad")),
     )
 
     response = await client.messages.create(
@@ -291,8 +317,20 @@ async def tool_executor_node(
     if not plan:
         return {"gathered_data": {}}
 
+    cached_squad = state.get("user_squad")
+
     async def _run(tc: ToolCall) -> tuple[str, Any]:
         key = _result_key(tc)
+        # Short-circuit: if the caller pre-loaded the squad, never invoke
+        # the team-fetcher Lambda. The planner prompt already gates this,
+        # but a belt-and-braces check stops a misbehaving plan from
+        # triggering an avoidable cross-account invoke + FPL API hit.
+        if tc.name == "fetch_user_squad" and cached_squad is not None:
+            logger.warning(
+                "fetch_user_squad short-circuited — squad pre-loaded; "
+                "planner should not have included this call",
+            )
+            return key, cached_squad.model_dump()
         if tc.name not in tools:
             return key, {"error": f"unknown tool '{tc.name}'"}
         try:
