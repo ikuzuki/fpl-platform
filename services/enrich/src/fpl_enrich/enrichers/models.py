@@ -2,11 +2,13 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PlayerSummaryOutput(BaseModel):
     """Validated output from the player summary enricher."""
+
+    model_config = ConfigDict(extra="forbid")
 
     summary: str = Field(min_length=20)
     form_trend: Literal["improving", "stable", "declining"]
@@ -15,6 +17,8 @@ class PlayerSummaryOutput(BaseModel):
 
 class InjurySignalOutput(BaseModel):
     """Validated output from the injury signal enricher."""
+
+    model_config = ConfigDict(extra="forbid")
 
     risk_score: int = Field(ge=0, le=10)
     reasoning: str = Field(min_length=1)
@@ -25,6 +29,8 @@ class InjurySignalOutput(BaseModel):
 class SentimentOutput(BaseModel):
     """Validated output from the sentiment enricher."""
 
+    model_config = ConfigDict(extra="forbid")
+
     sentiment: Literal["positive", "negative", "neutral", "mixed"]
     score: float = Field(ge=-1.0, le=1.0)
     key_themes: list[str] = []
@@ -32,6 +38,8 @@ class SentimentOutput(BaseModel):
 
 class FixtureOutlookOutput(BaseModel):
     """Validated output from the fixture outlook enricher."""
+
+    model_config = ConfigDict(extra="forbid")
 
     difficulty_score: int = Field(ge=1, le=5)
     recommendation: str = Field(min_length=1)

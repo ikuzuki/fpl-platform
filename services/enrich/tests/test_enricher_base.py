@@ -1,21 +1,28 @@
 """Unit tests for the FPLEnricher abstract base class."""
 
-import json
 import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from pydantic import BaseModel, ConfigDict, Field
 
 from fpl_enrich.enrichers.base import FPLEnricher
 
 # --- Concrete test enricher ------------------------------------------------
 
 
+class _StubOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    summary: str = Field(min_length=1)
+
+
 class _StubEnricher(FPLEnricher):
     """Minimal concrete enricher for testing the base class."""
 
     BATCH_SIZE = 2
+    OUTPUT_MODEL = _StubOutput
 
     def _get_system_prompt(self) -> str:
         return "You are a test enricher."
@@ -29,12 +36,23 @@ class _StubEnricher(FPLEnricher):
 # --- Fixtures ---------------------------------------------------------------
 
 
-def _make_anthropic_response(results: list[dict[str, Any]]) -> MagicMock:
-    """Build a mock Anthropic messages.create() response."""
+def _make_tool_use_response(results: list[dict[str, Any]]) -> MagicMock:
+    """Build a mock Anthropic messages.create() response carrying a tool_use block.
+
+    The real enricher forces ``tool_choice`` to ``record_enrichments`` and reads
+    ``response.content[<tool_use block>].input["results"]`` — mirror that shape
+    here so the code path under test matches production.
+    """
+    tool_block = MagicMock()
+    tool_block.type = "tool_use"
+    tool_block.name = "record_enrichments"
+    tool_block.input = {"results": results}
+
     response = MagicMock()
-    response.content = [MagicMock(text=json.dumps(results))]
+    response.content = [tool_block]
     response.usage.input_tokens = 100
     response.usage.output_tokens = 50
+    response.stop_reason = "tool_use"
     return response
 
 
@@ -77,11 +95,11 @@ class TestChunkHelper:
 @pytest.mark.unit
 class TestCallLLM:
     @pytest.mark.asyncio
-    async def test_parses_json_response(
+    async def test_parses_tool_use_response(
         self, enricher: _StubEnricher, mock_client: MagicMock
     ) -> None:
         expected = [{"summary": "Good form"}, {"summary": "Poor form"}]
-        mock_client.messages.create.return_value = _make_anthropic_response(expected)
+        mock_client.messages.create.return_value = _make_tool_use_response(expected)
 
         result = await enricher._call_llm([{"name": "A"}, {"name": "B"}])
 
@@ -89,10 +107,51 @@ class TestCallLLM:
         mock_client.messages.create.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_forces_tool_choice(
+        self, enricher: _StubEnricher, mock_client: MagicMock
+    ) -> None:
+        """The enricher must force ``tool_choice`` so Anthropic constrains
+        sampling to the structured-output schema."""
+        mock_client.messages.create.return_value = _make_tool_use_response(
+            [{"summary": "x"}, {"summary": "y"}]
+        )
+
+        await enricher._call_llm([{"name": "A"}, {"name": "B"}])
+
+        kwargs = mock_client.messages.create.call_args.kwargs
+        assert kwargs["tool_choice"] == {"type": "tool", "name": "record_enrichments"}
+        tools = kwargs["tools"]
+        assert len(tools) == 1
+        tool = tools[0]
+        assert tool["name"] == "record_enrichments"
+        # Schema pins the output count to the batch size — replaces the old
+        # prompt-level "return one per input" instruction.
+        results_schema = tool["input_schema"]["properties"]["results"]
+        assert results_schema["minItems"] == 2
+        assert results_schema["maxItems"] == 2
+        assert tool["input_schema"]["additionalProperties"] is False
+
+    @pytest.mark.asyncio
+    async def test_tool_schema_derives_from_output_model(
+        self, enricher: _StubEnricher, mock_client: MagicMock
+    ) -> None:
+        """Schema on the wire must come from ``OUTPUT_MODEL`` — not a
+        hand-written copy."""
+        mock_client.messages.create.return_value = _make_tool_use_response(
+            [{"summary": "x"}, {"summary": "y"}]
+        )
+
+        await enricher._call_llm([{"name": "A"}, {"name": "B"}])
+
+        tools = mock_client.messages.create.call_args.kwargs["tools"]
+        item_schema = tools[0]["input_schema"]["properties"]["results"]["items"]
+        assert item_schema == _StubOutput.model_json_schema()
+
+    @pytest.mark.asyncio
     async def test_tracks_token_usage(
         self, enricher: _StubEnricher, mock_client: MagicMock
     ) -> None:
-        mock_client.messages.create.return_value = _make_anthropic_response([{"summary": "x"}])
+        mock_client.messages.create.return_value = _make_tool_use_response([{"summary": "x"}])
 
         await enricher._call_llm([{"name": "A"}])
 
@@ -103,7 +162,9 @@ class TestCallLLM:
     async def test_raises_on_count_mismatch(
         self, enricher: _StubEnricher, mock_client: MagicMock
     ) -> None:
-        mock_client.messages.create.return_value = _make_anthropic_response(
+        """Defensive Python-side check — schema normally prevents this but we
+        still want a loud error if Anthropic somehow returns the wrong count."""
+        mock_client.messages.create.return_value = _make_tool_use_response(
             [{"summary": "only one"}]
         )
 
@@ -111,10 +172,26 @@ class TestCallLLM:
             await enricher._call_llm([{"name": "A"}, {"name": "B"}])
 
     @pytest.mark.asyncio
+    async def test_raises_when_no_tool_use_block(
+        self, enricher: _StubEnricher, mock_client: MagicMock
+    ) -> None:
+        """If Anthropic returns plain text with no tool_use block (shouldn't
+        happen with forced tool_choice, but guard against SDK edge cases)."""
+        response = MagicMock()
+        response.content = [MagicMock(type="text", text="oops")]
+        response.usage.input_tokens = 10
+        response.usage.output_tokens = 5
+        response.stop_reason = "end_turn"
+        mock_client.messages.create.return_value = response
+
+        with pytest.raises(ValueError, match="tool_use block"):
+            await enricher._call_llm([{"name": "A"}])
+
+    @pytest.mark.asyncio
     async def test_formats_numbered_items(
         self, enricher: _StubEnricher, mock_client: MagicMock
     ) -> None:
-        mock_client.messages.create.return_value = _make_anthropic_response([{"summary": "x"}])
+        mock_client.messages.create.return_value = _make_tool_use_response([{"summary": "x"}])
 
         await enricher._call_llm([{"name": "A"}])
 
@@ -129,8 +206,8 @@ class TestApply:
     async def test_batches_correctly(self, enricher: _StubEnricher, mock_client: MagicMock) -> None:
         """With BATCH_SIZE=2 and 3 items, should make 2 LLM calls."""
         mock_client.messages.create.side_effect = [
-            _make_anthropic_response([{"summary": "a"}, {"summary": "b"}]),
-            _make_anthropic_response([{"summary": "c"}]),
+            _make_tool_use_response([{"summary": "a"}, {"summary": "b"}]),
+            _make_tool_use_response([{"summary": "c"}]),
         ]
 
         results = await enricher.apply([{"name": "A"}, {"name": "B"}, {"name": "C"}])
@@ -143,7 +220,7 @@ class TestApply:
     async def test_returns_none_for_invalid(
         self, enricher: _StubEnricher, mock_client: MagicMock
     ) -> None:
-        mock_client.messages.create.return_value = _make_anthropic_response(
+        mock_client.messages.create.return_value = _make_tool_use_response(
             [{"summary": "valid"}, {"no_summary": True}]
         )
 
@@ -156,7 +233,7 @@ class TestApply:
     async def test_counts_valid_and_invalid(
         self, enricher: _StubEnricher, mock_client: MagicMock
     ) -> None:
-        mock_client.messages.create.return_value = _make_anthropic_response(
+        mock_client.messages.create.return_value = _make_tool_use_response(
             [{"summary": "ok"}, {"bad": True}]
         )
 
@@ -177,8 +254,8 @@ class TestApply:
         self, enricher: _StubEnricher, mock_client: MagicMock
     ) -> None:
         mock_client.messages.create.side_effect = [
-            _make_anthropic_response([{"summary": "a"}, {"summary": "b"}]),
-            _make_anthropic_response([{"summary": "c"}]),
+            _make_tool_use_response([{"summary": "a"}, {"summary": "b"}]),
+            _make_tool_use_response([{"summary": "c"}]),
         ]
 
         await enricher.apply([{"name": "A"}, {"name": "B"}, {"name": "C"}])
@@ -199,7 +276,7 @@ class TestApply:
 
         async def _tracking_create(**kwargs: Any) -> MagicMock:
             call_times.append(time.monotonic())
-            return _make_anthropic_response([{"summary": "x"}])
+            return _make_tool_use_response([{"summary": "x"}])
 
         mock_client.messages.create = _tracking_create
 
