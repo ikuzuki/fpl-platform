@@ -203,8 +203,16 @@ module "lambda_agent" {
   # No `command` override — the container image runs uvicorn via its own CMD,
   # with the AWS Lambda Web Adapter extension translating Function URL
   # RESPONSE_STREAM events into local HTTP. See ADR-0010.
-  timeout     = 60
-  memory_size = 1024
+  timeout = 60
+  # 3008 MB gets the agent close to 2 vCPU (Lambda scales CPU linearly with
+  # memory, full 2 vCPU at ~3584 MB). At 1024 MB (~0.57 vCPU) cold-start was
+  # ~27s dominated by Python imports (LangGraph + pgvector + asyncpg +
+  # langfuse + anthropic + FastAPI); Lambda's 10s init cap tripped, the
+  # container was force-restarted, and LWA's /health probe only went green
+  # ~28s in — outside CloudFront's 30s origin-response window, so browser
+  # requests saw 502s intermittently. The Lambda's steady-state memory
+  # usage stays well under 300 MB; this knob is bought purely for the CPU.
+  memory_size = 3008
   # Hardware-level backpressure for the public agent endpoint. Replaces API
   # Gateway's 10rps/20-burst throttling after ADR-0010 removed API Gateway
   # from the agent stack. See docs/architecture/security-architecture.md.
