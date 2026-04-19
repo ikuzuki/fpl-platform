@@ -77,3 +77,24 @@ resource "aws_lambda_function_url" "agent" {
   # is left empty to avoid a duplicate layer that would need to stay in
   # sync with the application config.
 }
+
+# Resource-based policy paired with the URL above. Function URLs have two
+# independent access gates AND'd together: the URL's `authorization_type`
+# (SigV4 check) and the function's resource policy (allowed principals).
+# `authorization_type = "NONE"` only skips the SigV4 step — it does NOT
+# grant invoke permission. Without this `aws_lambda_permission` every
+# request hits the URL and returns 403 because the resource policy is
+# empty. AWS keeps the gates decoupled so opening a function to the
+# public internet stays an explicit, auditable action.
+#
+# CloudFront masks the 403 with the SPA error-page fallback (403 →
+# /index.html with HTTP 200), so the symptom presents as the dashboard
+# receiving HTML instead of JSON and throwing SyntaxError on
+# response.json(). Hence the explicit public grant here.
+resource "aws_lambda_permission" "agent_function_url_public" {
+  statement_id           = "FunctionURLAllowPublicAccess"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = module.lambda_agent.function_name
+  principal              = "*"
+  function_url_auth_type = "NONE"
+}

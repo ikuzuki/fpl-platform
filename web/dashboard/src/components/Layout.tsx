@@ -1,9 +1,20 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { Moon, Sun, Menu, X, Crown, Target, ArrowRightLeft, Info } from "lucide-react";
+import {
+  Moon,
+  Sun,
+  Menu,
+  X,
+  Crown,
+  Target,
+  ArrowRightLeft,
+  Info,
+  Sparkles,
+} from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { PulseLogo, PulseWordmark, NavIcons } from "@/components/icons/FplIcons";
+import { AskScoutDrawer } from "@/components/AskScoutDrawer";
 
 const links: { to: string; label: string; icon: ReactNode }[] = [
   { to: "/", label: "Briefing", icon: <NavIcons.Briefing size={16} /> },
@@ -75,6 +86,20 @@ export function Layout() {
             </nav>
           </div>
           <div className="flex items-center gap-2">
+            <NavLink
+              to="/chat"
+              className={({ isActive }) =>
+                cn(
+                  "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors",
+                  isActive
+                    ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]"
+                    : "border-[var(--ai-border)] bg-[var(--ai-bg)] text-[var(--accent)] hover:opacity-90",
+                )
+              }
+            >
+              <Sparkles className="h-4 w-4" />
+              <span className="hidden sm:inline">Ask Scout</span>
+            </NavLink>
             <button
               onClick={() => setDark(!dark)}
               className="rounded-md p-2 text-[var(--muted-foreground)] hover:bg-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
@@ -94,6 +119,21 @@ export function Layout() {
         </div>
         {menuOpen && (
           <nav className="lg:hidden border-t border-[var(--border)] bg-[var(--card)] px-6 py-3 space-y-1" aria-label="Mobile navigation">
+            <NavLink
+              to="/chat"
+              onClick={() => setMenuOpen(false)}
+              className={({ isActive }) =>
+                cn(
+                  "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors border",
+                  isActive
+                    ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]"
+                    : "border-[var(--ai-border)] bg-[var(--ai-bg)] text-[var(--accent)]",
+                )
+              }
+            >
+              <Sparkles className="h-4 w-4" />
+              Ask Scout
+            </NavLink>
             {links.map((link) => (
               <NavLink
                 key={link.to}
@@ -127,6 +167,7 @@ export function Layout() {
           &middot; Powered by Claude AI enrichment
         </span>
       </footer>
+      <AskScoutDrawer />
     </div>
   );
 }

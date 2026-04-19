@@ -175,3 +175,76 @@ export interface TeamStrength {
   season: string;
   gameweek: number;
 }
+
+// ---------------------------------------------------------------------------
+// Scout Agent — mirrors services/agent/src/fpl_agent/models/responses.py
+// ---------------------------------------------------------------------------
+
+export interface SquadPick {
+  element_id: number;
+  web_name: string;
+  team_name: string;
+  position: number; // 1-15 squad slot
+  element_type: number; // 1=GK, 2=DEF, 3=MID, 4=FWD
+  multiplier: number; // 0=bench, 1=starting, 2=captain, 3=triple
+  is_captain: boolean;
+  is_vice_captain: boolean;
+  price: number; // £m
+}
+
+export interface UserSquad {
+  team_id: number;
+  gameweek: number;
+  picks: SquadPick[];
+  bank: number; // £m
+  total_value: number; // £m
+  active_chip: string | null;
+  overall_rank: number | null;
+  total_points: number;
+}
+
+export type FixtureOutlook = "green" | "amber" | "red";
+
+export interface PlayerAnalysis {
+  player_name: string;
+  position: string; // GKP / DEF / MID / FWD
+  price: number;
+  form: number;
+  fixture_outlook: FixtureOutlook;
+  verdict: string;
+  confidence: number;
+}
+
+export interface ComparisonResult {
+  players: PlayerAnalysis[];
+  winner: string | null;
+  reasoning: string;
+}
+
+export interface ScoutReport {
+  question: string;
+  analysis: string;
+  players: PlayerAnalysis[];
+  comparison: ComparisonResult | null;
+  recommendation: string;
+  caveats: string[];
+  data_sources: string[];
+}
+
+export interface AgentResponse {
+  report: ScoutReport;
+  iterations_used: number;
+  tool_calls_made: string[];
+}
+
+// SSE event stream from POST /chat. Discriminated union — a `type` switch
+// covers every case the backend emits (see services/agent/src/fpl_agent/api.py).
+export type AgentEvent =
+  | { type: "step"; node: string }
+  | { type: "result"; payload: AgentResponse }
+  | { type: "error"; message: string };
+
+export interface ChatRequest {
+  question: string;
+  squad?: UserSquad;
+}
