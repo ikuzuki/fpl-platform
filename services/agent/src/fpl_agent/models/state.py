@@ -20,16 +20,21 @@ from pydantic import BaseModel, Field
 
 from fpl_agent.models.responses import UserSquad
 
-# Tool names are constrained to the 6 implemented tools. Using ``Literal``
+# Tool names are constrained to the 5 implemented tools. Using ``Literal``
 # here means the planner's output is validated by Pydantic the moment it
 # comes back — no chance of the planner hallucinating "search_players".
+#
+# Squad loading is deliberately *not* a tool — it's an HTTP-layer concern.
+# The dashboard calls ``GET /team`` and echoes the resulting ``UserSquad``
+# back on every chat turn; the agent reads it from ``state["user_squad"]``.
+# Letting the agent dispatch a cross-service Lambda invoke at planning time
+# would require it to invent a ``team_id`` it has no source of truth for.
 ToolName = Literal[
     "query_player",
     "search_similar_players",
     "query_players_by_criteria",
     "get_fixture_outlook",
     "get_injury_signals",
-    "fetch_user_squad",
 ]
 
 

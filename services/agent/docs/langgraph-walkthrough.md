@@ -123,7 +123,7 @@ START → planner → tool_executor → reflector ──needs more──┘
 ```python
 class AgentState(TypedDict):
     question: str                              # user's input, immutable after START
-    user_squad: dict | None                    # populated by fetch_user_squad if called
+    user_squad: UserSquad | None               # input context, seeded from ChatRequest.squad (see PR #119)
     plan: list[ToolCall]                       # planner output for current iteration
     gathered_data: Annotated[dict, merge_dicts] # accumulates across iterations
     tool_calls_made: Annotated[list[str], operator.add]  # audit trail
@@ -141,7 +141,7 @@ The `merge_dicts` reducer lets tools from iteration 2 add keys without wiping it
 
 ### `services/agent/src/fpl_agent/models/state.py` — state definition
 
-- `ToolCall` — Pydantic: `name: Literal[<6 tool names>]`, `args: dict[str, Any]`
+- `ToolCall` — Pydantic: `name: Literal[<5 tool names>]`, `args: dict[str, Any]`
 - `AgentState` — `TypedDict` as shown above
 - `merge_dicts(a, b)` — helper reducer: returns `{**a, **b}`
 
@@ -158,7 +158,7 @@ Pydantic v2 models the recommender generates:
 
 **Why Pydantic v2 here but TypedDict for state?** State needs reducers (LangGraph requirement). Responses need strict validation at the API boundary (client contract). Different jobs, different tools.
 
-### `services/agent/src/fpl_agent/tools/player_tools.py` — 6 async tools
+### `services/agent/src/fpl_agent/tools/player_tools.py` — 5 async tools
 
 All tools:
 
@@ -175,9 +175,10 @@ All tools:
 | `query_players_by_criteria(position=None, max_price=None, min_form=None, team=None, limit=20)` | Dynamic WHERE clause on structured columns | list of matching player rows |
 | `get_fixture_outlook(player_name)` | For now: returns `fixture_difficulty` column from the stored row. *Note:* richer fixture data is a future enrichment — flagged in caveats. | `{player, difficulty, note}` |
 | `get_injury_signals(player_name)` | Returns `injury_risk_score`, `form_trend`, and `summary` fields from the stored enrichment | injury signal dict |
-| `fetch_user_squad(team_id, gameweek)` | Invokes the team-fetcher Lambda via `boto3.client("lambda").invoke()`. Requires `TEAM_FETCHER_FUNCTION_NAME` env var. | squad dict |
 
-**Tool factory pattern — what and why.** A "factory" is just a function that creates things. Here, `make_tools(neon)` creates 6 callable tools, each with the `NeonClient` captured in its closure:
+**Squad loading is not a tool.** PR #119 moved it from the tool registry into the HTTP layer (`GET /team` → `UserSquad` echoed back on every `POST /chat` → seeded onto `state["user_squad"]`). Letting the LLM dispatch a cross-service Lambda invoke at planning time would have required it to invent a `team_id` it has no source of truth for. See `services/agent/src/fpl_agent/squad_loader.py` for the loader and `docs/architecture/agent-architecture.md` for the rationale.
+
+**Tool factory pattern — what and why.** A "factory" is just a function that creates things. Here, `make_tools(neon)` creates 5 callable tools, each with the `NeonClient` captured in its closure:
 
 ```python
 def make_tools(neon: NeonClient) -> dict[str, Callable]:
@@ -374,12 +375,11 @@ Out of scope for PR #91, but worth a follow-up refactor issue.
 4. **Reflector hard-caps before calling the LLM** — saves one Haiku call when iteration limit is already reached.
 5. **`asyncio.gather(..., return_exceptions=True)`** — one slow/broken tool doesn't cancel the others.
 6. **Token usage logged, not enforced** — PR #91 records it for the kill-switch in #92/#93.
-7. **`fetch_user_squad` via boto3 Lambda invoke** — keeps FPL API concerns in the team-fetcher Lambda.
+7. **Squad loading is HTTP-layer only (not a tool)** — `GET /team` invokes the team-fetcher Lambda + Neon enrichment via `squad_loader.py`. Dashboard echoes the loaded `UserSquad` on every chat request; agent reads `state["user_squad"]`. Keeps cross-service Lambda invokes off the planner's discretion. (PR #119)
 
 ---
 
 ## Answered during planning
 
 - **`search_similar_players`** — reads the target's stored vector from Neon (cheaper, faster than re-embedding; re-embedding is a future optimisation for "hypothetical profile" queries).
-- **`fetch_user_squad`** — invokes the team-fetcher Lambda. Matches ADR's separation of concerns; keeps FPL API egress in one place.
 - **Planner fallback on invalid JSON** — resolved by tool-use. Server-side schema enforcement eliminates JSON syntax failures. Residual semantic failures (invalid Pydantic validation) short-circuit to `state["error"]`.

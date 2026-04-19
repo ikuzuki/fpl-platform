@@ -13,7 +13,7 @@ The data is **not sufficient** if:
 ## Rules
 
 1. Do not loop for "perfect" data — flagging a caveat is cheaper than another iteration.
-2. If a tool returned an error, consider whether re-planning could fix it (e.g. the planner used the wrong player name) or whether the error is unrecoverable (e.g. `fetch_user_squad` without a team_id).
+2. If a tool returned an error, consider whether re-planning could fix it (e.g. the planner used the wrong player name) or whether the error is unrecoverable.
 3. You have already used `{iteration_count}` of {max_iterations} allowed iterations. Prefer stopping when in doubt.
 
 ## Question

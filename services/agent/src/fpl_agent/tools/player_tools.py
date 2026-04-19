@@ -1,9 +1,14 @@
 """Async tool implementations for the scout report agent.
 
 The :func:`make_tools` factory takes a live :class:`NeonClient` and returns a
-dict of six callable tools, each with the client captured in a closure. The
+dict of five callable tools, each with the client captured in a closure. The
 graph's ``tool_executor`` node dispatches calls from the planner's plan into
 this dict by name.
+
+Squad loading is deliberately *not* in this registry — it's an HTTP-layer
+concern handled by :mod:`fpl_agent.squad_loader` and surfaced via the
+``GET /team`` endpoint. The dashboard echoes the loaded squad on every chat
+turn and the agent reads it from ``state["user_squad"]``.
 
 Every tool:
 
@@ -18,14 +23,11 @@ Every tool:
 
 from __future__ import annotations
 
-import json
 import logging
-import os
 from collections.abc import Awaitable, Callable
 from typing import Any, cast
 
 import asyncpg
-import boto3
 
 from fpl_lib.clients.neon import NeonClient
 from fpl_lib.observability import observe
@@ -204,41 +206,10 @@ def make_tools(neon: NeonClient) -> dict[str, ToolFn]:
             "summary": row["summary"],
         }
 
-    @observe(name="tool.fetch_user_squad", as_type="tool")
-    async def fetch_user_squad(team_id: int, gameweek: int) -> dict[str, Any]:
-        """Invoke the team-fetcher Lambda to retrieve a user's FPL squad.
-
-        The target function name comes from ``TEAM_FETCHER_FUNCTION_NAME``; if
-        the environment variable is unset the tool raises :class:`ToolError`
-        rather than crashing the whole graph — the agent can still answer
-        questions that don't need a user squad.
-        """
-        function_name = os.environ.get("TEAM_FETCHER_FUNCTION_NAME")
-        if not function_name:
-            raise ToolError("TEAM_FETCHER_FUNCTION_NAME not set — squad lookups are unavailable.")
-
-        payload = json.dumps({"team_id": team_id, "gameweek": gameweek}).encode("utf-8")
-        import asyncio
-
-        def _invoke() -> dict[str, Any]:
-            client = boto3.client("lambda")
-            response = client.invoke(
-                FunctionName=function_name,
-                InvocationType="RequestResponse",
-                Payload=payload,
-            )
-            body = response["Payload"].read().decode("utf-8")
-            if response.get("FunctionError"):
-                raise ToolError(f"team-fetcher Lambda error: {body}")
-            return cast(dict[str, Any], json.loads(body))
-
-        return await asyncio.to_thread(_invoke)
-
     return {
         "query_player": query_player,
         "search_similar_players": search_similar_players,
         "query_players_by_criteria": query_players_by_criteria,
         "get_fixture_outlook": get_fixture_outlook,
         "get_injury_signals": get_injury_signals,
-        "fetch_user_squad": fetch_user_squad,
     }

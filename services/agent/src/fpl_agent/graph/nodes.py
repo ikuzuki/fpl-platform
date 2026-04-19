@@ -195,28 +195,37 @@ def _result_key(tc: ToolCall) -> str:
 
 
 def _summarise_squad(squad: UserSquad | None) -> str:
-    """Render the squad block for the planner prompt.
+    """One-line squad block for the planner prompt.
 
-    The planner doesn't need the full 15-row payload (the recommender does
-    later, via state["user_squad"] flowing through into its prompt). Here we
-    just need enough for the planner to know whether to call
-    ``fetch_user_squad`` and whether the question references the user's team.
+    The planner only needs to know whether a squad is loaded so it can decide
+    whether to ground tool calls in 'my team' context. The recommender gets a
+    richer block via :func:`_render_squad_for_recommender`.
     """
     if squad is None:
         return (
-            "No user squad has been loaded for this session. The "
-            "`fetch_user_squad` tool is unavailable — give generic "
-            "recommendations rather than personalised ones."
+            "No user squad provided with this request. Answer generically — "
+            "do not reference 'my team' specifics."
         )
     captain = next((p for p in squad.picks if p.is_captain), None)
     captain_name = captain.web_name if captain else "(none)"
     return (
-        f"The user's squad is already loaded for GW{squad.gameweek}: "
-        f"{len(squad.picks)} players, captain={captain_name}, "
-        f"bank=£{squad.bank:.1f}m, value=£{squad.total_value:.1f}m, "
-        f"chip={squad.active_chip or 'none'}. "
-        f"Do **not** call `fetch_user_squad` — the squad is already in context."
+        f"Loaded for GW{squad.gameweek}: {len(squad.picks)} players, "
+        f"captain={captain_name}, bank=£{squad.bank:.1f}m, "
+        f"value=£{squad.total_value:.1f}m, chip={squad.active_chip or 'none'}."
     )
+
+
+def _render_squad_for_recommender(squad: UserSquad | None) -> str:
+    """Full squad payload for the recommender prompt.
+
+    Dumps the picks as JSON so the LLM can quote any field (web_name, price,
+    bench/captain status, position) when answering 'my team' questions. The
+    planner gets the one-line summary from :func:`_summarise_squad`; the
+    recommender needs the per-pick detail to be useful.
+    """
+    if squad is None:
+        return "No user squad provided — give generic advice rather than personalised picks."
+    return squad.model_dump_json()
 
 
 def _error_report(state: AgentState) -> ScoutReport:
@@ -317,20 +326,8 @@ async def tool_executor_node(
     if not plan:
         return {"gathered_data": {}}
 
-    cached_squad = state.get("user_squad")
-
     async def _run(tc: ToolCall) -> tuple[str, Any]:
         key = _result_key(tc)
-        # Short-circuit: if the caller pre-loaded the squad, never invoke
-        # the team-fetcher Lambda. The planner prompt already gates this,
-        # but a belt-and-braces check stops a misbehaving plan from
-        # triggering an avoidable cross-account invoke + FPL API hit.
-        if tc.name == "fetch_user_squad" and cached_squad is not None:
-            logger.warning(
-                "fetch_user_squad short-circuited — squad pre-loaded; "
-                "planner should not have included this call",
-            )
-            return key, cached_squad.model_dump()
         if tc.name not in tools:
             return key, {"error": f"unknown tool '{tc.name}'"}
         try:
@@ -438,6 +435,7 @@ async def recommender_node(
     prompt = _load_prompt("recommender").format(
         question=state["question"],
         gathered_data_json=json.dumps(state.get("gathered_data", {}), default=str),
+        user_squad_block=_render_squad_for_recommender(state.get("user_squad")),
     )
 
     response = await client.messages.create(

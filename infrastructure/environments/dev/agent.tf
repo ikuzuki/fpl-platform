@@ -42,8 +42,9 @@ resource "aws_iam_role_policy" "lambda_agent_dynamo" {
   })
 }
 
-# The agent invokes the team-fetcher Lambda synchronously to load a user's
-# squad (both via the GET /team endpoint and the fetch_user_squad tool).
+# The agent's GET /team endpoint invokes the team-fetcher Lambda synchronously
+# (see services/agent/src/fpl_agent/squad_loader.py). The agent graph itself
+# never invokes Lambdas — squad loading is strictly an HTTP-layer concern.
 # Scoped to the one function rather than `*` so a future second invokeable
 # Lambda has to be granted explicitly.
 resource "aws_iam_role_policy" "lambda_agent_invoke_team_fetcher" {

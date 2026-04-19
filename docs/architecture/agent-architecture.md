@@ -83,7 +83,7 @@ Model selection follows [ADR-0004](../adr/0004-llm-cost-optimisation.md)'s princ
 
 ## Tools
 
-Six async tools, dispatched by the executor via `asyncio.gather(..., return_exceptions=True)` so one slow or broken tool does not cancel its siblings.
+Five async tools, dispatched by the executor via `asyncio.gather(..., return_exceptions=True)` so one slow or broken tool does not cancel its siblings.
 
 | Tool | Backing store | Purpose |
 |------|---------------|---------|
@@ -92,11 +92,12 @@ Six async tools, dispatched by the executor via `asyncio.gather(..., return_exce
 | `query_players_by_criteria` | Neon | Filter by position / price / form / team |
 | `get_fixture_outlook` | Neon | Return the stored aggregate fixture-difficulty signal |
 | `get_injury_signals` | Neon | Return stored injury-risk + form-trend enrichment |
-| `fetch_user_squad` | team-fetcher Lambda (boto3) | Pull a user's current FPL squad via the Wave 1 Lambda |
 
-All tools take a `NeonClient` (or the Lambda client) through a factory closure — `make_tools(neon)` returns a dict of callables with the client captured in each scope. State never carries a live connection; see the walkthrough doc for the "why".
+Squad loading is intentionally **not** in the tool registry. The dashboard calls `GET /team` (which invokes the team-fetcher Lambda + enriches via Neon), receives a `UserSquad`, and echoes it on every chat request. The agent reads it from `state["user_squad"]` and renders it into both the planner and recommender prompts as context. Letting the agent dispatch a cross-service Lambda invoke at planning time would require it to invent a `team_id` it has no source of truth for.
 
-Per-tool timeout: `TOOL_TIMEOUT_SECONDS = 10` (Lambda's 60s ceiling minus ~15s of LLM latency leaves ~45s for up to 3 iterations of tool calls; 10s each is generous for a Neon query and safe for a boto3 invoke).
+All tools take a `NeonClient` through a factory closure — `make_tools(neon)` returns a dict of callables with the client captured in each scope. State never carries a live connection; see the walkthrough doc for the "why".
+
+Per-tool timeout: `TOOL_TIMEOUT_SECONDS = 10` (Lambda's 60s ceiling minus ~15s of LLM latency leaves ~45s for up to 3 iterations of tool calls; 10s each is generous for a Neon query).
 
 ## Structured Output via Tool-Use
 

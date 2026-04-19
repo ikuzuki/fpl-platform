@@ -430,7 +430,7 @@ def _fake_squad():
 
 @pytest.mark.asyncio
 async def test_planner_prompt_includes_squad_summary_when_loaded() -> None:
-    """Squad metadata flows into the planner prompt so the LLM knows not to fetch."""
+    """Squad metadata flows into the planner prompt as one-line context."""
     payload = {"plan": []}
     client = _mock_client(_tool_use_response("record_plan", payload))
     state: AgentState = {**initial_state("Who should I captain?", squad=_fake_squad())}
@@ -439,51 +439,28 @@ async def test_planner_prompt_includes_squad_summary_when_loaded() -> None:
 
     prompt = client.messages.create.await_args.kwargs["messages"][0]["content"]
     assert "captain=Haaland" in prompt
-    assert "Do **not** call `fetch_user_squad`" in prompt
+    assert "bank=£2.5m" in prompt
 
 
 @pytest.mark.asyncio
-async def test_planner_prompt_says_squad_unavailable_when_absent() -> None:
+async def test_planner_prompt_says_no_squad_when_absent() -> None:
     payload = {"plan": []}
     client = _mock_client(_tool_use_response("record_plan", payload))
 
     await planner_node(initial_state("Who should I captain?"), client=client)
 
     prompt = client.messages.create.await_args.kwargs["messages"][0]["content"]
-    assert "No user squad has been loaded" in prompt
+    assert "No user squad provided" in prompt
 
 
-@pytest.mark.asyncio
-async def test_tool_executor_short_circuits_fetch_user_squad_when_cached() -> None:
-    """If state has user_squad, fetch_user_squad must NOT call the underlying tool."""
-    underlying_fetcher = AsyncMock()
-    tools = {"fetch_user_squad": underlying_fetcher}
-    plan = [ToolCall(name="fetch_user_squad", args={"team_id": 1, "gameweek": 33})]
-    state: AgentState = {
-        **initial_state("q", squad=_fake_squad()),
-        "plan": plan,
-    }
+def test_fetch_user_squad_is_not_a_valid_tool_name() -> None:
+    """Squad loading is HTTP-layer only — Pydantic must reject it as a planner output.
 
-    update = await tool_executor_node(state, tools=tools)
+    Regression guard: if the Literal is ever extended back to include this
+    name, the planner could dispatch a cross-service Lambda invoke at the
+    LLM's discretion, which is exactly what we removed.
+    """
+    from pydantic import ValidationError
 
-    underlying_fetcher.assert_not_awaited()
-    # The cached squad is what gets handed to the recommender.
-    key = "fetch_user_squad(gameweek=33,team_id=1)"
-    assert update["gathered_data"][key]["team_id"] == 12345
-    assert update["gathered_data"][key]["picks"][0]["web_name"] == "Haaland"
-
-
-@pytest.mark.asyncio
-async def test_tool_executor_calls_fetch_user_squad_when_no_cache() -> None:
-    """Without a cached squad, the executor must invoke the underlying tool."""
-    raw_squad = {"picks": [{"element": 1}], "bank": 0}
-    underlying_fetcher = AsyncMock(return_value=raw_squad)
-    tools = {"fetch_user_squad": underlying_fetcher}
-    plan = [ToolCall(name="fetch_user_squad", args={"team_id": 1, "gameweek": 33})]
-    state: AgentState = {**initial_state("q"), "plan": plan}
-
-    update = await tool_executor_node(state, tools=tools)
-
-    underlying_fetcher.assert_awaited_once_with(team_id=1, gameweek=33)
-    key = "fetch_user_squad(gameweek=33,team_id=1)"
-    assert update["gathered_data"][key] == raw_squad
+    with pytest.raises(ValidationError):
+        ToolCall(name="fetch_user_squad", args={"team_id": 1, "gameweek": 33})

@@ -74,9 +74,11 @@ Status code map:
 - **503** — `TEAM_FETCHER_FUNCTION_NAME` env var missing (Lambda not wired in)
 
 If a chat request includes the squad in the request body, the agent
-seeds it onto `state["user_squad"]` and the planner is gated against
-calling `fetch_user_squad`. Langfuse traces for those requests carry
-`team_id` + `gameweek` metadata so you can filter by manager.
+seeds it onto `state["user_squad"]` so both the planner and recommender
+prompts see it as context. Squad loading is HTTP-layer only — the agent
+graph has no tool that fetches a squad. Langfuse traces for those
+requests carry `team_id` + `gameweek` metadata so you can filter by
+manager.
 
 ### When `/team` returns 502 in production
 

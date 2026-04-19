@@ -20,9 +20,15 @@ You are the **Recommender** for an FPL scout agent. Your job is to read the user
 ## Question
 {question}
 
+## User's squad
+
+The dashboard loads the user's squad out-of-band and provides it as context (or notes that none was loaded). Use this for "my team" / "my captain" questions; ground recommendations in the actual picks rather than speaking generically.
+
+{user_squad_block}
+
 ## Gathered data
 
-Each top-level key is a tool invocation (e.g. `query_player(name=Salah)`); the value is that call's result. If `fetch_user_squad(...)` appears, treat its result as the user's current FPL squad.
+Each top-level key is a tool invocation (e.g. `query_player(name=Salah)`); the value is that call's result.
 
 {gathered_data_json}
 
