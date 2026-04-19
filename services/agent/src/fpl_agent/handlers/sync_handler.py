@@ -51,8 +51,9 @@ async def main(
     s3_client = S3Client()
     embedder = PlayerEmbedder()
 
-    async with NeonClient(database_url) as neon_client:
-        await register_vector(neon_client._conn)
+    # Register pgvector on every connection the pool hands out; otherwise
+    # vector columns come back as strings and asyncpg can't round-trip them.
+    async with NeonClient(database_url, init=register_vector) as neon_client:
         result = await sync_embeddings(
             s3_client=s3_client,
             neon_client=neon_client,

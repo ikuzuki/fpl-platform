@@ -7,7 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **lib: `NeonClient` now wraps `asyncpg.create_pool` instead of a single `Connection`.** asyncpg forbids concurrent queries on one connection; the agent's tool executor runs queries in parallel via `asyncio.gather`, so shared-connection usage would have raised `InterfaceError` in production. Each `fetch`/`fetch_one`/`execute` now acquires a connection from the pool. Connection setup (e.g. `pgvector.asyncpg.register_vector`) is passed via a new `init` parameter so it runs on every pooled connection.
+- Agent: `tool_executor` keys `gathered_data` entries by `f"{name}({arg1=val,arg2=val})"` instead of bare tool name — `[query_player(Salah), query_player(Palmer)]` in one plan now produces two distinct entries. Fixes comparison questions (a first-class ADR-0009 use case) that previously saw only the last tool call's result.
+- Agent: `planner_node` now clears `plan` and `tool_calls_made` on error, preventing the tool executor from re-running the previous iteration's plan.
+- Agent: `recommender_node` short-circuits when `state["error"]` is set and returns a minimal error `ScoutReport` without calling Sonnet — saves cost + avoids feeding broken data into the most expensive LLM call in the graph.
+- Agent: All response models now set `extra="forbid"`, emitting `additionalProperties: false` in the tool-use `input_schema`. Anthropic's decoder rejects unknown fields at sampling time rather than letting them through to Pydantic.
+- Agent: `_log_usage` now also records `stop_reason` and warns when it's `"max_tokens"` (signals output truncation — useful for debugging phantom Pydantic failures).
+
+### Fixed
+- Agent: Prompt `.md` files now ship with the Lambda wheel. `pyproject.toml` declares `[tool.setuptools.package-data]` so setuptools includes them, and `_load_prompt` uses `importlib.resources.files` for path-independent loading (editable install, wheel install, and source tree all work).
+- Agent: Removed dead `user_squad` state field. Squad data from `fetch_user_squad` lives in `gathered_data` like every other tool result; previously the recommender prompt always received `null` while the real squad sat un-rendered in gathered_data.
+
 ### Added
+- Agent: 4-node LangGraph state machine (`planner` → `tool_executor` → `reflector` → `recommender`) with a conditional loop capped at 3 iterations — replaces the Wave 2 stub handler for /chat
+- Agent: `AgentState` TypedDict with per-field reducers (`operator.add` for `tool_calls_made`, `merge_dicts` for `gathered_data`); Pydantic response models `ScoutReport`, `PlayerAnalysis`, `ComparisonResult`, `ReflectionResult`, `AgentResponse`
+- Agent: Six async tools over Neon pgvector (`query_player`, `search_similar_players`, `query_players_by_criteria`, `get_fixture_outlook`, `get_injury_signals`) plus `fetch_user_squad` via boto3 invoke of the team-fetcher Lambda
+- Agent: Versioned prompt templates under `services/agent/src/fpl_agent/graph/prompts/v1/` (planner, reflector, recommender)
+- Agent: Anthropic tool-use for structured output at every LLM node — schemas derive from Pydantic so malformed JSON can't reach the parser
+- Agent: Langfuse `@observe()` decorators on all nodes and tools (runtime client init lands in #93)
 - Infra: `modules/api-gateway/` — HTTP API v2 with Lambda proxy integration, CORS, throttling (10 req/s, 20 burst), CloudWatch access logs
 - Infra: Agent Lambda (`fpl-agent-dev`) wired to agent ECR image and shared Lambda role (1024 MB, 60s timeout)
 - Infra: DynamoDB table `fpl-agent-usage-dev` for monthly token/cost tracking and budget kill-switch
