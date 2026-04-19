@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- ADR-0009: documented the "no user-controlled URLs in agent tools" constraint. Every current tool is a Neon query or internal Lambda invoke, so there's no SSRF surface today; the note pins a guardrail for any future URL-fetching tool (IP blocklist + resolve-then-connect + domain allowlist) to close the SSRF-to-IMDS pivot (`169.254.169.254` credential exfiltration).
 - **ADR-0010 — Agent HTTP Transport: Lambda Function URL with Response Streaming.** Documents the migration from API Gateway v2 HTTP API to Lambda Function URL + AWS Lambda Web Adapter. Captures the 29s / response-buffering rationale, the four alternatives considered, and the security-posture consequences (loss of API Gateway throttling, layered replacement).
 - **`docs/architecture/security-architecture.md`** — new document describing the threat model (primary risk: cost runaway on the public agent endpoint), layered defences (Shield Standard → CloudFront → Lambda reserved concurrency → in-app RateLimiter → BudgetTracker → graph iteration cap), secrets + IAM posture, and explicit non-goals (WAF / authentication / VPC isolation) with triggers for adoption.
 - Agent: FastAPI endpoints for the scout agent — `POST /chat` (SSE stream of intermediate `step` events + final `result`), `POST /chat/sync` (blocking JSON fallback), and `GET /budget` (current-month spend snapshot). Replaces the Wave 2 health-only stub.

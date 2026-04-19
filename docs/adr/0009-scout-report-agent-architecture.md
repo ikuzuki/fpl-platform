@@ -79,6 +79,8 @@ START → Planner → Tool Executor → Reflector ─┐
 
 **Tool Executor** — no LLM. Dispatches tool calls from the plan, executes concurrently where independent, accumulates results. Tools include: `query_player`, `search_similar_players`, `query_players_by_criteria`, `get_fixture_outlook`, `get_injury_signals`, `fetch_user_squad`.
 
+**Tool constraint: no user-controlled URLs.** Every current tool is a parameterised Neon query or an internal Lambda invoke — no tool fetches an arbitrary URL. Any future tool that needs URL fetching (news enrichment, image OCR, link summarisation) must (a) validate the destination IP against a loopback / link-local / RFC1918 blocklist before connecting, (b) resolve-then-connect-by-IP so the check can't be bypassed via DNS rebinding, and (c) be scoped to an explicit domain allowlist. Without this, a prompt-injection attack could coerce the agent into fetching `http://169.254.169.254/latest/meta-data/iam/security-credentials/` and streaming the Lambda's IAM credentials back to the client (the SSRF-to-IMDS pivot behind the 2019 Capital One breach). See [`docs/architecture/security-architecture.md`](../architecture/security-architecture.md).
+
 **Reflector** — evaluates whether the gathered data is sufficient to answer the question. If not, identifies what's missing and sends it back to the planner. Maximum 3 iterations to bound latency and cost. Uses Haiku.
 
 **Recommender** — synthesises all gathered data into a structured `ScoutReport` (analysis, player cards, recommendation, caveats, data sources). This is the only node that uses Sonnet, because it requires deep reasoning across multiple data points.
