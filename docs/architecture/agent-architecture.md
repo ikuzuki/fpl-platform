@@ -128,7 +128,7 @@ The agent endpoint is publicly accessible — anyone with the CloudFront URL can
 
 | Layer | Where | Configuration | Purpose |
 |-------|-------|---------------|---------|
-| Lambda reserved concurrency | Terraform (`modules/lambda`) | `reserved_concurrent_executions = 10` | Hardware-level backpressure; replaces API Gateway throttling after ADR-0010 |
+| Lambda reserved concurrency | Terraform (`modules/lambda`) | `reserved_concurrent_executions = 10` (currently disabled — see [#121](https://github.com/ikuzuki/fpl-platform/issues/121)) | Hardware-level backpressure; replaces API Gateway throttling after ADR-0010. Disabled until the AWS account's Lambda concurrency quota is raised from the new-account default of 10 |
 | Application rate limiter | `middleware/rate_limit.py` | 5/min + 20/hour per session | Per-session fairness; in-memory per Lambda container |
 | Reflector iteration cap | `graph/config.py` | `MAX_ITERATIONS = 3` | Bounds per-request LLM calls at 7 (3 planner + 3 reflector + 1 recommender). Most queries resolve in 2 iterations (5 calls) |
 | DynamoDB budget kill-switch | `fpl-agent-usage-dev` | Monthly `$5` cap enforced at request entry | Hard cap on monthly spend. Returns 429 "demo has hit its monthly limit" when exceeded |
