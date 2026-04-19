@@ -20,6 +20,7 @@ class PlayerSummaryEnricher(FPLEnricher):
 
     BATCH_SIZE = 10
     MODEL = "claude-haiku-4-5-20251001"
+    OUTPUT_MODEL = PlayerSummaryOutput
     RELEVANT_FIELDS = [
         "web_name",
         "team",

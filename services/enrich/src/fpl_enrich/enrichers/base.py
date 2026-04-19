@@ -6,10 +6,11 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
-from typing import Any
+from typing import Any, ClassVar
 
 import anthropic
 from langfuse import Langfuse, observe
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -44,21 +45,27 @@ class RateLimiter:
 DEFAULT_MAX_CONCURRENT = 2
 DEFAULT_RATE_LIMIT_RPM = 15
 
+# Name of the fake tool each enricher forces the LLM to call. Structured
+# output flows through ``response.content[<block>].input["results"]``.
+_RESULTS_TOOL_NAME = "record_enrichments"
+
 
 class FPLEnricher(ABC):
     """Base enricher that sends batched items to Claude and validates outputs.
 
-    Subclasses must implement:
+    Subclasses must set:
+        OUTPUT_MODEL — Pydantic model describing one output item
+        BATCH_SIZE — number of items per LLM call (override per enricher)
+        MODEL — Anthropic model to use
+
+    And implement:
         _get_system_prompt() — return the system prompt string
         _validate_output(output) — validate a single LLM output dict
-
-    Class variables:
-        BATCH_SIZE — number of items per LLM call (override per enricher)
-        MODEL — Anthropic model to use (default: claude-haiku-4-5-20251001)
     """
 
     BATCH_SIZE: int = 10
     MODEL: str = "claude-haiku-4-5-20251001"
+    OUTPUT_MODEL: ClassVar[type[BaseModel]]
 
     def __init__(
         self,
@@ -152,9 +159,46 @@ class FPLEnricher(ABC):
             return item
         return {k: v for k, v in item.items() if k in self.RELEVANT_FIELDS}
 
+    def _build_results_tool(self, batch_size: int) -> dict[str, Any]:
+        """Build the Anthropic tool schema that wraps ``OUTPUT_MODEL`` as a list.
+
+        We force the LLM to "call" this tool; Anthropic's decoder constrains
+        sampling to JSON that matches the schema, so malformed / missing / typo-ed
+        fields can't reach our parser. ``minItems``/``maxItems`` pin the output
+        count to the batch size — replaces the old count-mismatch ``ValueError``.
+        """
+        item_schema = self.OUTPUT_MODEL.model_json_schema()
+        return {
+            "name": _RESULTS_TOOL_NAME,
+            "description": (
+                "Record the enrichment result for each input item. The `results` "
+                "array MUST contain exactly one object per input item, in the "
+                "same order as the numbered items in the user message."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "results": {
+                        "type": "array",
+                        "items": item_schema,
+                        "minItems": batch_size,
+                        "maxItems": batch_size,
+                    },
+                },
+                "required": ["results"],
+                "additionalProperties": False,
+            },
+        }
+
     @observe(name="enricher_batch_call")
     async def _call_llm(self, batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Send a batch of items to the Anthropic API and parse the JSON response."""
+        """Send a batch to Claude via forced tool-use and return structured results.
+
+        The tool schema is derived from ``OUTPUT_MODEL`` so the Pydantic definition
+        is the single source of truth. Anthropic enforces the schema server-side,
+        which eliminates the JSON-parsing failure modes the old text path had
+        (markdown fences, truncated JSON, missing fields).
+        """
         langfuse = Langfuse()
         langfuse.update_current_span(
             metadata={
@@ -168,6 +212,7 @@ class FPLEnricher(ABC):
         user_content = "\n".join(f"I{i + 1}: {json.dumps(item)}" for i, item in enumerate(prepared))
 
         system_prompt = self._get_system_prompt().format(batch_size=len(batch))
+        tool = self._build_results_tool(len(batch))
 
         logger.info(
             "[ANTHROPIC] %s: calling %s | batch_size=%d | prompt_version=%s",
@@ -181,6 +226,8 @@ class FPLEnricher(ABC):
             model=self.MODEL,
             max_tokens=4096,
             system=system_prompt,
+            tools=[tool],
+            tool_choice={"type": "tool", "name": _RESULTS_TOOL_NAME},
             messages=[{"role": "user", "content": user_content}],
         )
 
@@ -195,33 +242,30 @@ class FPLEnricher(ABC):
             response.stop_reason,
         )
 
-        raw_text = response.content[0].text.strip() if response.content else ""
+        if response.stop_reason == "max_tokens":
+            logger.warning(
+                "[ANTHROPIC] %s: stop_reason=max_tokens — tool output likely truncated",
+                self.__class__.__name__,
+            )
 
-        if not raw_text:
+        tool_block = next(
+            (b for b in response.content if getattr(b, "type", None) == "tool_use"),
+            None,
+        )
+        if tool_block is None:
             logger.error(
-                "[ANTHROPIC] %s: empty response (stop_reason=%s, content_blocks=%d)",
+                "[ANTHROPIC] %s: no tool_use block in response (stop_reason=%s, blocks=%d)",
                 self.__class__.__name__,
                 response.stop_reason,
                 len(response.content),
             )
-            raise ValueError("LLM returned empty response")
+            raise ValueError("LLM did not emit the expected tool_use block")
 
-        # Strip markdown code fences if the LLM wraps the JSON
-        if raw_text.startswith("```"):
-            raw_text = raw_text.split("\n", 1)[1]  # remove opening ```json
-            raw_text = raw_text.rsplit("```", 1)[0]  # remove closing ```
-            raw_text = raw_text.strip()
+        parsed: list[dict[str, Any]] = list(tool_block.input.get("results", []))
 
-        try:
-            parsed: list[dict[str, Any]] = json.loads(raw_text)
-        except json.JSONDecodeError:
-            logger.error(
-                "[ANTHROPIC] %s: invalid JSON (first 200 chars): %s",
-                self.__class__.__name__,
-                raw_text[:200],
-            )
-            raise
-
+        # Schema enforces len == batch_size; keep a defensive check so an
+        # Anthropic edge case surfaces as a clear error rather than a
+        # silent off-by-one downstream.
         count_valid = len(parsed) == len(batch)
         langfuse.score_current_span(
             name="output_count_valid",

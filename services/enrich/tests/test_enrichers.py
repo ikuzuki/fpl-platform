@@ -1,6 +1,5 @@
 """Unit tests for concrete enricher implementations and Pydantic output models."""
 
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -246,6 +245,15 @@ class TestEnricherConfig:
         prompt = enricher._get_system_prompt()
         assert "difficulty_score" in prompt
 
+    def test_each_enricher_wires_its_output_model(self, mock_client: MagicMock) -> None:
+        """Every enricher must point ``OUTPUT_MODEL`` at its Pydantic schema —
+        the base class builds the Anthropic tool schema from it, and a silent
+        mismatch would let the wrong shape through the decoder."""
+        assert PlayerSummaryEnricher.OUTPUT_MODEL is PlayerSummaryOutput
+        assert InjurySignalEnricher.OUTPUT_MODEL is InjurySignalOutput
+        assert SentimentEnricher.OUTPUT_MODEL is SentimentOutput
+        assert FixtureOutlookEnricher.OUTPUT_MODEL is FixtureOutlookOutput
+
 
 # --- Cost calculation tests -------------------------------------------------
 
@@ -273,14 +281,3 @@ class TestCostCalculation:
         assert report["total_output_tokens"] == 6000
         assert report["estimated_cost_usd"] > 0
         assert len(report["model_breakdown"]) == 2
-
-
-def _make_handler_response(results: list[dict[str, Any]]) -> MagicMock:
-    """Build a mock Anthropic messages.create() response."""
-    import json
-
-    response = MagicMock()
-    response.content = [MagicMock(text=json.dumps(results))]
-    response.usage.input_tokens = 100
-    response.usage.output_tokens = 50
-    return response

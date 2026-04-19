@@ -21,6 +21,7 @@ class FixtureOutlookEnricher(FPLEnricher):
 
     BATCH_SIZE = 5
     MODEL = "claude-sonnet-4-6"
+    OUTPUT_MODEL = FixtureOutlookOutput
     RELEVANT_FIELDS = [
         "web_name",
         "team",
