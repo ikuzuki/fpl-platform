@@ -27,7 +27,6 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
-import boto3
 from anthropic import AsyncAnthropic
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -53,6 +52,7 @@ from fpl_lib.observability import (
 from fpl_lib.observability import (
     flush as langfuse_flush,
 )
+from fpl_lib.secrets import resolve_secret_to_env
 
 logger = logging.getLogger(__name__)
 
@@ -63,9 +63,6 @@ ENVIRONMENT = os.environ.get("ENV", "dev")
 BUDGET_TABLE = os.environ.get("AGENT_USAGE_TABLE", f"fpl-agent-usage-{ENVIRONMENT}")
 MONTHLY_BUDGET_USD = float(os.environ.get("AGENT_MONTHLY_BUDGET_USD", "5.0"))
 NEON_DATABASE_URL_ENV = "NEON_DATABASE_URL"
-NEON_SECRET_ARN_ENV = "NEON_SECRET_ARN"
-ANTHROPIC_API_KEY_ENV = "ANTHROPIC_API_KEY"
-ANTHROPIC_SECRET_ARN_ENV = "ANTHROPIC_SECRET_ARN"
 TEAM_FETCHER_FUNCTION_NAME_ENV = "TEAM_FETCHER_FUNCTION_NAME"
 
 # Production traffic is same-origin via CloudFront — the browser hits the
@@ -80,30 +77,6 @@ CORS_ORIGINS = [
 ]
 
 
-def _resolve_secret_to_env(arn_env: str, target_env: str, *, region: str = "eu-west-2") -> None:
-    """Fetch a Secrets Manager secret by ARN env var and export the plain value.
-
-    The Lambda container receives secret ARNs (not the values) so that IaC
-    doesn't leak credentials into Terraform state. Downstream SDKs — Anthropic
-    in particular — read plain env vars (``ANTHROPIC_API_KEY``), so the agent
-    must materialise those before any client is constructed. Without this
-    step ``AsyncAnthropic()`` raises at cold-start, the LWA readiness probe
-    never passes, and every Function URL request returns 502 with no log
-    stream written (init crashes before Python configures logging).
-
-    Idempotent: if ``target_env`` is already set (local dev, tests), skips
-    the AWS call entirely. Missing ``arn_env`` is tolerated — callers choose
-    whether the missing secret is fatal by downstream behaviour.
-    """
-    if os.environ.get(target_env):
-        return
-    arn = os.environ.get(arn_env)
-    if not arn:
-        return
-    client = boto3.client("secretsmanager", region_name=region)
-    os.environ[target_env] = client.get_secret_value(SecretId=arn)["SecretString"]
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Initialise shared resources on cold-start, clean up on shutdown.
@@ -112,12 +85,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     boto3 clients and the in-memory rate limiter are fine to drop.
 
     Secret resolution runs first and must complete before ``AsyncAnthropic()``
-    — the SDK constructor reads ``ANTHROPIC_API_KEY`` from env and raises
-    immediately if it's missing. Langfuse is best-effort by design; Neon is
-    optional (health endpoint must still boot without it).
+    reads ``ANTHROPIC_API_KEY``. The Anthropic key is required — if the fetch
+    fails we let the exception propagate so cold-start dies loudly rather
+    than silently 500-ing every chat request. Neon is tolerant: the health
+    endpoint must still boot without it, so the missing-key path degrades
+    to a graph-less app that returns 503 on ``/chat`` and ``/team``.
+    Langfuse is best-effort by design — ``init_langfuse`` swallows its own
+    failures so tracing outages never block the request path.
     """
-    _resolve_secret_to_env(ANTHROPIC_SECRET_ARN_ENV, ANTHROPIC_API_KEY_ENV)
-    _resolve_secret_to_env(NEON_SECRET_ARN_ENV, NEON_DATABASE_URL_ENV)
+    resolve_secret_to_env(ENVIRONMENT, "anthropic-api-key", "ANTHROPIC_API_KEY")
+    try:
+        resolve_secret_to_env(ENVIRONMENT, "neon-database-url", NEON_DATABASE_URL_ENV)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Neon secret fetch failed, chat/team will return 503: %s", exc)
     init_langfuse(environment=ENVIRONMENT)
 
     database_url = os.environ.get(NEON_DATABASE_URL_ENV)
