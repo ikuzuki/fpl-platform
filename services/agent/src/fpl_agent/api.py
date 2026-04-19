@@ -105,7 +105,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     neon: NeonClient | None = None
 
     if database_url:
-        neon = NeonClient(database_url, init=register_vector)
+        # ``min_size=0`` defers Postgres connection to the first query. Neon's
+        # serverless compute is scale-to-zero and the first wake can take 5-10s;
+        # at ``min_size=1`` ``asyncpg.create_pool`` opens that first connection
+        # synchronously during lifespan, which blew past Lambda's 10s init
+        # timeout (LWA's /health probe never went green, every Function URL
+        # request returned 502 with "app is not ready" filling CloudWatch).
+        # ``register_vector`` still runs — asyncpg invokes ``init`` on every
+        # new pool connection, lazy or eager.
+        neon = NeonClient(database_url, min_size=0, init=register_vector)
         await neon.connect()
         tools = make_tools(neon)
     else:
