@@ -44,21 +44,6 @@ resource "aws_cloudfront_origin_access_control" "data" {
   signing_protocol                  = "sigv4"
 }
 
-# Lambda OAC — CloudFront signs every request to the agent Function URL with
-# SigV4. Paired with `authorization_type = "AWS_IAM"` on the Function URL and a
-# CloudFront-scoped resource policy on the Lambda, this makes the Function URL
-# unreachable directly — the only path to the agent is through this distribution.
-# Requires AWS provider >= 5.40.0 (lambda origin type); we're on 5.100.0.
-resource "aws_cloudfront_origin_access_control" "agent" {
-  count = var.enable_agent_api ? 1 : 0
-
-  name                              = "fpl-${var.environment}-agent-oac"
-  description                       = "OAC for agent Lambda Function URL"
-  origin_access_control_origin_type = "lambda"
-  signing_behavior                  = "always"
-  signing_protocol                  = "sigv4"
-}
-
 # -----------------------------------------------------------------------------
 # CloudFront distribution
 #
@@ -93,18 +78,19 @@ resource "aws_cloudfront_distribution" "dashboard" {
   }
 
   # --- Agent API origin (conditional — only when agent_api_domain is set) ---
-  # The Lambda Function URL is a standard HTTPS endpoint, so we use
-  # custom_origin_config alongside the Lambda OAC. The OAC makes CloudFront
-  # sign every origin request with SigV4; the Function URL's
-  # `authorization_type = "AWS_IAM"` rejects any unsigned request, so the
-  # only way to reach the agent is through this distribution. Host header
-  # is stripped via AllViewerExceptHostHeader policy on the cache behaviour.
+  # The Lambda Function URL is a standard HTTPS endpoint reached via
+  # custom_origin_config. The Function URL is currently on
+  # `authorization_type = "NONE"` + `principal = "*"` (reverted in the same
+  # incident that removed OAC here — see the entry in CHANGELOG), so no
+  # SigV4 signing is needed on the origin request. Host header is stripped
+  # via AllViewerExceptHostHeader policy on the cache behaviour.
+  # OAC will be reintroduced if/when the Function URL is re-hardened to
+  # AWS_IAM — tracked in docs/architecture/security-architecture.md.
   dynamic "origin" {
     for_each = var.enable_agent_api ? [1] : []
     content {
-      origin_id                = "agent_api"
-      domain_name              = var.agent_api_domain
-      origin_access_control_id = aws_cloudfront_origin_access_control.agent[0].id
+      origin_id   = "agent_api"
+      domain_name = var.agent_api_domain
 
       custom_origin_config {
         http_port              = 80
