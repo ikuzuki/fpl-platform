@@ -42,6 +42,27 @@ resource "aws_iam_role_policy" "lambda_agent_dynamo" {
   })
 }
 
+# The agent's GET /team endpoint invokes the team-fetcher Lambda synchronously
+# (see services/agent/src/fpl_agent/squad_loader.py). The agent graph itself
+# never invokes Lambdas — squad loading is strictly an HTTP-layer concern.
+# Scoped to the one function rather than `*` so a future second invokeable
+# Lambda has to be granted explicitly.
+resource "aws_iam_role_policy" "lambda_agent_invoke_team_fetcher" {
+  name = "fpl-${var.environment}-agent-invoke-team-fetcher"
+  role = module.lambda_role.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["lambda:InvokeFunction"]
+        Resource = module.lambda_team_fetcher.function_arn
+      }
+    ]
+  })
+}
+
 # Lambda Function URL with response streaming. `AuthType = NONE` because
 # CloudFront is the only fronting origin in production — never called directly.
 # A future hardening step is moving to AWS_IAM with CloudFront OAC signing

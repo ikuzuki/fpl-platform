@@ -18,16 +18,23 @@ from typing import Annotated, Any, Literal, TypedDict
 
 from pydantic import BaseModel, Field
 
-# Tool names are constrained to the 6 implemented tools. Using ``Literal``
+from fpl_agent.models.responses import UserSquad
+
+# Tool names are constrained to the 5 implemented tools. Using ``Literal``
 # here means the planner's output is validated by Pydantic the moment it
 # comes back — no chance of the planner hallucinating "search_players".
+#
+# Squad loading is deliberately *not* a tool — it's an HTTP-layer concern.
+# The dashboard calls ``GET /team`` and echoes the resulting ``UserSquad``
+# back on every chat turn; the agent reads it from ``state["user_squad"]``.
+# Letting the agent dispatch a cross-service Lambda invoke at planning time
+# would require it to invent a ``team_id`` it has no source of truth for.
 ToolName = Literal[
     "query_player",
     "search_similar_players",
     "query_players_by_criteria",
     "get_fixture_outlook",
     "get_injury_signals",
-    "fetch_user_squad",
 ]
 
 
@@ -53,12 +60,15 @@ class AgentState(TypedDict, total=False):
     ``total=False`` so partial state dicts are valid during graph execution —
     nodes only need to populate the fields they actually change.
 
-    User squad data (when :func:`fetch_user_squad` is called) lives under
-    ``gathered_data["fetch_user_squad(...)"]`` — it is not hoisted into a
-    dedicated state key. Every tool result is treated uniformly.
+    ``user_squad`` is *input context* — seeded from the API request when the
+    dashboard pre-loaded a squad via ``GET /team``. It deliberately lives on
+    its own field rather than inside ``gathered_data`` so the quality-score
+    ``tool_success_rate`` reflects only real tool calls, and so the planner
+    + executor can read it from a single, typed source.
     """
 
     question: str
+    user_squad: UserSquad | None
     plan: list[ToolCall]
     gathered_data: Annotated[dict[str, Any], merge_dicts]
     tool_calls_made: Annotated[list[str], operator.add]
@@ -69,15 +79,21 @@ class AgentState(TypedDict, total=False):
     error: str | None
 
 
-def initial_state(question: str) -> AgentState:
+def initial_state(question: str, squad: UserSquad | None = None) -> AgentState:
     """Build a fresh state with all fields populated to their zero values.
 
     LangGraph tolerates missing keys, but passing a complete dict makes
     debugging easier — you can diff the starting state against the final
     state and see exactly what each node contributed.
+
+    Args:
+        question: The user's chat question.
+        squad: Optional pre-loaded user squad. When provided, the planner sees
+            it in the prompt and the executor short-circuits ``fetch_user_squad``.
     """
     return {
         "question": question,
+        "user_squad": squad,
         "plan": [],
         "gathered_data": {},
         "tool_calls_made": [],

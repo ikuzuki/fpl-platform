@@ -55,6 +55,43 @@ If both have `SecretString` values and traces still don't appear, check the
 Lambda execution role has `secretsmanager:GetSecretValue` on
 `/fpl-platform/*` (covered by the shared `lambda-role` module).
 
+## Loading a User's FPL Squad
+
+`GET /team?team_id={id}&gameweek={n}` on the agent service returns the
+enriched `UserSquad` shape — picks joined against Neon for `web_name`,
+`team_name`, `price`. Money fields are in pounds millions (£3.2m), not
+the FPL API's tenths-of-millions wire format.
+
+```bash
+# Smoke test against dev (replace with the live CloudFront domain)
+curl -s "https://{cloudfront-domain}/api/agent/team?team_id=5767400&gameweek=33" | jq .
+```
+
+Status code map:
+- **200** — enriched squad
+- **404** — `team_id` doesn't exist on FPL (or has no picks for that GW)
+- **502** — upstream failure: team-fetcher Lambda erroring, FPL rate-limiting, or Neon down
+- **503** — `TEAM_FETCHER_FUNCTION_NAME` env var missing (Lambda not wired in)
+
+If a chat request includes the squad in the request body, the agent
+seeds it onto `state["user_squad"]` so both the planner and recommender
+prompts see it as context. Squad loading is HTTP-layer only — the agent
+graph has no tool that fetches a squad. Langfuse traces for those
+requests carry `team_id` + `gameweek` metadata so you can filter by
+manager.
+
+### When `/team` returns 502 in production
+
+1. Check the team-fetcher Lambda directly:
+   ```bash
+   aws --profile fpl-prod lambda invoke --function-name fpl-prod-team-fetcher \
+     --payload '{"team_id":5767400,"gameweek":33}' /tmp/out.json && cat /tmp/out.json
+   ```
+2. If that fails with `FPLAccessError`, FPL is rate-limiting via Cloudflare
+   — the Lambda already retries 403s once after 2s. Wait, then retry.
+3. If it fails with a Neon error, check Neon status and the
+   `NEON_DATABASE_URL` secret hasn't rotated.
+
 ## Common Issues
 
 *To be populated as issues are encountered.*

@@ -394,3 +394,73 @@ async def test_log_usage_warns_on_max_tokens_truncation(
     assert any(
         "hit max_tokens" in r.message and r.levelno == logging.WARNING for r in caplog.records
     )
+
+
+# ============================================================================
+# user_squad: planner prompt gating + executor short-circuit
+# ============================================================================
+def _fake_squad():
+    """A minimal valid UserSquad for tests that need one."""
+    from fpl_agent.models.responses import SquadPick, UserSquad
+
+    picks = [
+        SquadPick(
+            element_id=430,
+            web_name="Haaland",
+            team_name="Man City",
+            position=1,
+            element_type=4,
+            multiplier=2,
+            is_captain=True,
+            is_vice_captain=False,
+            price=14.2,
+        ),
+    ]
+    return UserSquad(
+        team_id=12345,
+        gameweek=33,
+        picks=picks,
+        bank=2.5,
+        total_value=100.5,
+        active_chip=None,
+        overall_rank=500_000,
+        total_points=1500,
+    )
+
+
+@pytest.mark.asyncio
+async def test_planner_prompt_includes_squad_summary_when_loaded() -> None:
+    """Squad metadata flows into the planner prompt as one-line context."""
+    payload = {"plan": []}
+    client = _mock_client(_tool_use_response("record_plan", payload))
+    state: AgentState = {**initial_state("Who should I captain?", squad=_fake_squad())}
+
+    await planner_node(state, client=client)
+
+    prompt = client.messages.create.await_args.kwargs["messages"][0]["content"]
+    assert "captain=Haaland" in prompt
+    assert "bank=£2.5m" in prompt
+
+
+@pytest.mark.asyncio
+async def test_planner_prompt_says_no_squad_when_absent() -> None:
+    payload = {"plan": []}
+    client = _mock_client(_tool_use_response("record_plan", payload))
+
+    await planner_node(initial_state("Who should I captain?"), client=client)
+
+    prompt = client.messages.create.await_args.kwargs["messages"][0]["content"]
+    assert "No user squad provided" in prompt
+
+
+def test_fetch_user_squad_is_not_a_valid_tool_name() -> None:
+    """Squad loading is HTTP-layer only — Pydantic must reject it as a planner output.
+
+    Regression guard: if the Literal is ever extended back to include this
+    name, the planner could dispatch a cross-service Lambda invoke at the
+    LLM's discretion, which is exactly what we removed.
+    """
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        ToolCall(name="fetch_user_squad", args={"team_id": 1, "gameweek": 33})

@@ -98,3 +98,51 @@ class AgentResponse(BaseModel):
     report: ScoutReport
     iterations_used: int
     tool_calls_made: list[str]
+
+
+# ---------------------------------------------------------------------------
+# User squad — enriched picks served by GET /team and echoed back by POST /chat
+# ---------------------------------------------------------------------------
+# The team-fetcher Lambda returns FPL's raw shape: `picks` carry `element` IDs
+# only, no names. The dashboard needs names for the squad card and the agent's
+# recommender already speaks names, not IDs. So `/team` joins the FPL response
+# against Neon `player_embeddings` and serves the enriched form below.
+#
+# Money fields (price, bank, total_value) are in pounds millions — the FPL API
+# uses tenths-of-millions on the wire, but storing the friendlier float here
+# means the frontend renders without a divisor and the recommender prompt
+# reads naturally ("£8.5m" not "85").
+
+
+class SquadPick(BaseModel):
+    """One of the 15 entries in a manager's squad for a gameweek."""
+
+    model_config = _STRICT_CONFIG
+
+    element_id: int = Field(description="FPL player ID (the bootstrap-static `element`)")
+    web_name: str
+    team_name: str
+    position: int = Field(description="1-15 squad slot; 1-11 are starters, 12-15 bench")
+    element_type: int = Field(description="FPL position code: 1=GK, 2=DEF, 3=MID, 4=FWD")
+    multiplier: int = Field(description="0=bench, 1=starting, 2=captain, 3=triple captain")
+    is_captain: bool
+    is_vice_captain: bool
+    price: float = Field(description="Player price in £m at the time of the snapshot")
+
+
+class UserSquad(BaseModel):
+    """A user's enriched FPL squad for one gameweek, ready for both UI + agent."""
+
+    model_config = _STRICT_CONFIG
+
+    team_id: int
+    gameweek: int
+    picks: list[SquadPick]
+    bank: float = Field(description="Cash in the bank in £m")
+    total_value: float = Field(description="Squad market value in £m (excluding bank)")
+    active_chip: str | None = Field(
+        default=None,
+        description="Active chip code (`wildcard`, `freehit`, `bboost`, `3xc`) or null",
+    )
+    overall_rank: int | None = None
+    total_points: int

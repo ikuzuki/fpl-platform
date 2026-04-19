@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -48,7 +47,7 @@ def _fake_row(**overrides: Any) -> dict[str, Any]:
     return base
 
 
-def test_make_tools_returns_all_six_tool_names() -> None:
+def test_make_tools_returns_all_five_tool_names() -> None:
     tools = make_tools(_mock_neon())
     assert set(tools.keys()) == {
         "query_player",
@@ -56,7 +55,6 @@ def test_make_tools_returns_all_six_tool_names() -> None:
         "query_players_by_criteria",
         "get_fixture_outlook",
         "get_injury_signals",
-        "fetch_user_squad",
     }
 
 
@@ -152,58 +150,6 @@ async def test_get_injury_signals_returns_expected_fields() -> None:
     assert "summary" in result
 
 
-@pytest.mark.asyncio
-async def test_fetch_user_squad_raises_when_env_not_set(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("TEAM_FETCHER_FUNCTION_NAME", raising=False)
-    tools = make_tools(_mock_neon())
-
-    with pytest.raises(ToolError, match="not set"):
-        await tools["fetch_user_squad"](team_id=123, gameweek=30)
-
-
-@pytest.mark.asyncio
-async def test_fetch_user_squad_invokes_lambda_with_payload(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("TEAM_FETCHER_FUNCTION_NAME", "fpl-data-dev-team-fetcher")
-
-    squad = {"picks": [{"element": 1, "position": 1}], "bank": 2.5}
-    fake_payload = MagicMock()
-    fake_payload.read.return_value = json.dumps(squad).encode("utf-8")
-    fake_lambda_client = MagicMock()
-    fake_lambda_client.invoke.return_value = {"Payload": fake_payload}
-
-    with patch(
-        "fpl_agent.tools.player_tools.boto3.client",
-        return_value=fake_lambda_client,
-    ):
-        tools = make_tools(_mock_neon())
-        result = await tools["fetch_user_squad"](team_id=123, gameweek=30)
-
-    assert result == squad
-    call_kwargs = fake_lambda_client.invoke.call_args.kwargs
-    assert call_kwargs["FunctionName"] == "fpl-data-dev-team-fetcher"
-    assert json.loads(call_kwargs["Payload"]) == {"team_id": 123, "gameweek": 30}
-
-
-@pytest.mark.asyncio
-async def test_fetch_user_squad_raises_on_lambda_error(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("TEAM_FETCHER_FUNCTION_NAME", "fpl-data-dev-team-fetcher")
-
-    fake_payload = MagicMock()
-    fake_payload.read.return_value = b'{"errorType":"TeamNotFoundError"}'
-    fake_lambda_client = MagicMock()
-    fake_lambda_client.invoke.return_value = {
-        "Payload": fake_payload,
-        "FunctionError": "Unhandled",
-    }
-
-    with patch(
-        "fpl_agent.tools.player_tools.boto3.client",
-        return_value=fake_lambda_client,
-    ):
-        tools = make_tools(_mock_neon())
-        with pytest.raises(ToolError, match="team-fetcher Lambda error"):
-            await tools["fetch_user_squad"](team_id=99, gameweek=30)
+# Squad loading is intentionally not a tool — it's an HTTP-layer concern
+# (see fpl_agent.squad_loader and the GET /team route). Coverage for that
+# path lives in tests/test_squad_loader.py.

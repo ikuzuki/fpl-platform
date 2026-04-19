@@ -43,7 +43,7 @@ from fpl_agent.graph.config import (
     REFLECTOR_MODEL,
     TOOL_TIMEOUT_SECONDS,
 )
-from fpl_agent.models.responses import ReflectionResult, ScoutReport
+from fpl_agent.models.responses import ReflectionResult, ScoutReport, UserSquad
 from fpl_agent.models.state import AgentState, ToolCall
 from fpl_agent.tools.player_tools import ToolError, ToolFn
 from fpl_lib.observability import observe, record_llm_usage
@@ -194,6 +194,40 @@ def _result_key(tc: ToolCall) -> str:
     return f"{tc.name}({arg_summary})"
 
 
+def _summarise_squad(squad: UserSquad | None) -> str:
+    """One-line squad block for the planner prompt.
+
+    The planner only needs to know whether a squad is loaded so it can decide
+    whether to ground tool calls in 'my team' context. The recommender gets a
+    richer block via :func:`_render_squad_for_recommender`.
+    """
+    if squad is None:
+        return (
+            "No user squad provided with this request. Answer generically — "
+            "do not reference 'my team' specifics."
+        )
+    captain = next((p for p in squad.picks if p.is_captain), None)
+    captain_name = captain.web_name if captain else "(none)"
+    return (
+        f"Loaded for GW{squad.gameweek}: {len(squad.picks)} players, "
+        f"captain={captain_name}, bank=£{squad.bank:.1f}m, "
+        f"value=£{squad.total_value:.1f}m, chip={squad.active_chip or 'none'}."
+    )
+
+
+def _render_squad_for_recommender(squad: UserSquad | None) -> str:
+    """Full squad payload for the recommender prompt.
+
+    Dumps the picks as JSON so the LLM can quote any field (web_name, price,
+    bench/captain status, position) when answering 'my team' questions. The
+    planner gets the one-line summary from :func:`_summarise_squad`; the
+    recommender needs the per-pick detail to be useful.
+    """
+    if squad is None:
+        return "No user squad provided — give generic advice rather than personalised picks."
+    return squad.model_dump_json()
+
+
 def _error_report(state: AgentState) -> ScoutReport:
     """Construct a minimal ScoutReport for the error short-circuit path.
 
@@ -226,6 +260,7 @@ async def planner_node(
     prompt = _load_prompt("planner").format(
         question=state["question"],
         gathered_data_json=json.dumps(state.get("gathered_data", {}), default=str),
+        user_squad_block=_summarise_squad(state.get("user_squad")),
     )
 
     response = await client.messages.create(
@@ -400,6 +435,7 @@ async def recommender_node(
     prompt = _load_prompt("recommender").format(
         question=state["question"],
         gathered_data_json=json.dumps(state.get("gathered_data", {}), default=str),
+        user_squad_block=_render_squad_for_recommender(state.get("user_squad")),
     )
 
     response = await client.messages.create(
