@@ -42,6 +42,15 @@ from fpl_agent.models.responses import AgentResponse, ScoutReport
 from fpl_agent.models.state import initial_state
 from fpl_agent.tools.player_tools import make_tools
 from fpl_lib.clients.neon import NeonClient
+from fpl_lib.observability import (
+    Langfuse,
+    init_langfuse,
+    observe,
+    propagate_attributes,
+)
+from fpl_lib.observability import (
+    flush as langfuse_flush,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +80,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     The Neon pool is the only resource that needs explicit teardown —
     boto3 clients and the in-memory rate limiter are fine to drop.
+
+    Langfuse is initialised here so every ``@observe`` span in the graph
+    and tools picks up the keys on first use. If Secrets Manager is
+    unreachable, ``init_langfuse`` logs a warning and returns — the
+    service still runs, just without tracing.
     """
+    init_langfuse(environment=ENVIRONMENT)
+
     database_url = os.environ.get(NEON_DATABASE_URL_ENV)
     anthropic_client = AsyncAnthropic()  # reads ANTHROPIC_API_KEY from env
     neon: NeonClient | None = None
@@ -217,6 +233,52 @@ async def _run_graph(graph: Any, question: str) -> dict[str, Any]:
     return await graph.ainvoke(initial_state(question))
 
 
+def _emit_quality_scores(final_state: dict[str, Any]) -> None:
+    """Attach three request-level scores to the current Langfuse trace.
+
+    Called after the graph completes (or after a streaming run ends). The
+    scores are pure functions of ``final_state`` so they can be unit-tested
+    without any Langfuse fixture; the push itself is wrapped in try/except
+    because observability must never interrupt the response path.
+
+    Scores:
+
+    * ``output_valid`` — 1.0 if a :class:`ScoutReport` was produced without
+      the graph setting ``error``, else 0.0. Drives dashboards that track
+      "how often the agent actually answered."
+    * ``iterations_used`` — raw iteration count (lower is better). Langfuse
+      UI aggregates so this is logged as-is.
+    * ``tool_success_rate`` — fraction of ``gathered_data`` entries that
+      aren't error dicts. 1.0 when no tools ran (vacuously — nothing failed).
+    """
+    try:
+        report = final_state.get("final_response")
+        error = final_state.get("error")
+        output_valid = 1.0 if isinstance(report, ScoutReport) and not error else 0.0
+
+        gathered = final_state.get("gathered_data", {}) or {}
+        if gathered:
+            failed = sum(1 for v in gathered.values() if isinstance(v, dict) and "error" in v)
+            tool_success_rate = 1.0 - (failed / len(gathered))
+        else:
+            tool_success_rate = 1.0
+
+        langfuse = Langfuse()
+        langfuse.score_current_trace(name="output_valid", value=output_valid)
+        langfuse.score_current_trace(
+            name="iterations_used",
+            value=float(final_state.get("iteration_count", 0)),
+        )
+        langfuse.score_current_trace(name="tool_success_rate", value=round(tool_success_rate, 4))
+    except Exception:  # noqa: BLE001
+        logger.debug("failed to emit quality scores to Langfuse", exc_info=True)
+
+
+def _trace_tags() -> list[str]:
+    """Tags applied to every agent trace. Kept here so changes are one edit."""
+    return ["agent", ENVIRONMENT]
+
+
 def _sse(event_type: str, data: dict[str, Any] | str) -> dict[str, str]:
     """Format a dict for ``sse_starlette.EventSourceResponse``.
 
@@ -228,29 +290,44 @@ def _sse(event_type: str, data: dict[str, Any] | str) -> dict[str, str]:
 
 
 @app.post("/chat/sync")
+@observe(name="agent_chat_request")
 async def chat_sync(
     req: ChatRequest,
     budget: BudgetTracker = Depends(check_budget),
     _rl: None = Depends(check_rate_limit),
     graph: Any = Depends(get_graph),
+    x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
 ) -> JSONResponse:
     """Blocking JSON endpoint — runs the agent end-to-end and returns the report."""
-    try:
-        final_state = await _run_graph(graph, req.question)
-    except Exception as exc:  # noqa: BLE001 — surface any agent failure as 500
-        logger.exception("agent run failed")
-        raise HTTPException(status_code=500, detail=f"agent_failure: {exc}") from exc
+    with propagate_attributes(
+        session_id=x_session_id or "anon",
+        user_id="anon",
+        tags=_trace_tags(),
+        metadata={"question_length": str(len(req.question)), "transport": "sync"},
+    ):
+        try:
+            final_state = await _run_graph(graph, req.question)
+        except Exception as exc:  # noqa: BLE001 — surface any agent failure as 500
+            logger.exception("agent run failed")
+            langfuse_flush()
+            raise HTTPException(status_code=500, detail=f"agent_failure: {exc}") from exc
 
-    await budget.record_batch(final_state.get("llm_usage", []))
-    return JSONResponse(_agent_response(final_state).model_dump(mode="json"))
+        _emit_quality_scores(final_state)
+        await budget.record_batch(final_state.get("llm_usage", []))
+        response = _agent_response(final_state).model_dump(mode="json")
+
+    langfuse_flush()
+    return JSONResponse(response)
 
 
 @app.post("/chat")
+@observe(name="agent_chat_request")
 async def chat_stream(
     req: ChatRequest,
     budget: BudgetTracker = Depends(check_budget),
     _rl: None = Depends(check_rate_limit),
     graph: Any = Depends(get_graph),
+    x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
 ) -> EventSourceResponse:
     """SSE endpoint.
 
@@ -260,31 +337,55 @@ async def chat_stream(
     completion, shaped ``{node_name: partial_state_return}``, which maps
     1:1 onto an SSE step event without needing to re-derive which node
     just ran.
+
+    The ``propagate_attributes`` context must live inside the generator —
+    not around ``EventSourceResponse(...)`` — because the generator runs
+    async after the handler returns, and contextvars don't propagate
+    across the boundary unless they're entered in the generator frame.
+    Same reason ``langfuse_flush`` is in the generator's ``finally``.
     """
 
     async def event_generator() -> AsyncIterator[dict[str, str]]:
         final_state: dict[str, Any] = dict(initial_state(req.question))
-        try:
-            async for update in graph.astream(initial_state(req.question), stream_mode="updates"):
-                # update is {node_name: partial_dict}; typically one key per tick.
-                for node_name, partial in update.items():
-                    # Re-apply the partial to our shadow state so we have the
-                    # final state ready when the stream ends. This is the same
-                    # work LangGraph does internally — doing it here avoids a
-                    # second ``ainvoke`` call.
-                    _merge_partial(final_state, partial)
-                    yield _sse("step", {"node": node_name})
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("agent stream failed")
-            yield _sse("error", {"message": str(exc)})
-            return
+        with propagate_attributes(
+            session_id=x_session_id or "anon",
+            user_id="anon",
+            tags=_trace_tags(),
+            metadata={
+                "question_length": str(len(req.question)),
+                "transport": "sse",
+            },
+        ):
+            try:
+                async for update in graph.astream(
+                    initial_state(req.question), stream_mode="updates"
+                ):
+                    # update is {node_name: partial_dict}; typically one key per tick.
+                    for node_name, partial in update.items():
+                        # Re-apply the partial to our shadow state so we have
+                        # the final state ready when the stream ends. This is
+                        # the same work LangGraph does internally — doing it
+                        # here avoids a second ``ainvoke`` call.
+                        _merge_partial(final_state, partial)
+                        yield _sse("step", {"node": node_name})
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("agent stream failed")
+                yield _sse("error", {"message": str(exc)})
+                langfuse_flush()
+                return
 
-        try:
-            await budget.record_batch(final_state.get("llm_usage", []))
-        except Exception:  # noqa: BLE001 — budget write failures must not kill the response
-            logger.exception("failed to record usage after graph run")
+            _emit_quality_scores(final_state)
+            try:
+                await budget.record_batch(final_state.get("llm_usage", []))
+            except Exception:  # noqa: BLE001 — budget write failures must not kill the response
+                logger.exception("failed to record usage after graph run")
 
-        yield _sse("result", _agent_response(final_state).model_dump(mode="json"))
+            yield _sse("result", _agent_response(final_state).model_dump(mode="json"))
+
+        # Outside propagate_attributes — flush must happen after the last
+        # event is yielded so client disconnect between steps still uploads
+        # accumulated spans.
+        langfuse_flush()
 
     return EventSourceResponse(event_generator())
 

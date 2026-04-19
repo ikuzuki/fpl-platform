@@ -266,3 +266,108 @@ def test_budget_endpoint_returns_snapshot(client: TestClient) -> None:
     body = resp.json()
     assert set(body.keys()) == {"spend_usd", "limit_usd", "remaining_usd"}
     assert body["limit_usd"] == 5.0
+
+
+# ---------------------------------------------------------------------------
+# Quality scores + flush — observability wiring
+# ---------------------------------------------------------------------------
+def test_emit_quality_scores_reports_valid_report() -> None:
+    from fpl_agent.api import _emit_quality_scores
+
+    final_state: dict[str, Any] = {
+        "final_response": _scout_report_fixture(),
+        "iteration_count": 2,
+        "gathered_data": {
+            "query_player(name=Salah)": {"web_name": "Salah"},
+            "get_fixture_outlook(player=Salah)": {"error": "timeout"},
+            "get_injury_signals(player=Salah)": {"summary": "fit"},
+        },
+        "error": None,
+    }
+
+    with _patch_langfuse() as langfuse_mock:
+        _emit_quality_scores(final_state)
+
+    call_map = {
+        c.kwargs["name"]: c.kwargs["value"]
+        for c in langfuse_mock.score_current_trace.call_args_list
+    }
+    assert call_map == {
+        "output_valid": 1.0,
+        "iterations_used": 2.0,
+        "tool_success_rate": pytest.approx(0.6667, abs=1e-3),
+    }
+
+
+def test_emit_quality_scores_marks_output_invalid_on_error_state() -> None:
+    from fpl_agent.api import _emit_quality_scores
+
+    final_state: dict[str, Any] = {
+        "final_response": None,
+        "iteration_count": 3,
+        "gathered_data": {},
+        "error": "planner failed",
+    }
+
+    with _patch_langfuse() as langfuse_mock:
+        _emit_quality_scores(final_state)
+
+    call_map = {
+        c.kwargs["name"]: c.kwargs["value"]
+        for c in langfuse_mock.score_current_trace.call_args_list
+    }
+    assert call_map["output_valid"] == 0.0
+    # No tools ran — vacuously 1.0 (no failures recorded).
+    assert call_map["tool_success_rate"] == 1.0
+
+
+def test_emit_quality_scores_swallows_langfuse_failures() -> None:
+    """A broken Langfuse must not propagate — we'd rather lose a trace than a response."""
+    from fpl_agent.api import _emit_quality_scores
+
+    with _patch_langfuse(side_effect=RuntimeError("langfuse down")):
+        # Must not raise.
+        _emit_quality_scores({"final_response": _scout_report_fixture()})
+
+
+def test_chat_sync_flushes_langfuse(client: TestClient) -> None:
+    """Observability must drain on every request or Lambda freeze strands events."""
+    from unittest.mock import patch
+
+    with patch("fpl_agent.api.langfuse_flush") as mock_flush:
+        resp = client.post("/chat/sync", json={"question": "Is Salah worth it?"})
+
+    assert resp.status_code == 200
+    assert mock_flush.call_count >= 1
+
+
+def test_chat_stream_flushes_langfuse(client: TestClient) -> None:
+    from unittest.mock import patch
+
+    with (
+        patch("fpl_agent.api.langfuse_flush") as mock_flush,
+        client.stream("POST", "/chat", json={"question": "hi"}) as resp,
+    ):
+        # Drain the generator so the ``finally`` runs.
+        list(resp.iter_lines())
+
+    assert mock_flush.call_count >= 1
+
+
+# ---------------------------------------------------------------------------
+# Langfuse patching helper
+# ---------------------------------------------------------------------------
+from contextlib import contextmanager  # noqa: E402 — kept local to tests
+from unittest.mock import patch as _patch  # noqa: E402
+
+
+@contextmanager
+def _patch_langfuse(side_effect: Exception | None = None):
+    """Swap ``fpl_agent.api.Langfuse`` for a MagicMock yielding a spy instance."""
+    mock_instance = MagicMock()
+    if side_effect is not None:
+        mock_cls = MagicMock(side_effect=side_effect)
+    else:
+        mock_cls = MagicMock(return_value=mock_instance)
+    with _patch("fpl_agent.api.Langfuse", mock_cls):
+        yield mock_instance

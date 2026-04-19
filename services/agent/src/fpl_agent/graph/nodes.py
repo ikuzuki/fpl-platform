@@ -31,7 +31,6 @@ from importlib.resources import files
 from typing import Any
 
 from anthropic import AsyncAnthropic
-from langfuse import observe
 from pydantic import TypeAdapter, ValidationError
 
 from fpl_agent.graph.config import (
@@ -47,6 +46,7 @@ from fpl_agent.graph.config import (
 from fpl_agent.models.responses import ReflectionResult, ScoutReport
 from fpl_agent.models.state import AgentState, ToolCall
 from fpl_agent.tools.player_tools import ToolError, ToolFn
+from fpl_lib.observability import observe, record_llm_usage
 
 logger = logging.getLogger(__name__)
 
@@ -120,20 +120,33 @@ def _extract_tool_input(response: Any, expected_name: str) -> dict[str, Any]:
     raise ToolError(f"Anthropic response did not contain a '{expected_name}' tool_use block")
 
 
-def _record_usage(node: str, model: str, response: Any) -> dict[str, Any]:
-    """Log usage and return a dict suitable for the ``llm_usage`` state field.
+def _record_usage(
+    node: str,
+    model: str,
+    response: Any,
+    extra_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Log usage, push to Langfuse, and return a dict for the ``llm_usage`` state field.
 
-    Budget enforcement in ``middleware/budget.py`` consumes the returned
-    dicts after graph execution. Logging ``stop_reason`` is worth doing
-    because ``"max_tokens"`` means the tool_use block was truncated;
-    downstream Pydantic then raises with an unhelpful "missing field X"
-    error. Having stop_reason in the log tells future-you to raise
-    ``*_MAX_TOKENS`` instead of hunting phantom data bugs.
+    Three consumers of the same token counts:
+
+    * CloudWatch logs (here) — for grep-driven debugging when Langfuse is
+      unreachable.
+    * Langfuse (via :func:`record_llm_usage`) — so the UI shows cost and
+      latency per generation span.
+    * ``state["llm_usage"]`` (returned dict) — consumed by
+      ``middleware/budget.py`` to enforce the monthly cap.
+
+    Logging ``stop_reason`` is worth doing because ``"max_tokens"`` means
+    the tool_use block was truncated; downstream Pydantic then raises with
+    an unhelpful "missing field X" error. Having stop_reason in the log
+    tells future-you to raise ``*_MAX_TOKENS`` instead of hunting phantom
+    data bugs.
     """
     usage = getattr(response, "usage", None)
     stop_reason = getattr(response, "stop_reason", None)
-    input_tokens = getattr(usage, "input_tokens", 0) if usage else 0
-    output_tokens = getattr(usage, "output_tokens", 0) if usage else 0
+    input_tokens = int(getattr(usage, "input_tokens", 0) or 0) if usage else 0
+    output_tokens = int(getattr(usage, "output_tokens", 0) or 0) if usage else 0
     logger.info(
         "llm_usage node=%s model=%s stop_reason=%s input_tokens=%s output_tokens=%s",
         node,
@@ -147,11 +160,18 @@ def _record_usage(node: str, model: str, response: Any) -> dict[str, Any]:
             "node %s hit max_tokens — output likely truncated, Pydantic validation may fail",
             node,
         )
+    record_llm_usage(
+        model=model,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        stop_reason=stop_reason,
+        metadata={"node": node, **(extra_metadata or {})},
+    )
     return {
         "node": node,
         "model": model,
-        "input_tokens": int(input_tokens or 0),
-        "output_tokens": int(output_tokens or 0),
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
     }
 
 
@@ -196,7 +216,7 @@ def _error_report(state: AgentState) -> ScoutReport:
 # ----------------------------------------------------------------------------
 # planner
 # ----------------------------------------------------------------------------
-@observe(name="node.planner")
+@observe(name="node.planner", as_type="generation")
 async def planner_node(
     state: AgentState,
     *,
@@ -215,7 +235,15 @@ async def planner_node(
         tool_choice={"type": "tool", "name": "record_plan"},
         messages=[{"role": "user", "content": prompt}],
     )
-    usage = _record_usage("planner", PLANNER_MODEL, response)
+    usage = _record_usage(
+        "planner",
+        PLANNER_MODEL,
+        response,
+        extra_metadata={
+            "iteration": state.get("iteration_count", 0),
+            "question_length": len(state.get("question", "")),
+        },
+    )
 
     try:
         raw = _extract_tool_input(response, "record_plan")
@@ -289,7 +317,7 @@ async def tool_executor_node(
 # ----------------------------------------------------------------------------
 # reflector
 # ----------------------------------------------------------------------------
-@observe(name="node.reflector")
+@observe(name="node.reflector", as_type="generation")
 async def reflector_node(
     state: AgentState,
     *,
@@ -321,7 +349,12 @@ async def reflector_node(
         tool_choice={"type": "tool", "name": "record_reflection"},
         messages=[{"role": "user", "content": prompt}],
     )
-    usage = _record_usage("reflector", REFLECTOR_MODEL, response)
+    usage = _record_usage(
+        "reflector",
+        REFLECTOR_MODEL,
+        response,
+        extra_metadata={"iteration": state.get("iteration_count", 0)},
+    )
 
     try:
         raw = _extract_tool_input(response, "record_reflection")
@@ -346,7 +379,7 @@ async def reflector_node(
 # ----------------------------------------------------------------------------
 # recommender
 # ----------------------------------------------------------------------------
-@observe(name="node.recommender")
+@observe(name="node.recommender", as_type="generation")
 async def recommender_node(
     state: AgentState,
     *,
@@ -376,7 +409,12 @@ async def recommender_node(
         tool_choice={"type": "tool", "name": "record_scout_report"},
         messages=[{"role": "user", "content": prompt}],
     )
-    usage = _record_usage("recommender", RECOMMENDER_MODEL, response)
+    usage = _record_usage(
+        "recommender",
+        RECOMMENDER_MODEL,
+        response,
+        extra_metadata={"iteration": state.get("iteration_count", 0)},
+    )
 
     try:
         raw = _extract_tool_input(response, "record_scout_report")
