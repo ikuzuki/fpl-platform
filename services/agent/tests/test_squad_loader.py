@@ -59,7 +59,9 @@ def _raw_response(picks: list[dict[str, Any]] | None = None) -> dict[str, Any]:
 
 def _mock_lambda_payload(body: Any, *, function_error: str | None = None) -> MagicMock:
     payload = MagicMock()
-    payload.read.return_value = json.dumps(body).encode("utf-8") if not isinstance(body, bytes) else body
+    payload.read.return_value = (
+        json.dumps(body).encode("utf-8") if not isinstance(body, bytes) else body
+    )
     response: dict[str, Any] = {"Payload": payload}
     if function_error:
         response["FunctionError"] = function_error
@@ -78,9 +80,27 @@ def _mock_neon(rows: list[dict[str, Any]]) -> MagicMock:
 async def test_load_user_squad_enriches_picks_with_neon_metadata() -> None:
     raw = _raw_response()
     metadata_rows = [
-        {"player_id": 341, "web_name": "Raya", "team_name": "Arsenal", "price": 5.5, "position": "GKP"},
-        {"player_id": 430, "web_name": "Haaland", "team_name": "Man City", "price": 14.2, "position": "FWD"},
-        {"player_id": 235, "web_name": "Saka", "team_name": "Arsenal", "price": 10.5, "position": "MID"},
+        {
+            "player_id": 341,
+            "web_name": "Raya",
+            "team_name": "Arsenal",
+            "price": 5.5,
+            "position": "GKP",
+        },
+        {
+            "player_id": 430,
+            "web_name": "Haaland",
+            "team_name": "Man City",
+            "price": 14.2,
+            "position": "FWD",
+        },
+        {
+            "player_id": 235,
+            "web_name": "Saka",
+            "team_name": "Arsenal",
+            "price": 10.5,
+            "position": "MID",
+        },
     ]
     lambda_client = _mock_lambda_payload(raw)
     neon = _mock_neon(metadata_rows)
@@ -182,11 +202,16 @@ async def test_load_user_squad_invokes_lambda_with_correct_payload() -> None:
     raw = _raw_response()
     lambda_client = _mock_lambda_payload(raw)
     neon = _mock_neon(
-        [{"player_id": eid, "web_name": "p", "team_name": "t", "price": 5.0, "position": "MID"} for eid in (341, 430, 235)]
+        [
+            {"player_id": eid, "web_name": "p", "team_name": "t", "price": 5.0, "position": "MID"}
+            for eid in (341, 430, 235)
+        ]
     )
 
     with patch("fpl_agent.squad_loader.boto3.client", return_value=lambda_client):
-        await load_user_squad(team_id=5767400, gameweek=33, neon=neon, function_name="fpl-dev-team-fetcher")
+        await load_user_squad(
+            team_id=5767400, gameweek=33, neon=neon, function_name="fpl-dev-team-fetcher"
+        )
 
     call_kwargs = lambda_client.invoke.call_args.kwargs
     assert call_kwargs["FunctionName"] == "fpl-dev-team-fetcher"

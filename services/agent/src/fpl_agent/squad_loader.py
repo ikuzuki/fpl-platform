@@ -8,7 +8,7 @@ enriched :class:`UserSquad`.
 
 Errors map onto the API:
 
-* :class:`SquadNotFoundErrorError` — FPL returned 404 for that team_id (Lambda
+* :class:`SquadNotFoundError` — FPL returned 404 for that team_id (Lambda
   surfaces ``TeamNotFoundError``); the route translates to HTTP 404.
 * :class:`SquadFetchError` — Lambda invoke failed, FPL was rate-limited, or
   Neon raised. Route translates to HTTP 502.
@@ -37,9 +37,7 @@ class SquadFetchError(Exception):
     """The squad could not be loaded for a transient reason (FPL/Lambda/Neon)."""
 
 
-def _invoke_team_fetcher_sync(
-    function_name: str, team_id: int, gameweek: int
-) -> dict[str, Any]:
+def _invoke_team_fetcher_sync(function_name: str, team_id: int, gameweek: int) -> dict[str, Any]:
     """Sync boto3 invocation; called via ``asyncio.to_thread`` from the route.
 
     boto3 itself is sync — wrapping with ``to_thread`` keeps the event loop
@@ -136,7 +134,9 @@ async def load_user_squad(
         logger.exception("Neon metadata lookup failed for team %d GW%d", team_id, gameweek)
         raise SquadFetchError(f"metadata lookup failed: {exc}") from exc
 
-    picks = [_enrich_pick(raw_pick, metadata.get(int(raw_pick["element"]))) for raw_pick in picks_raw]
+    picks = [
+        _enrich_pick(raw_pick, metadata.get(int(raw_pick["element"]))) for raw_pick in picks_raw
+    ]
 
     eh: dict[str, Any] = raw.get("entry_history") or {}
     return UserSquad(
