@@ -1,38 +1,22 @@
-"""Stub API handler for the Scout Agent.
+"""Lambda entry point — adapts the FastAPI app to API Gateway via Mangum.
 
-The real LangGraph-backed implementation lands in Wave 3 (ikuzuki/fpl-platform#91).
-This stub exists so Wave 2 Terraform can provision the Lambda and API Gateway
-with an image that actually responds, letting us validate wiring end-to-end
-before the agent logic is built.
+Mangum translates API Gateway v2 (HTTP API) events into ASGI requests the
+FastAPI app already understands, and translates responses back. The
+``lifespan='on'`` setting ensures our ``@asynccontextmanager`` lifespan
+runs on the first invocation so the Neon pool, Anthropic client, compiled
+graph, and budget/rate-limit singletons are set up before any request is
+served. Subsequent warm invocations reuse the same event loop / app state.
 """
 
 from __future__ import annotations
 
-import json
 import logging
-from typing import Any
 
-logger = logging.getLogger(__name__)
+from mangum import Mangum
+
+from fpl_agent.api import app
+
+logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-
-def lambda_handler(event: dict[str, Any], context: object) -> dict[str, Any]:
-    """Return 200 on /health, 501 on everything else.
-
-    API Gateway v2 payload format 2.0 puts the path in `event["rawPath"]`.
-    """
-    path = event.get("rawPath", "")
-    logger.info("agent stub received request: path=%s", path)
-
-    if path == "/health":
-        return {
-            "statusCode": 200,
-            "headers": {"content-type": "application/json"},
-            "body": json.dumps({"status": "ok", "stub": True}),
-        }
-
-    return {
-        "statusCode": 501,
-        "headers": {"content-type": "application/json"},
-        "body": json.dumps({"error": "agent not yet implemented — see issue #91"}),
-    }
+lambda_handler = Mangum(app, lifespan="on")

@@ -62,6 +62,7 @@ class AgentState(TypedDict, total=False):
     plan: list[ToolCall]
     gathered_data: Annotated[dict[str, Any], merge_dicts]
     tool_calls_made: Annotated[list[str], operator.add]
+    llm_usage: Annotated[list[dict[str, Any]], operator.add]
     iteration_count: int
     should_continue: bool
     final_response: Any  # ScoutReport; typed ``Any`` to avoid a circular import
@@ -80,6 +81,7 @@ def initial_state(question: str) -> AgentState:
         "plan": [],
         "gathered_data": {},
         "tool_calls_made": [],
+        "llm_usage": [],
         "iteration_count": 0,
         "should_continue": False,
         "final_response": None,
