@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Infra: agent Lambda `reserved_concurrent_executions = 10` temporarily commented out** in `infrastructure/environments/dev/lambda.tf`. The `fpl-dev` AWS account ships with a 10-concurrent-execution Lambda quota (new-account default; AWS standard is 1000), and AWS enforces `UnreservedConcurrentExecutions >= 10` — so reserving any concurrency on a single function fails `terraform apply` with `InvalidParameterValueException`. A Service Quotas case has been opened to raise the account quota to 1000; the reservation will be restored under #121 once approved. Until then the agent endpoint relies on the application-level RateLimiter + BudgetTracker for spam protection, with no infrastructure-level concurrency cap.
+
 ### Added
 - **Agent: `GET /team` endpoint** that fetches a user's FPL squad and returns it pre-enriched. Two-step under the hood — invoke the team-fetcher Lambda (raw FPL passthrough), then join against Neon `player_embeddings` for `web_name` / `team_name` / `price` so consumers don't need a separate name-resolution step. Returns `UserSquad` with money fields converted from FPL's tenths-of-millions wire format to whole pounds. Errors map to: 404 for unknown team_id, 502 for upstream failure (Lambda/FPL/Neon), 503 if `TEAM_FETCHER_FUNCTION_NAME` is unset. Wrapped with `@observe(name="get_team")` so squad-load failures land next to chat traces in the same Langfuse timeline.
 - **Agent: `UserSquad` + `SquadPick` Pydantic response models** (`models/responses.py`). Enriched shape with names + team + price; money in `float` £m, not the FPL API's tenths-of-millions integers. Conversion happens once at the loader boundary so both the agent's recommender and the dashboard read natural units.

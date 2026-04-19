@@ -54,7 +54,9 @@ Automatic and free whenever traffic flows through CloudFront. Covers SYN floods,
 `AuthType = NONE`. Public by design. Never called directly in production — CloudFront is the only fronting origin. A future hardening step is moving to `AuthType = AWS_IAM` and signing requests from CloudFront via Origin Access Control; deferred until the endpoint is considered production.
 
 ### 4. Lambda reserved concurrency — infrastructure backpressure
-`reserved_concurrent_executions = 10` on the agent Lambda. When more than 10 requests are in-flight concurrently, Lambda itself returns 429 without invoking the function. This replaces API Gateway's endpoint throttling (removed per ADR-0010) with infrastructure-level enforcement.
+**Status: temporarily disabled — see [#121](https://github.com/ikuzuki/fpl-platform/issues/121).** The `fpl-dev` AWS account ships with the new-account default Lambda concurrency quota of `10` (the AWS default elsewhere is `1000`). AWS enforces `UnreservedConcurrentExecutions >= 10`, so reserving any concurrency on a single function fails with `InvalidParameterValueException`. A Service Quotas case has been opened to raise the account quota; the reservation will be restored once approved.
+
+When restored: `reserved_concurrent_executions = 10` on the agent Lambda. When more than 10 requests are in-flight concurrently, Lambda itself returns 429 without invoking the function. This replaces API Gateway's endpoint throttling (removed per ADR-0010) with infrastructure-level enforcement.
 
 Properties:
 - **Cap blast radius.** A 100-rps flood gets 10 concurrent Lambdas; the other 90 rps hit 429 without cost.
