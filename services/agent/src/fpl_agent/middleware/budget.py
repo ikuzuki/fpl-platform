@@ -109,9 +109,7 @@ class BudgetTracker:
         spend = await asyncio.to_thread(self._fetch_cost, month)
         return spend < self._limit, spend
 
-    async def record_usage(
-        self, input_tokens: int, output_tokens: int, model: str
-    ) -> float:
+    async def record_usage(self, input_tokens: int, output_tokens: int, model: str) -> float:
         """Atomically add one LLM call's usage to the monthly totals.
 
         Returns the new running cost (post-increment). Stamps

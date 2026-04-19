@@ -99,7 +99,9 @@ def get_graph(request: Request) -> Any:
     """Return the compiled graph, or 503 if Neon isn't configured."""
     graph = getattr(request.app.state, "graph", None)
     if graph is None:
-        raise HTTPException(status_code=503, detail="agent not configured (NEON_DATABASE_URL missing)")
+        raise HTTPException(
+            status_code=503, detail="agent not configured (NEON_DATABASE_URL missing)"
+        )
     return graph
 
 
@@ -238,9 +240,7 @@ async def chat_stream(
     async def event_generator() -> AsyncIterator[dict[str, str]]:
         final_state: dict[str, Any] = dict(initial_state(req.question))
         try:
-            async for update in graph.astream(
-                initial_state(req.question), stream_mode="updates"
-            ):
+            async for update in graph.astream(initial_state(req.question), stream_mode="updates"):
                 # update is {node_name: partial_dict}; typically one key per tick.
                 for node_name, partial in update.items():
                     # Re-apply the partial to our shadow state so we have the

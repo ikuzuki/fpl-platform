@@ -87,7 +87,7 @@ The agent endpoint is publicly accessible — anyone with the URL can send quest
 
 1. **API Gateway throttling** — 10 requests/second, 20 burst. First line of defence, zero code, configured in Terraform.
 
-2. **DynamoDB budget kill-switch** — tracks cumulative token usage per month. At the start of each request, check if monthly spend exceeds $5. If yes, return 429 with "demo has hit its monthly limit." This is the hard cap — even if rate limiting fails, spend is bounded.
+2. **DynamoDB budget kill-switch** — tracks cumulative token usage per month. At the start of each request, check if monthly spend exceeds $5. If yes, return 429 with "demo has hit its monthly limit." This is the hard cap — even if rate limiting fails, spend is bounded. Langfuse (ADR-0005) is the observability layer for tracing and post-hoc cost analysis; enforcement stays on DynamoDB because the check is on the hot request path and must not depend on third-party SaaS availability. DynamoDB also gives atomic `UpdateItem ADD` increments, which a batched telemetry pipeline cannot — two concurrent requests would both read stale "before" spend from Langfuse and both proceed past the cap.
 
 3. **Max 3 agent iterations** — the reflector loop is capped. Most queries resolve in 2 iterations. This bounds per-request cost regardless of question complexity.
 

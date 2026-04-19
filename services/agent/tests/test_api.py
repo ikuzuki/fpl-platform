@@ -63,8 +63,18 @@ def _mock_graph_for_happy_path() -> MagicMock:
         "iteration_count": 1,
         "tool_calls_made": ["query_player"],
         "llm_usage": [
-            {"node": "planner", "model": "claude-haiku-4-5", "input_tokens": 100, "output_tokens": 50},
-            {"node": "recommender", "model": "claude-sonnet-4-6", "input_tokens": 200, "output_tokens": 120},
+            {
+                "node": "planner",
+                "model": "claude-haiku-4-5",
+                "input_tokens": 100,
+                "output_tokens": 50,
+            },
+            {
+                "node": "recommender",
+                "model": "claude-sonnet-4-6",
+                "input_tokens": 200,
+                "output_tokens": 120,
+            },
         ],
         "gathered_data": {},
         "plan": [],
@@ -74,7 +84,12 @@ def _mock_graph_for_happy_path() -> MagicMock:
 
     async def fake_astream(_input, stream_mode: str = "updates"):
         # Emit one update per node, like LangGraph would.
-        yield {"planner": {"llm_usage": [final_state["llm_usage"][0]], "tool_calls_made": ["query_player"]}}
+        yield {
+            "planner": {
+                "llm_usage": [final_state["llm_usage"][0]],
+                "tool_calls_made": ["query_player"],
+            }
+        }
         yield {"tool_executor": {"gathered_data": {}}}
         yield {"reflector": {"should_continue": False, "iteration_count": 1}}
         yield {
@@ -137,7 +152,9 @@ def test_chat_sync_rejects_unknown_field(client: TestClient) -> None:
     assert resp.status_code == 422
 
 
-def test_chat_sse_stream_emits_steps_then_result(client: TestClient, fake_budget: _FakeBudget) -> None:
+def test_chat_sse_stream_emits_steps_then_result(
+    client: TestClient, fake_budget: _FakeBudget
+) -> None:
     with client.stream("POST", "/chat", json={"question": "Is Salah worth it?"}) as resp:
         assert resp.status_code == 200
         assert "text/event-stream" in resp.headers["content-type"]
