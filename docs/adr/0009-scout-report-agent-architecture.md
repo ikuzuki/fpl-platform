@@ -85,7 +85,7 @@ The agent endpoint is publicly accessible — anyone with the URL can send quest
 
 **Three layers of protection:**
 
-1. **API Gateway throttling** — 10 requests/second, 20 burst. First line of defence, zero code, configured in Terraform.
+1. **Lambda reserved concurrency + per-session rate limiter** — reserved concurrency caps parallel Lambda invocations (hardware-level backpressure); the in-app `RateLimiter` caps per-session request rate. Replaced API Gateway throttling after ADR-0010 moved the transport to Lambda Function URL. Full security posture documented in `docs/architecture/security-architecture.md`.
 
 2. **DynamoDB budget kill-switch** — tracks cumulative token usage per month. At the start of each request, check if monthly spend exceeds $5. If yes, return 429 with "demo has hit its monthly limit." This is the hard cap — even if rate limiting fails, spend is bounded. Langfuse (ADR-0005) is the observability layer for tracing and post-hoc cost analysis; enforcement stays on DynamoDB because the check is on the hot request path and must not depend on third-party SaaS availability. DynamoDB also gives atomic `UpdateItem ADD` increments, which a batched telemetry pipeline cannot — two concurrent requests would both read stale "before" spend from Langfuse and both proceed past the cap.
 
@@ -103,7 +103,7 @@ No authentication required. For a portfolio project, aggressive throttling plus 
 **Harder:**
 - 4 nodes + tools is more complex than a simple chain — more code to maintain
 - Latency is 10-15 seconds per query (3-4 sequential LLM calls) — mitigated by streaming intermediate steps via SSE
-- Lambda's 29-second API Gateway timeout constrains agent execution time — acceptable given the 3-iteration cap
+- Lambda's 60-second timeout bounds agent execution (up from the 29s API Gateway cliff after ADR-0010); 3-iteration cap keeps typical runs well under that
 - DynamoDB budget tracking adds a read + write per request — minor latency and another infrastructure component
 - Max 3 iterations means some complex questions may get incomplete analysis — acceptable trade-off for cost control
 

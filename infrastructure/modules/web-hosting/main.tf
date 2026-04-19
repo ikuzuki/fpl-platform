@@ -110,7 +110,7 @@ resource "aws_cloudfront_distribution" "dashboard" {
     cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"
   }
 
-  # --- /api/agent/* → agent API Gateway (no caching; SSE streams must pass through) ---
+  # --- /api/agent/* → agent Lambda Function URL (streaming; see ADR-0010) ---
   dynamic "ordered_cache_behavior" {
     for_each = var.agent_api_domain != "" ? [1] : []
     content {
@@ -119,18 +119,20 @@ resource "aws_cloudfront_distribution" "dashboard" {
       viewer_protocol_policy = "redirect-to-https"
       allowed_methods        = ["GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"]
       cached_methods         = ["GET", "HEAD"]
-      compress               = true
+      # Compression buffers responses (CloudFront must know the compressed
+      # size before sending) which would silently defeat SSE. Off by design.
+      compress = false
 
       # AWS managed: CachingDisabled — streaming LLM responses must not be cached
       cache_policy_id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
       # AWS managed: AllViewerExceptHostHeader — forwards everything (auth, body, query)
-      # but strips Host so API Gateway accepts the request.
+      # but strips Host so the Function URL accepts the request.
       origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac"
 
-      # Strip the /api/agent prefix before forwarding to API Gateway.
+      # Strip the /api/agent prefix before forwarding to the Function URL.
       # CloudFront's path_pattern selects which origin to use but doesn't
-      # rewrite the URL — so without this function, API Gateway would
-      # receive GET /api/agent/health instead of GET /health and 404.
+      # rewrite the URL — so without this function, the agent FastAPI app
+      # would receive GET /api/agent/health instead of GET /health and 404.
       function_association {
         event_type   = "viewer-request"
         function_arn = aws_cloudfront_function.strip_agent_prefix[0].arn

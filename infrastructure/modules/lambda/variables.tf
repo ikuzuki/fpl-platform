@@ -44,7 +44,13 @@ variable "environment_variables" {
 }
 
 variable "command" {
-  description = "Handler entry point for container image Lambdas (e.g. 'fpl_data.handlers.fpl_api_handler.lambda_handler')"
+  description = "Handler entry point for container image Lambdas (e.g. 'fpl_data.handlers.fpl_api_handler.lambda_handler'). Leave null to use the container image's own CMD (required when the image runs a long-lived server like uvicorn via Lambda Web Adapter)."
   type        = list(string)
   default     = null
+}
+
+variable "reserved_concurrent_executions" {
+  description = "Caps parallel invocations. -1 uses the account-level unreserved pool (default). Used as hardware-level backpressure on public endpoints — see docs/architecture/security-architecture.md."
+  type        = number
+  default     = -1
 }

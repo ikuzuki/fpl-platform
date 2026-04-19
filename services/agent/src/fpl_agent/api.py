@@ -29,6 +29,7 @@ from typing import Any
 
 from anthropic import AsyncAnthropic
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pgvector.asyncpg import register_vector
 from sse_starlette.sse import EventSourceResponse
@@ -51,6 +52,17 @@ ENVIRONMENT = os.environ.get("ENVIRONMENT", "dev")
 BUDGET_TABLE = os.environ.get("AGENT_USAGE_TABLE", f"fpl-agent-usage-{ENVIRONMENT}")
 MONTHLY_BUDGET_USD = float(os.environ.get("AGENT_MONTHLY_BUDGET_USD", "5.0"))
 NEON_DATABASE_URL_ENV = "NEON_DATABASE_URL"
+
+# Production traffic is same-origin via CloudFront — the browser hits the
+# dashboard domain and proxies to /api/agent/*, so CORS mostly matters for
+# local Vite dev. The CloudFront domain is added via env so we don't hardcode
+# a dev-specific hostname into the image.
+_extra_origins = os.environ.get("AGENT_CORS_EXTRA_ORIGINS", "")
+CORS_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    *(o.strip() for o in _extra_origins.split(",") if o.strip()),
+]
 
 
 @asynccontextmanager
@@ -89,7 +101,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await neon.close()
 
 
-app = FastAPI(title="FPL Agent API", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="FPL Agent API", version="0.3.0", lifespan=lifespan)
+
+# Moved from API Gateway to the application layer per ADR-0010. CORS for
+# /chat endpoints that stream SSE — the browser sends a preflight before the
+# POST, and the actual request must carry Access-Control-Allow-Origin on the
+# response headers (applied by this middleware to both preflight and stream
+# responses).
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "X-Session-Id"],
+)
 
 
 # ---------------------------------------------------------------------------

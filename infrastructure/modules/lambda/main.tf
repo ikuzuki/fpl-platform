@@ -1,10 +1,11 @@
 resource "aws_lambda_function" "this" {
-  function_name = "${var.project}-${var.environment}-${var.name}"
-  package_type  = "Image"
-  image_uri     = var.image_uri
-  role          = var.execution_role_arn != null ? var.execution_role_arn : aws_iam_role.lambda[0].arn
-  timeout       = var.timeout
-  memory_size   = var.memory_size
+  function_name                  = "${var.project}-${var.environment}-${var.name}"
+  package_type                   = "Image"
+  image_uri                      = var.image_uri
+  role                           = var.execution_role_arn != null ? var.execution_role_arn : aws_iam_role.lambda[0].arn
+  timeout                        = var.timeout
+  memory_size                    = var.memory_size
+  reserved_concurrent_executions = var.reserved_concurrent_executions
 
   dynamic "image_config" {
     for_each = var.command != null ? [1] : []

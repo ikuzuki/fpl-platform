@@ -3,7 +3,8 @@
 #
 # - DynamoDB table tracks monthly token usage for budget kill-switch
 # - IAM policy grants the shared Lambda role access to the table
-# - API Gateway v2 fronts the agent Lambda with CORS + throttling
+# - Lambda Function URL (RESPONSE_STREAM) is the HTTP surface; CloudFront fronts
+#   it. See ADR-0010 for the transport decision.
 # -----------------------------------------------------------------------------
 
 # Monthly usage tracking — one row per calendar month (e.g. "2026-04").
@@ -41,17 +42,17 @@ resource "aws_iam_role_policy" "lambda_agent_dynamo" {
   })
 }
 
-module "api_gateway" {
-  source = "../../modules/api-gateway"
+# Lambda Function URL with response streaming. `AuthType = NONE` because
+# CloudFront is the only fronting origin in production — never called directly.
+# A future hardening step is moving to AWS_IAM with CloudFront OAC signing
+# requests (flagged in docs/architecture/security-architecture.md).
+resource "aws_lambda_function_url" "agent" {
+  function_name      = module.lambda_agent.function_name
+  authorization_type = "NONE"
+  invoke_mode        = "RESPONSE_STREAM"
 
-  name                 = "fpl-agent-${var.environment}"
-  environment          = var.environment
-  lambda_function_name = module.lambda_agent.function_name
-  lambda_invoke_arn    = module.lambda_agent.invoke_arn
-
-  # Production traffic is same-origin (dashboard and agent both served from
-  # the CloudFront domain), so CORS only matters for local Vite dev.
-  # Intentionally scoped to localhost to avoid a circular dependency on
-  # module.web_hosting.cloudfront_domain.
-  cors_allow_origins = ["http://localhost:5173"]
+  # CORS is handled at the FastAPI application layer so the dashboard and
+  # localhost Vite dev can both hit the endpoint. Function URL CORS config
+  # is left empty to avoid a duplicate layer that would need to stay in
+  # sync with the application config.
 }
