@@ -26,10 +26,8 @@ fpl-platform/
 ├── services/
 │   ├── data/                   # Collection Lambdas (FPL API, Understat, news)
 │   ├── enrich/                 # LLM enrichment Lambdas (summaries, sentiment)
-│   ├── curate/                 # Data curation service
-│   ├── etl/                    # dbt models + DuckDB scripts
-│   ├── agent/                  # LangGraph transfer recommendation agent
-│   └── stream/                 # Kafka streaming pipeline
+│   ├── curate/                 # Curator classes that synthesise enriched data into dashboard/agent-ready JSON
+│   └── agent/                  # LangGraph transfer recommendation agent
 │
 ├── web/
 │   ├── dashboard/              # React 19 + TypeScript + Tailwind v4

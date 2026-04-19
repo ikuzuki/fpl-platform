@@ -8,9 +8,8 @@ Monorepo with shared lib, multiple services, and Terraform infrastructure.
 - `libs/fpl_lib/` — Shared Python library (models, clients, utils, validators)
 - `services/data/` — Data collection Lambdas (FPL API, Understat, news)
 - `services/enrich/` — LLM enrichment Lambdas (summaries, injury, sentiment)
-- `services/etl/` — dbt models + DuckDB processing scripts
+- `services/curate/` — Curator classes that synthesise enriched data into dashboard/agent-ready JSON
 - `services/agent/` — LangGraph transfer recommendation agent
-- `services/stream/` — Kafka streaming pipeline
 - `infrastructure/` — Terraform modules and environment configs
 - `web/` — Portfolio site + Streamlit dashboard
 - `docs/adr/` — Architecture Decision Records
@@ -91,8 +90,8 @@ Later items depend on earlier ones — don't skip ahead:
 2. **FPL API collector** — simplest Lambda; proves the pattern end-to-end
 3. **Understat + news collectors** — can be built in parallel after #2
 4. **Validation Lambda** — needs the collector S3 paths to exist
-5. **ETL / transformation** — needs validated data
-6. **Enrichment Lambdas** — needs clean data layer
+5. **Enrichment Lambdas** — needs clean data layer
+6. **Curation service** — synthesises enriched data into dashboard/agent-ready outputs
 7. **Step Functions** — wires everything together; build last
 
 ## Important: Don't...
