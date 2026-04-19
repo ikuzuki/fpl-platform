@@ -10,13 +10,14 @@ from __future__ import annotations
 
 import json
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from fpl_agent.api import (
+    _resolve_secret_to_env,
     app,
     check_budget,
     check_rate_limit,
@@ -260,6 +261,53 @@ def test_chat_stream_error_event_on_graph_failure(fake_budget: _FakeBudget) -> N
 
     assert "event: error" in events
     assert "boom" in events
+
+
+# ---------------------------------------------------------------------------
+# Secret resolver — cold-start env hydration
+# ---------------------------------------------------------------------------
+def test_resolve_secret_to_env_fetches_and_sets(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("PLAIN_KEY", raising=False)
+    monkeypatch.setenv("MY_SECRET_ARN", "arn:aws:secretsmanager:eu-west-2:1:secret:x")
+    mock_sm = MagicMock()
+    mock_sm.get_secret_value.return_value = {"SecretString": "the-value"}
+
+    with patch("fpl_agent.api.boto3.client", return_value=mock_sm):
+        _resolve_secret_to_env("MY_SECRET_ARN", "PLAIN_KEY")
+
+    import os
+
+    assert os.environ["PLAIN_KEY"] == "the-value"
+    mock_sm.get_secret_value.assert_called_once_with(
+        SecretId="arn:aws:secretsmanager:eu-west-2:1:secret:x"
+    )
+
+
+def test_resolve_secret_to_env_is_noop_when_target_already_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Local dev sets the plain var directly; resolver must not clobber."""
+    monkeypatch.setenv("PLAIN_KEY", "local-override")
+    monkeypatch.setenv("MY_SECRET_ARN", "arn:unused")
+
+    with patch("fpl_agent.api.boto3.client") as mock_client:
+        _resolve_secret_to_env("MY_SECRET_ARN", "PLAIN_KEY")
+
+    mock_client.assert_not_called()
+
+
+def test_resolve_secret_to_env_is_noop_when_arn_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If neither the ARN nor the plain key are set, skip silently —
+    downstream callers decide whether the missing secret is fatal."""
+    monkeypatch.delenv("MY_SECRET_ARN", raising=False)
+    monkeypatch.delenv("PLAIN_KEY", raising=False)
+
+    with patch("fpl_agent.api.boto3.client") as mock_client:
+        _resolve_secret_to_env("MY_SECRET_ARN", "PLAIN_KEY")
+
+    mock_client.assert_not_called()
 
 
 def test_budget_endpoint_returns_snapshot(client: TestClient) -> None:

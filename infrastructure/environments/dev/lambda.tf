@@ -215,7 +215,7 @@ module "lambda_agent" {
     ANTHROPIC_SECRET_ARN           = aws_secretsmanager_secret.anthropic_api_key.arn
     LANGFUSE_PUBLIC_KEY_SECRET_ARN = aws_secretsmanager_secret.langfuse_public_key.arn
     LANGFUSE_SECRET_KEY_SECRET_ARN = aws_secretsmanager_secret.langfuse_secret_key.arn
-    USAGE_TABLE_NAME               = aws_dynamodb_table.agent_usage.name
+    AGENT_USAGE_TABLE              = aws_dynamodb_table.agent_usage.name
     TEAM_FETCHER_FUNCTION_NAME     = module.lambda_team_fetcher.function_name
   }
 }
