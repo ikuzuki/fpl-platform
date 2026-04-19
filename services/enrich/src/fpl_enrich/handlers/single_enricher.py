@@ -12,7 +12,6 @@ from typing import Any
 
 import anthropic
 import boto3
-from langfuse import Langfuse, observe, propagate_attributes
 
 from fpl_enrich.enrichers.base import RateLimiter
 from fpl_enrich.enrichers.fixture_outlook import FixtureOutlookEnricher
@@ -21,6 +20,8 @@ from fpl_enrich.enrichers.player_summary import PlayerSummaryEnricher
 from fpl_enrich.enrichers.sentiment import SentimentEnricher
 from fpl_lib.clients.s3 import S3Client
 from fpl_lib.core.run_handler import RunHandler
+from fpl_lib.observability import flush as langfuse_flush
+from fpl_lib.observability import init_langfuse, observe, propagate_attributes
 
 logger = logging.getLogger(__name__)
 
@@ -45,20 +46,6 @@ def _get_secret(secret_name: str, region: str = "eu-west-2") -> str:
     client = boto3.client("secretsmanager", region_name=region)
     response = client.get_secret_value(SecretId=secret_name)
     return response["SecretString"]
-
-
-def _init_langfuse(region: str = "eu-west-2") -> None:
-    """Initialise Langfuse with keys from Secrets Manager."""
-    import os
-
-    if not os.environ.get("LANGFUSE_PUBLIC_KEY"):
-        os.environ["LANGFUSE_PUBLIC_KEY"] = _get_secret(
-            "/fpl-platform/dev/langfuse-public-key", region
-        )
-    if not os.environ.get("LANGFUSE_SECRET_KEY"):
-        os.environ["LANGFUSE_SECRET_KEY"] = _get_secret(
-            "/fpl-platform/dev/langfuse-secret-key", region
-        )
 
 
 def _load_players(
@@ -372,7 +359,7 @@ async def fixture_outlook_main(
 
 def player_summary_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Lambda entry point for player summary enrichment."""
-    _init_langfuse()
+    init_langfuse()
     season = event.get("season", "unknown")
     gameweek = event.get("gameweek", 0)
     with propagate_attributes(
@@ -387,13 +374,13 @@ def player_summary_handler(event: dict[str, Any], context: Any) -> dict[str, Any
             required_main_params=["season", "gameweek"],
             optional_main_params=["output_bucket", "prompt_version"],
         ).lambda_executor(lambda_event=event)
-    Langfuse().flush()
+    langfuse_flush()
     return result
 
 
 def injury_signal_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Lambda entry point for injury signal enrichment."""
-    _init_langfuse()
+    init_langfuse()
     season = event.get("season", "unknown")
     gameweek = event.get("gameweek", 0)
     with propagate_attributes(
@@ -405,13 +392,13 @@ def injury_signal_handler(event: dict[str, Any], context: Any) -> dict[str, Any]
             required_main_params=["season", "gameweek"],
             optional_main_params=["output_bucket", "prompt_version"],
         ).lambda_executor(lambda_event=event)
-    Langfuse().flush()
+    langfuse_flush()
     return result
 
 
 def sentiment_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Lambda entry point for sentiment enrichment."""
-    _init_langfuse()
+    init_langfuse()
     season = event.get("season", "unknown")
     gameweek = event.get("gameweek", 0)
     with propagate_attributes(
@@ -423,13 +410,13 @@ def sentiment_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             required_main_params=["season", "gameweek"],
             optional_main_params=["output_bucket", "prompt_version"],
         ).lambda_executor(lambda_event=event)
-    Langfuse().flush()
+    langfuse_flush()
     return result
 
 
 def fixture_outlook_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Lambda entry point for fixture outlook enrichment."""
-    _init_langfuse()
+    init_langfuse()
     season = event.get("season", "unknown")
     gameweek = event.get("gameweek", 0)
     with propagate_attributes(
@@ -444,5 +431,5 @@ def fixture_outlook_handler(event: dict[str, Any], context: Any) -> dict[str, An
             required_main_params=["season", "gameweek"],
             optional_main_params=["output_bucket", "prompt_version"],
         ).lambda_executor(lambda_event=event)
-    Langfuse().flush()
+    langfuse_flush()
     return result

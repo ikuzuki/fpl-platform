@@ -9,7 +9,7 @@ description = "FPL data curation service — derives dashboard-ready datasets fr
 requires-python = ">=3.11"
 dependencies = [
     "fpl-lib",
-    "langfuse>=2.0.0",
+    "langfuse>=3.0.0",
     "pandas>=2.0.0",
     "pyarrow>=14.0.0",
 ]

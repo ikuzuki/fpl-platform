@@ -9,8 +9,9 @@ from collections.abc import Iterator
 from typing import Any, ClassVar
 
 import anthropic
-from langfuse import Langfuse, observe
 from pydantic import BaseModel
+
+from fpl_lib.observability import Langfuse, observe, record_llm_usage
 
 logger = logging.getLogger(__name__)
 
@@ -190,7 +191,7 @@ class FPLEnricher(ABC):
             },
         }
 
-    @observe(name="enricher_batch_call")
+    @observe(name="enricher_batch_call", as_type="generation")
     async def _call_llm(self, batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Send a batch to Claude via forced tool-use and return structured results.
 
@@ -198,16 +199,11 @@ class FPLEnricher(ABC):
         is the single source of truth. Anthropic enforces the schema server-side,
         which eliminates the JSON-parsing failure modes the old text path had
         (markdown fences, truncated JSON, missing fields).
+
+        Marked ``as_type="generation"`` so the Langfuse UI surfaces it with
+        model / token / cost columns once ``record_llm_usage`` pushes the
+        usage from the Anthropic response below.
         """
-        langfuse = Langfuse()
-        langfuse.update_current_span(
-            metadata={
-                "enricher": self.__class__.__name__,
-                "prompt_version": self.prompt_version,
-                "model": self.MODEL,
-                "batch_size": len(batch),
-            },
-        )
         prepared = [self._prepare_item(item) for item in batch]
         user_content = "\n".join(f"I{i + 1}: {json.dumps(item)}" for i, item in enumerate(prepared))
 
@@ -233,6 +229,22 @@ class FPLEnricher(ABC):
 
         self.total_input_tokens += response.usage.input_tokens
         self.total_output_tokens += response.usage.output_tokens
+
+        # Surface model + usage in the Langfuse UI. Langfuse uses the model
+        # string to compute cost against its published rate table, so the
+        # per-service COST_RATES tables stay as the authoritative source for
+        # the S3 cost report but Langfuse gets its own signal.
+        record_llm_usage(
+            model=self.MODEL,
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+            stop_reason=response.stop_reason,
+            metadata={
+                "enricher": self.__class__.__name__,
+                "prompt_version": self.prompt_version,
+                "batch_size": len(batch),
+            },
+        )
 
         logger.info(
             "[ANTHROPIC] %s: response | input_tokens=%d | output_tokens=%d | stop_reason=%s",
@@ -267,7 +279,7 @@ class FPLEnricher(ABC):
         # Anthropic edge case surfaces as a clear error rather than a
         # silent off-by-one downstream.
         count_valid = len(parsed) == len(batch)
-        langfuse.score_current_span(
+        Langfuse().score_current_span(
             name="output_count_valid",
             value=1.0 if count_valid else 0.0,
             comment=f"expected={len(batch)}, got={len(parsed)}",

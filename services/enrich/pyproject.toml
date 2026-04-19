@@ -10,7 +10,7 @@ requires-python = ">=3.11"
 dependencies = [
     "fpl-lib",
     "anthropic>=0.25.0",
-    "langfuse>=2.0.0",
+    "langfuse>=3.0.0",
 ]
 
 [project.optional-dependencies]

@@ -4,7 +4,6 @@ import logging
 from typing import Any
 
 import pyarrow as pa
-from langfuse import Langfuse, observe, propagate_attributes
 
 from fpl_curate.config import get_curate_settings
 from fpl_curate.curators.fixture_ticker import build_fixture_ticker, build_team_map
@@ -16,6 +15,8 @@ from fpl_curate.curators.transfer_picks import build_transfer_picks
 from fpl_lib.clients.s3 import S3Client
 from fpl_lib.core.responses import CurationResult
 from fpl_lib.core.run_handler import RunHandler
+from fpl_lib.observability import flush as langfuse_flush
+from fpl_lib.observability import init_langfuse, observe, propagate_attributes
 
 logger = logging.getLogger(__name__)
 
@@ -43,22 +44,6 @@ def _log_advice_gameweek_sanity(
             advice_gameweek,
             next_from_bootstrap,
         )
-
-
-def _init_langfuse(region: str = "eu-west-2") -> None:
-    """Initialise Langfuse with keys from Secrets Manager."""
-    import os
-
-    import boto3
-
-    if not os.environ.get("LANGFUSE_PUBLIC_KEY"):
-        client = boto3.client("secretsmanager", region_name=region)
-        resp = client.get_secret_value(SecretId="/fpl-platform/dev/langfuse-public-key")
-        os.environ["LANGFUSE_PUBLIC_KEY"] = resp["SecretString"]
-    if not os.environ.get("LANGFUSE_SECRET_KEY"):
-        client = boto3.client("secretsmanager", region_name=region)
-        resp = client.get_secret_value(SecretId="/fpl-platform/dev/langfuse-secret-key")
-        os.environ["LANGFUSE_SECRET_KEY"] = resp["SecretString"]
 
 
 @observe(name="curate_gameweek")
@@ -258,7 +243,7 @@ async def main(
 
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """AWS Lambda entry point for data curation."""
-    _init_langfuse()
+    init_langfuse()
     season = event.get("season", "unknown")
     gameweek = event.get("gameweek", 0)
     with propagate_attributes(
@@ -270,5 +255,5 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             required_main_params=REQUIRED_PARAMS,
             optional_main_params=OPTIONAL_PARAMS,
         ).lambda_executor(lambda_event=event)
-    Langfuse().flush()
+    langfuse_flush()
     return result

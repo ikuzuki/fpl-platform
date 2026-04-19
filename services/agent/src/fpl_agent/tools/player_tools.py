@@ -26,9 +26,9 @@ from typing import Any, cast
 
 import asyncpg
 import boto3
-from langfuse import observe
 
 from fpl_lib.clients.neon import NeonClient
+from fpl_lib.observability import observe
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ def make_tools(neon: NeonClient) -> dict[str, ToolFn]:
     so the executor can dispatch planner output directly.
     """
 
-    @observe(name="tool.query_player")
+    @observe(name="tool.query_player", as_type="tool")
     async def query_player(name: str) -> dict[str, Any]:
         """Look up a single player by name (case-insensitive partial match)."""
         row = await neon.fetch_one(
@@ -87,7 +87,7 @@ def make_tools(neon: NeonClient) -> dict[str, ToolFn]:
             raise ToolError(f"No player found matching '{name}'")
         return cast(dict[str, Any], _row_to_dict(row))
 
-    @observe(name="tool.search_similar_players")
+    @observe(name="tool.search_similar_players", as_type="tool")
     async def search_similar_players(player_name: str, k: int = 5) -> dict[str, Any]:
         """Find the k players most similar to ``player_name`` by embedding cosine distance."""
         target = await neon.fetch_one(
@@ -119,7 +119,7 @@ def make_tools(neon: NeonClient) -> dict[str, ToolFn]:
             "similar": _rows_to_dicts(neighbours),
         }
 
-    @observe(name="tool.query_players_by_criteria")
+    @observe(name="tool.query_players_by_criteria", as_type="tool")
     async def query_players_by_criteria(
         position: str | None = None,
         max_price: float | None = None,
@@ -157,7 +157,7 @@ def make_tools(neon: NeonClient) -> dict[str, ToolFn]:
         )
         return {"count": len(rows), "players": _rows_to_dicts(rows)}
 
-    @observe(name="tool.get_fixture_outlook")
+    @observe(name="tool.get_fixture_outlook", as_type="tool")
     async def get_fixture_outlook(player_name: str) -> dict[str, Any]:
         """Return the player's stored fixture-difficulty signal.
 
@@ -183,7 +183,7 @@ def make_tools(neon: NeonClient) -> dict[str, ToolFn]:
             "note": "Single aggregate difficulty score; per-GW breakdown not yet available.",
         }
 
-    @observe(name="tool.get_injury_signals")
+    @observe(name="tool.get_injury_signals", as_type="tool")
     async def get_injury_signals(player_name: str) -> dict[str, Any]:
         """Return stored injury risk + form-trend enrichment for a player."""
         row = await neon.fetch_one(
@@ -204,7 +204,7 @@ def make_tools(neon: NeonClient) -> dict[str, ToolFn]:
             "summary": row["summary"],
         }
 
-    @observe(name="tool.fetch_user_squad")
+    @observe(name="tool.fetch_user_squad", as_type="tool")
     async def fetch_user_squad(team_id: int, gameweek: int) -> dict[str, Any]:
         """Invoke the team-fetcher Lambda to retrieve a user's FPL squad.
 
