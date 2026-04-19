@@ -90,7 +90,7 @@ export function Layout() {
               to="/chat"
               className={({ isActive }) =>
                 cn(
-                  "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors",
+                  "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-3 py-1.5 text-sm font-medium transition-colors lg:ml-2",
                   isActive
                     ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]"
                     : "border-[var(--ai-border)] bg-[var(--ai-bg)] text-[var(--accent)] hover:opacity-90",

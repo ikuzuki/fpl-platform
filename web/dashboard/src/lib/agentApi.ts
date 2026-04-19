@@ -43,7 +43,7 @@ export async function fetchTeam(
     const detail = await safeReadDetail(res);
     throw new AgentApiError(detail, res.status);
   }
-  return (await res.json()) as UserSquad;
+  return parseJsonOrThrow<UserSquad>(res);
 }
 
 /** POST /chat/sync — blocking JSON. Used for tests and as a fallback. */
@@ -62,7 +62,7 @@ export async function chatSync(
     const retry = parseRetryAfter(res.headers.get("Retry-After"));
     throw new AgentApiError(detail, res.status, retry);
   }
-  return (await res.json()) as AgentResponse;
+  return parseJsonOrThrow<AgentResponse>(res);
 }
 
 /**
@@ -159,6 +159,28 @@ function parseFrame(frame: string): AgentEvent | null {
   } catch {
     // sse-starlette pings (no data, or non-JSON) — skip silently.
     return null;
+  }
+}
+
+/**
+ * Parse JSON with a friendly error when the body is HTML. CloudFront serves
+ * the SPA fallback (`/index.html` with HTTP 200) for upstream 4xx/5xx, so a
+ * mis-configured agent endpoint surfaces here as `<!doctype …>` instead of
+ * the JSON we asked for. The native parser error in that case is a cryptic
+ * `Unexpected token '<'`; this hint points at the actual problem.
+ */
+async function parseJsonOrThrow<T>(res: Response): Promise<T> {
+  const text = await res.text();
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    if (text.trimStart().startsWith("<")) {
+      throw new AgentApiError(
+        "Agent endpoint returned HTML instead of JSON — the Lambda Function URL is unreachable. Run terraform apply to install the Function URL invoke permission.",
+        502,
+      );
+    }
+    throw new AgentApiError(`Invalid JSON from agent: ${text.slice(0, 80)}`, 502);
   }
 }
 
