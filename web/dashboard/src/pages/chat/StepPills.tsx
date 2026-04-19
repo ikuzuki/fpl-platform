@@ -10,6 +10,15 @@ const NODE_LABELS: Record<string, string> = {
   recommender: "Writing report",
 };
 
+// Long-form descriptions surfaced via `title` so a non-technical viewer can
+// hover any pill and learn what the agent is actually doing at that stage.
+const NODE_DESCRIPTIONS: Record<string, string> = {
+  planner: "Choosing which player data to fetch from the database",
+  tool_executor: "Running those queries in parallel against Neon + FPL",
+  reflector: "Checking whether the data is enough to answer your question",
+  recommender: "Synthesising the answer into a structured ScoutReport",
+};
+
 const NODE_ORDER = ["planner", "tool_executor", "reflector", "recommender"];
 
 interface StepPillsProps {
@@ -32,6 +41,7 @@ export function StepPills({ steps, active }: StepPillsProps) {
         return (
           <span
             key={node}
+            title={NODE_DESCRIPTIONS[node] ?? label}
             className={cn(
               "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition-colors",
               done

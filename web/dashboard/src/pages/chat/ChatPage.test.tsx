@@ -130,4 +130,48 @@ describe("ChatPage", () => {
     expect(req.question).toMatch(/is salah worth/i);
     expect(req.squad).toBeUndefined();
   });
+
+  it("retry button re-sends the previous user message after an error", async () => {
+    const streamSpy = vi
+      .spyOn(agentApi, "streamChat")
+      .mockReturnValueOnce(mockStream([{ type: "error", message: "boom" }]))
+      .mockReturnValueOnce(mockStream([{ type: "result", payload: mockResponse }]));
+
+    renderPage();
+    const input = await screen.findByLabelText(/ask the scout agent/i);
+    fireEvent.change(input, { target: { value: "Captain pick?" } });
+    fireEvent.click(screen.getByRole("button", { name: /^send$/i }));
+
+    const retryButton = await screen.findByRole("button", { name: /retry/i });
+    fireEvent.click(retryButton);
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/salah is in elite form/i),
+      ).toBeInTheDocument(),
+    );
+    expect(streamSpy).toHaveBeenCalledTimes(2);
+    expect(streamSpy.mock.calls[1][0].question).toBe("Captain pick?");
+  });
+
+  it("new chat button clears messages and returns to the empty state", async () => {
+    vi.spyOn(agentApi, "streamChat").mockReturnValue(
+      mockStream([{ type: "result", payload: mockResponse }]),
+    );
+
+    renderPage();
+    const input = await screen.findByLabelText(/ask the scout agent/i);
+    fireEvent.change(input, { target: { value: "anything" } });
+    fireEvent.click(screen.getByRole("button", { name: /^send$/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/salah is in elite form/i)).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /new chat/i }));
+
+    expect(screen.queryByText(/salah is in elite form/i)).not.toBeInTheDocument();
+    // Suggested questions reappear in the empty state
+    expect(screen.getByText(/is salah worth/i)).toBeInTheDocument();
+  });
 });

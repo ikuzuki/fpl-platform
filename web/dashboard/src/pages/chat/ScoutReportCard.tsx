@@ -1,4 +1,12 @@
-import { AlertTriangle, Database, Trophy } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  CircleAlert,
+  Database,
+  Trophy,
+  X as XIcon,
+} from "lucide-react";
+import type { ComponentType, SVGProps } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn, formatPrice, positionColor } from "@/lib/utils";
@@ -14,6 +22,14 @@ const OUTLOOK_LABELS: Record<FixtureOutlook, string> = {
   green: "Easy fixtures",
   amber: "Mixed fixtures",
   red: "Tough fixtures",
+};
+
+// Colour alone is not WCAG-friendly; pair every outlook with a glyph so
+// the signal survives colourblindness or a monochrome screenshot.
+const OUTLOOK_ICONS: Record<FixtureOutlook, ComponentType<SVGProps<SVGSVGElement>>> = {
+  green: Check,
+  amber: CircleAlert,
+  red: XIcon,
 };
 
 interface ScoutReportCardProps {
@@ -112,7 +128,13 @@ function PlayerMiniCard({ player }: { player: PlayerAnalysis }) {
         <Badge className={positionColor(player.position)}>{player.position}</Badge>
       </div>
       <div className="flex items-center gap-2 flex-wrap">
-        <Badge className={OUTLOOK_STYLES[player.fixture_outlook]}>
+        <Badge
+          className={cn("inline-flex items-center gap-1", OUTLOOK_STYLES[player.fixture_outlook])}
+        >
+          {(() => {
+            const Icon = OUTLOOK_ICONS[player.fixture_outlook];
+            return <Icon className="h-3 w-3" aria-hidden="true" />;
+          })()}
           {OUTLOOK_LABELS[player.fixture_outlook]}
         </Badge>
         <span className="text-[11px] text-[var(--muted-foreground)]">
