@@ -13,6 +13,23 @@ We needed to decide: what kind of agent, what architecture, which models at whic
 
 ## Options Considered
 
+### Framework choice
+
+ADR-0003 rejected LangChain for the enrichment pipeline and flagged agentic orchestration as the likely exception. This is that exception — worth making the boundary explicit rather than leaving it as a footnote.
+
+**1. Hand-rolled state machine (rejected)**
+Implement the 4-node graph directly with a dispatch loop, a state dict, and manual tool-call plumbing against the Anthropic SDK.
+
+Rejected because: rebuilding conditional edges, checkpointing, tool-schema generation, and streaming event emission for no gain over a well-maintained library. The same arguments that made direct SDK calls *right* for batch enrichment (simple request-response, full prompt control) make them *wrong* here — agent execution has non-trivial control flow that a framework expresses better than bespoke code.
+
+**2. Pydantic AI (rejected)**
+Type-first agent framework built around Pydantic models and a single-agent execution loop.
+
+Rejected because: at the time of choosing, its graph primitives were less developed than LangGraph's — the multi-node reflection loop with conditional routing is exactly what LangGraph is built for. Pydantic AI is a strong fit for single-agent tool-calling; less natural for this shape.
+
+**3. LangGraph (chosen)**
+State machine with typed state, conditional edges, streaming, and tool-calling primitives. Used only for the agent — the enrichment pipeline continues to call the Anthropic SDK directly per ADR-0003.
+
 ### Agent framing
 
 **1. Transfer recommender — "give me your team, I'll suggest transfers" (rejected)**
