@@ -110,11 +110,32 @@ Prompt version metadata flows into every Langfuse trace, enabling A/B comparison
 
 ## Revision — 2026-04-20: Langfuse SDK v4 on Lambda tuning
 
-Langfuse SDK v4 is an OpenTelemetry rewrite. On Lambda, the OTLP batch exporter's default timeouts (30s export + 2× 10s HTTP retries) stacked to a ~60s hang on the response thread whenever `cloud.langfuse.com` was slow or unreachable — `/team` returned HTTP 200 but took 60s to return (see CHANGELOG 2026-04-20). Root cause: Lambda freezes the execution environment on handler return, so any `flush()` call on the response thread pays the full export deadline inline.
+Langfuse SDK v4 is an OpenTelemetry rewrite. On Lambda, uploads to `cloud.langfuse.com` can stack to a 60s hang on the response thread. There are **two separate blocking surfaces** and both matter:
 
-Two accepted patterns:
+1. **The OTLP HTTP exporter's retry loop.** `OTLPSpanExporter.export()` retries up to 6 times with exponential backoff (1s → 2s → 4s → 8s → 16s → 32s ≈ 63s total) on connect errors. Bounded only by the exporter's own `timeout` argument — OTel's standard `OTEL_BSP_EXPORT_TIMEOUT` is wired but [ignored by design](https://github.com/open-telemetry/opentelemetry-python) (the HTTP exporter has the explicit comment `# Not used. No way currently to pass timeout to export.`). Langfuse 4.x passes its own `LANGFUSE_TIMEOUT` env var (seconds, default 5) straight into the exporter constructor; that's the only knob that caps the retry deadline.
+2. **`resource_manager.flush()`'s queue joins.** `Langfuse().flush()` calls `self.tracer_provider.force_flush()` (OTel default 30 s, and the passed `export_timeout_millis` is silently ignored), then `_score_ingestion_queue.join()` and `_media_upload_queue.join()` **with no timeout at all**. If we emit any scores (we do — `_emit_quality_scores` in `api.py`) and the Langfuse endpoint is slow, the handler thread blocks forever on `.join()`.
 
-1. **SDK-only config (chosen).** Module-scope `Langfuse()` client (constructed lazily on first use and cached for the warm container's lifetime) plus tight OTEL env vars — `OTEL_EXPORTER_OTLP_TIMEOUT=3000`, `OTEL_BSP_EXPORT_TIMEOUT=5000`, `LANGFUSE_FLUSH_AT=1`. Worst-case per-request latency cost: ~5s on cold start when Langfuse is unreachable. At our scale (1–2 rpm hobby traffic) this is the recommended pattern — Langfuse maintainers reiterate it in [discussion #7669](https://github.com/orgs/langfuse/discussions/7669) and it's what almost every real-world Lambda + Langfuse deployment uses.
-2. **ADOT Lambda Extension.** Runs a local OpenTelemetry Collector as an external extension process. The app exports to `localhost:4318`; the collector buffers and flushes during the extension lifecycle (after the handler returns but before the container freezes). User-facing request latency is untouched. Widely regarded as overkill below double-digit RPS, and adds Dockerfile complexity (the collector has to be baked into the container image — Layers don't work with container-image Lambdas).
+### What we tried first and why it failed
 
-Pattern 2 is the production answer if (a) trace-drop rate becomes visible in the Langfuse UI, or (b) the ~5s worst-case cold-start tax shows up as user-visible latency. Pattern 1 remains the default. `LANGFUSE_TRACING_ENABLED=false` is preserved as a kill-switch — a single `aws lambda update-function-configuration` call disables tracing in seconds if a future Langfuse outage overruns the 5s cap.
+The first correction set `OTEL_EXPORTER_OTLP_TIMEOUT=3000` and `OTEL_BSP_EXPORT_TIMEOUT=5000` — both ignored by Langfuse's own processor, so `/team` hung 60s after redeploy. We also set `LANGFUSE_FLUSH_AT=1` thinking it would reduce queue depth; it actually *made things worse* because `BatchSpanProcessor.on_end()` triggers synchronous export on the handler thread whenever `queue_size >= max_export_batch_size`. With `max=1`, every span paid the full retry loop inline.
+
+### What actually works (chosen)
+
+- **`LANGFUSE_TIMEOUT=2`** — seconds, caps the OTLP exporter's retry loop (per-POST socket timeout AND overall deadline). A dead endpoint now costs ~2s, not 60s.
+- **`LANGFUSE_FLUSH_INTERVAL=1`** — short background flush interval so the batch processor drains on its own thread between requests. Small tail of events may be stranded when the Lambda freezes mid-batch; acceptable at our scale.
+- **Do NOT set `LANGFUSE_FLUSH_AT=1`** (see failure mode above — leave the SDK default of 15).
+- **Remove all explicit `langfuse_flush()` calls from request handlers.** The `_score_ingestion_queue.join()` path in `resource_manager.flush()` is unbounded and the background processor covers the common case anyway.
+- **Keep `LANGFUSE_TRACING_ENABLED` as the kill-switch** — a single `aws lambda update-function-configuration` flip disables tracing in seconds.
+
+### Source citations
+
+- `langfuse/_client/client.py:269` — `timeout = timeout or int(os.environ.get(LANGFUSE_TIMEOUT, 5))`
+- `langfuse/_client/span_processor.py:108-112` — `OTLPSpanExporter(timeout=timeout)`
+- `langfuse/_client/resource_manager.py:430` — `flush()` call chain; `_score_ingestion_queue.join()` without timeout
+- `opentelemetry/exporter/otlp/proto/http/trace_exporter/__init__.py:174-224` — retry loop with `_MAX_RETRYS = 6`, deadline = `time() + self._timeout`
+
+### ADOT stays deferred
+
+[AWS Distro for OpenTelemetry](https://aws-otel.github.io/) as a Lambda Extension runs a local OTEL collector as an external extension process — the app exports to `localhost:4318` and the extension flushes during the post-invocation lifecycle (before freeze), so user latency is untouched. It's the production answer at higher RPS and sidesteps every SDK-level blocking surface above. Deferred for us because (a) the SDK-level fix above is what Langfuse maintainers recommend for low-traffic Lambda, (b) ADOT on container-image Lambdas (Layers don't work) requires Dockerfile plumbing, and (c) once `LANGFUSE_TIMEOUT=2` is in place, worst case is a ~2s tax which is invisible at 1–2 rpm. Revisit if the Langfuse UI shows visible trace drop or if cold-start latency becomes user-facing.
+
+Langfuse PR [#1618](https://github.com/langfuse/langfuse-python/pull/1618) (v4.1+) adds a `span_exporter=` kwarg to `Langfuse()` letting apps inject a custom fire-and-forget or ADOT-routing exporter — cleaner escape hatch than overriding env vars. Worth revisiting after Langfuse 4.1 ships.

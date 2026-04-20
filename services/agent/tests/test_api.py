@@ -332,28 +332,13 @@ def test_emit_quality_scores_swallows_langfuse_failures() -> None:
         _emit_quality_scores({"final_response": _scout_report_fixture()})
 
 
-def test_chat_sync_flushes_langfuse(client: TestClient) -> None:
-    """Observability must drain on every request or Lambda freeze strands events."""
-    from unittest.mock import patch
-
-    with patch("fpl_agent.api.langfuse_flush") as mock_flush:
-        resp = client.post("/chat/sync", json={"question": "Is Salah worth it?"})
-
-    assert resp.status_code == 200
-    assert mock_flush.call_count >= 1
-
-
-def test_chat_stream_flushes_langfuse(client: TestClient) -> None:
-    from unittest.mock import patch
-
-    with (
-        patch("fpl_agent.api.langfuse_flush") as mock_flush,
-        client.stream("POST", "/chat", json={"question": "hi"}) as resp,
-    ):
-        # Drain the generator so the ``finally`` runs.
-        list(resp.iter_lines())
-
-    assert mock_flush.call_count >= 1
+# Explicit ``langfuse_flush()`` calls were removed from the request path in
+# the 2026-04-20 correction — Langfuse 4.x's ``resource_manager.flush()``
+# blocks on ``_score_ingestion_queue.join()`` with no timeout, which hung
+# the response thread indefinitely when Langfuse Cloud was slow. The SDK's
+# background batch processor drains spans/scores on its own thread. Any
+# test that asserts "the handler explicitly flushed" would now be pinning
+# behaviour we deliberately dropped; see ADR-0005 revision.
 
 
 # ---------------------------------------------------------------------------

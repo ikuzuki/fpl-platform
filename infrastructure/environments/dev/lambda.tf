@@ -228,25 +228,37 @@ module "lambda_agent" {
     SQUAD_CACHE_TABLE          = aws_dynamodb_table.squad_cache.name
     TEAM_FETCHER_FUNCTION_NAME = module.lambda_team_fetcher.function_name
 
-    # Langfuse tracing is on with the SDK pinned to tight timeouts so a slow
-    # or unreachable Langfuse endpoint adds at most ~5s to the response path
-    # (vs. the 60s default that blew up /team in #133). Matches the pattern
-    # Langfuse maintainers recommend for low-traffic Lambda deployments —
-    # ADOT Lambda Extension is the production answer at higher RPS and stays
-    # deferred pending observed trace-drop rate (see ADR-0005 revision).
-    LANGFUSE_TRACING_ENABLED = "true"
-    # OTLP exporter: give up on any single HTTP upload to cloud.langfuse.com
-    # after 3s (default 10s). Below the 5s BSP cap so one retry can still fit.
-    OTEL_EXPORTER_OTLP_TIMEOUT = "3000"
-    # BatchSpanProcessor: hard ceiling on the entire flush including retries.
-    # Lambda freezes the process the instant the handler returns, so any
-    # flush() call on the response thread blocks up to this value.
-    OTEL_BSP_EXPORT_TIMEOUT = "5000"
-    # Emit each span immediately — we'd rather pay 1 flush per span at low
-    # traffic than batch spans that could be stranded in the queue when the
-    # container freezes. At 1-2 rpm the upload cost is negligible.
-    LANGFUSE_FLUSH_AT       = "1"
-    LANGFUSE_FLUSH_INTERVAL = "1000"
+    # Langfuse tracing — off by default; the kill-switch is preserved so a
+    # single CLI flip can disable tracing in seconds if a future Langfuse
+    # outage overruns the 2s timeout we pin below. We earned this caution:
+    # #137's first attempt re-enabled tracing with OTEL_BSP_EXPORT_TIMEOUT +
+    # OTEL_EXPORTER_OTLP_TIMEOUT, which are documented-ignored by
+    # OpenTelemetry's OTLP HTTP exporter (`# Not used. No way currently to
+    # pass timeout to export.` — opentelemetry/exporter/otlp/proto/http/
+    # trace_exporter/__init__.py:164) and by Langfuse 4.x's own LangfuseSpan-
+    # Processor. Tracing is flipped back on at the CLI after this applies —
+    # once we've verified LANGFUSE_TIMEOUT actually bounds the retry loop in
+    # production, the default here moves to "true".
+    LANGFUSE_TRACING_ENABLED = "false"
+
+    # LANGFUSE_TIMEOUT is passed straight to OTLPSpanExporter(timeout=…). It
+    # bounds both the per-POST socket timeout AND the retry loop's deadline
+    # (the OTel exporter aborts further retries once backoff_seconds >
+    # deadline_sec - time()). Default is 5 seconds; we pin 2 so a dead
+    # endpoint can never cost more than ~2s on the response thread.
+    # See langfuse/_client/client.py:269 + _client/span_processor.py:108.
+    LANGFUSE_TIMEOUT = "2"
+
+    # LANGFUSE_FLUSH_INTERVAL controls the background batch-processor's
+    # schedule delay (seconds). Setting it low keeps queue depth small so a
+    # Lambda freeze between requests loses few spans. We do NOT set
+    # LANGFUSE_FLUSH_AT=1: that puts max_export_batch_size=1 on the
+    # BatchSpanProcessor, which makes on_end() call export() synchronously
+    # on the handler thread every time the queue hits 1 item — which is
+    # every span. That moves the blocking OTLP upload onto the user-facing
+    # request path, the exact behaviour the background thread is meant to
+    # prevent.
+    LANGFUSE_FLUSH_INTERVAL = "1"
 
     # Shared-secret gate: CloudFront injects this header on every origin
     # request (terraform-managed, stored in Secrets Manager). The FastAPI
