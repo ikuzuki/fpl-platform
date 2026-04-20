@@ -67,9 +67,7 @@ def _invoke_team_fetcher_sync(function_name: str, team_id: int, gameweek: int) -
         # picks list (handled in ``load_user_squad``) covers the benign cases
         # (future GW, never-set team); everything else is an upstream fetch error.
         err = (body or {}).get("error") if isinstance(body, dict) else None
-        raise SquadFetchError(
-            f"team-fetcher returned statusCode={status_code}: {err or raw!r}"
-        )
+        raise SquadFetchError(f"team-fetcher returned statusCode={status_code}: {err or raw!r}")
 
     return body
 
