@@ -24,6 +24,7 @@ from typing import Any, cast
 import boto3
 
 from fpl_agent.models.responses import SquadPick, UserSquad
+from fpl_agent.squad_cache import SquadCache
 from fpl_lib.clients.neon import NeonClient
 
 logger = logging.getLogger(__name__)
@@ -126,9 +127,33 @@ async def load_user_squad(
     gameweek: int,
     neon: NeonClient,
     function_name: str,
+    cache: SquadCache | None = None,
 ) -> UserSquad:
-    """Fetch and enrich one user's squad. The single entry point used by the route."""
-    raw = await asyncio.to_thread(_invoke_team_fetcher_sync, function_name, team_id, gameweek)
+    """Fetch and enrich one user's squad. The single entry point used by the route.
+
+    If ``cache`` is provided, check it before invoking the team-fetcher
+    Lambda — squad picks for a given ``(team_id, gameweek)`` pair are
+    immutable once the GW deadline passes, so a cached body is always
+    current. Any cache read failure falls through to the live fetch; a
+    cache write failure after a successful fetch is swallowed and logged
+    (the user still gets their squad, the next request just pays the
+    fetch cost again).
+    """
+    raw: dict[str, Any] | None = None
+    if cache is not None:
+        raw = await cache.get(team_id, gameweek)
+        if raw is not None:
+            logger.info("squad cache hit for team %d GW%d", team_id, gameweek)
+
+    if raw is None:
+        raw = await asyncio.to_thread(_invoke_team_fetcher_sync, function_name, team_id, gameweek)
+        if cache is not None and raw.get("picks"):
+            # Only cache non-empty responses — empty picks means "never set"
+            # or "future GW", both of which may legitimately become non-empty
+            # later (FPL pre-populates a team on first login for the user's
+            # first ever gameweek). Caching the empty body would freeze the
+            # "not found" state forever.
+            await cache.put(team_id, gameweek, raw)
 
     picks_raw: list[dict[str, Any]] = raw.get("picks", [])
     if not picks_raw:

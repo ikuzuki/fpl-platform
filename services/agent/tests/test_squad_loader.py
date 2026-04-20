@@ -248,6 +248,107 @@ async def test_load_user_squad_unwraps_run_handler_envelope() -> None:
     assert len(squad.picks) == 3
 
 
+class _FakeCache:
+    """Dict-backed :class:`SquadCache` for tests — no DynamoDB, no asyncio.to_thread."""
+
+    def __init__(self, initial: dict[tuple[int, int], dict[str, Any]] | None = None) -> None:
+        self._store: dict[tuple[int, int], dict[str, Any]] = dict(initial or {})
+        self.gets: list[tuple[int, int]] = []
+        self.puts: list[tuple[int, int, dict[str, Any]]] = []
+
+    async def get(self, team_id: int, gameweek: int) -> dict[str, Any] | None:
+        self.gets.append((team_id, gameweek))
+        return self._store.get((team_id, gameweek))
+
+    async def put(self, team_id: int, gameweek: int, body: dict[str, Any]) -> None:
+        self.puts.append((team_id, gameweek, body))
+        self._store[(team_id, gameweek)] = body
+
+
+@pytest.mark.asyncio
+async def test_load_user_squad_reads_from_cache_and_skips_lambda() -> None:
+    """Cache hit means zero Lambda invokes — the whole point of the cache."""
+    cache = _FakeCache(initial={(5767400, 33): _raw_body()})
+    # A broken lambda client proves the cache short-circuits before boto3 is touched.
+    lambda_client = MagicMock()
+    lambda_client.invoke.side_effect = AssertionError("lambda must not be invoked on cache hit")
+    neon = _mock_neon(
+        [
+            {"player_id": eid, "web_name": "p", "team_name": "t", "price": 5.0, "position": "MID"}
+            for eid in (341, 430, 235)
+        ]
+    )
+
+    with patch("fpl_agent.squad_loader.boto3.client", return_value=lambda_client):
+        squad = await load_user_squad(
+            team_id=5767400, gameweek=33, neon=neon, function_name="fn", cache=cache
+        )
+
+    assert len(squad.picks) == 3
+    assert cache.gets == [(5767400, 33)]
+    assert cache.puts == []  # cache was already warm, no write needed
+    lambda_client.invoke.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_load_user_squad_writes_cache_on_miss_after_successful_fetch() -> None:
+    """Cache miss → Lambda → cache write (so the next call is a hit)."""
+    cache = _FakeCache()
+    body = _raw_body()
+    lambda_client = _mock_lambda_client(_run_handler_envelope(body))
+    neon = _mock_neon(
+        [
+            {"player_id": eid, "web_name": "p", "team_name": "t", "price": 5.0, "position": "MID"}
+            for eid in (341, 430, 235)
+        ]
+    )
+
+    with patch("fpl_agent.squad_loader.boto3.client", return_value=lambda_client):
+        await load_user_squad(
+            team_id=5767400, gameweek=33, neon=neon, function_name="fn", cache=cache
+        )
+
+    assert cache.puts == [(5767400, 33, body)]
+    lambda_client.invoke.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_load_user_squad_does_not_cache_empty_picks() -> None:
+    """Empty picks means ``never set`` or ``future GW`` — caching would freeze that forever."""
+    cache = _FakeCache()
+    empty_body = {"picks": [], "active_chip": None, "entry_history": {}}
+    lambda_client = _mock_lambda_client(_run_handler_envelope(empty_body))
+    neon = _mock_neon([])
+
+    with (
+        patch("fpl_agent.squad_loader.boto3.client", return_value=lambda_client),
+        pytest.raises(SquadNotFoundError),
+    ):
+        await load_user_squad(team_id=1, gameweek=99, neon=neon, function_name="fn", cache=cache)
+
+    assert cache.puts == []  # did NOT persist the empty body
+
+
+@pytest.mark.asyncio
+async def test_load_user_squad_works_when_cache_is_none() -> None:
+    """Passing ``cache=None`` must behave exactly like the pre-cache implementation."""
+    lambda_client = _mock_lambda_client(_run_handler_envelope(_raw_body()))
+    neon = _mock_neon(
+        [
+            {"player_id": eid, "web_name": "p", "team_name": "t", "price": 5.0, "position": "MID"}
+            for eid in (341, 430, 235)
+        ]
+    )
+
+    with patch("fpl_agent.squad_loader.boto3.client", return_value=lambda_client):
+        squad = await load_user_squad(
+            team_id=1, gameweek=33, neon=neon, function_name="fn", cache=None
+        )
+
+    assert len(squad.picks) == 3
+    lambda_client.invoke.assert_called_once()
+
+
 @pytest.mark.asyncio
 async def test_load_user_squad_wraps_neon_failures_as_squad_fetch_error() -> None:
     raw = _run_handler_envelope(_raw_body())

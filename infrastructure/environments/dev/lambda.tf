@@ -225,6 +225,7 @@ module "lambda_agent" {
   environment_variables = {
     ENV                        = var.environment
     AGENT_USAGE_TABLE          = aws_dynamodb_table.agent_usage.name
+    SQUAD_CACHE_TABLE          = aws_dynamodb_table.squad_cache.name
     TEAM_FETCHER_FUNCTION_NAME = module.lambda_team_fetcher.function_name
     # Langfuse's @observe decorator blocks the request path when the tracing
     # endpoint is unreachable from this Lambda — /team direct-invoke hung for
