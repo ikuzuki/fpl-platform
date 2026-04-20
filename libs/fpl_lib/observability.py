@@ -24,6 +24,7 @@ another singleton would add indirection without functionality.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 from langfuse import Langfuse, observe, propagate_attributes
@@ -31,6 +32,46 @@ from langfuse import Langfuse, observe, propagate_attributes
 from fpl_lib.secrets import DEFAULT_REGION, DEFAULT_SECRET_PREFIX, resolve_secret_to_env
 
 logger = logging.getLogger(__name__)
+
+# Module-scope Langfuse client — re-constructing ``Langfuse()`` on every call
+# is the Lambda anti-pattern Langfuse maintainers explicitly flag in
+# https://github.com/orgs/langfuse/discussions/7669 (v3/v4 SDK rebuilds the
+# OTEL tracer provider on each instantiation). A single client built once per
+# cold-start reuses the pipeline across all invocations in the warm container.
+#
+# We defer construction until the first call site asks for the client so that
+# import-time (e.g. in unit tests) does not trigger Langfuse's OTEL setup —
+# tests monkeypatch ``LANGFUSE_TRACING_ENABLED=false`` and expect zero network
+# activity during module import. ``_get_client`` returns ``None`` when tracing
+# is disabled so callers can short-circuit without inspecting env themselves.
+_client: Langfuse | None = None
+
+
+def _tracing_enabled() -> bool:
+    """Mirror Langfuse's own env-var convention so callers can gate work."""
+    return os.environ.get("LANGFUSE_TRACING_ENABLED", "true").lower() not in {
+        "false",
+        "0",
+        "no",
+    }
+
+
+def _get_client() -> Langfuse | None:
+    """Return the process-wide Langfuse client, or ``None`` if tracing is off.
+
+    The first call lazily constructs the client. All OTEL pipeline setup
+    happens here, once, on the first traced request of a cold-start.
+    """
+    global _client
+    if not _tracing_enabled():
+        return None
+    if _client is None:
+        try:
+            _client = Langfuse()
+        except Exception:  # noqa: BLE001
+            logger.debug("Langfuse client construction failed", exc_info=True)
+            return None
+    return _client
 
 
 def init_langfuse(
@@ -92,8 +133,11 @@ def record_llm_usage(
     the caller proceeds. Observability must not break the code path it
     observes.
     """
+    client = _get_client()
+    if client is None:
+        return
     try:
-        Langfuse().update_current_generation(
+        client.update_current_generation(
             model=model,
             usage_details={"input": int(input_tokens), "output": int(output_tokens)},
             metadata={"stop_reason": stop_reason, **(metadata or {})},
@@ -109,9 +153,20 @@ def flush() -> None:
     server that thread eventually flushes; in Lambda the execution
     environment can freeze immediately after the response returns, stranding
     events in the queue. Call this at the end of every request handler.
+
+    Bounded by the OTLP exporter timeout — we set
+    ``OTEL_BSP_EXPORT_TIMEOUT=5000`` and ``OTEL_EXPORTER_OTLP_TIMEOUT=3000``
+    in the Lambda env so a slow or unreachable Langfuse endpoint adds at most
+    ~5s to the response, never the 60s default. On cold starts where Langfuse
+    is unreachable, that ~5s is the tradeoff we accept for real traces. Worth
+    re-evaluating via an ADOT Lambda Extension if trace drop-rate becomes
+    visible in the Langfuse UI; see ADR-0005.
     """
+    client = _get_client()
+    if client is None:
+        return
     try:
-        Langfuse().flush()
+        client.flush()
     except Exception:  # noqa: BLE001
         logger.debug("Langfuse flush failed", exc_info=True)
 

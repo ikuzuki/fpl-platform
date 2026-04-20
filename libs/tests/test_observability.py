@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+import fpl_lib.observability as observability
 from fpl_lib.observability import (
     flush,
     init_langfuse,
@@ -16,9 +17,19 @@ from fpl_lib.observability import (
 
 @pytest.fixture(autouse=True)
 def _clear_langfuse_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Strip Langfuse env vars so each test starts from a clean slate."""
+    """Strip Langfuse env vars so each test starts from a clean slate.
+
+    Also resets the module-scope cached client so tests never leak a patched
+    ``Langfuse`` instance into subsequent tests. Default tracing state is
+    ``on`` so existing ``flush`` / ``record_llm_usage`` tests exercise the
+    live path; the disabled-path tests opt in via ``setenv``.
+    """
     monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
     monkeypatch.delenv("LANGFUSE_SECRET_KEY", raising=False)
+    monkeypatch.setenv("LANGFUSE_TRACING_ENABLED", "true")
+    observability._client = None
+    yield
+    observability._client = None
 
 
 # ---------------------------------------------------------------------------
@@ -143,3 +154,60 @@ class TestFlush:
         with patch("fpl_lib.observability.Langfuse", side_effect=RuntimeError("broken")):
             # Must not raise — flush failures must never interrupt the response path.
             flush()
+
+
+# ---------------------------------------------------------------------------
+# Module-scope client + tracing toggle
+# ---------------------------------------------------------------------------
+class TestClientLifecycle:
+    @pytest.mark.unit
+    def test_client_is_constructed_once_across_calls(self) -> None:
+        """Langfuse maintainers flag per-call `Langfuse()` as a Lambda anti-pattern.
+
+        The module-scope cache must reuse the same client across every
+        ``flush`` / ``record_llm_usage`` invocation in a warm container.
+        """
+        mock_langfuse_cls = MagicMock()
+        mock_instance = MagicMock()
+        mock_langfuse_cls.return_value = mock_instance
+
+        with patch("fpl_lib.observability.Langfuse", mock_langfuse_cls):
+            flush()
+            flush()
+            record_llm_usage(model="m", input_tokens=1, output_tokens=1)
+
+        assert mock_langfuse_cls.call_count == 1
+
+    @pytest.mark.unit
+    def test_flush_short_circuits_when_tracing_disabled(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("LANGFUSE_TRACING_ENABLED", "false")
+        mock_langfuse_cls = MagicMock()
+
+        with patch("fpl_lib.observability.Langfuse", mock_langfuse_cls):
+            flush()
+
+        # Langfuse is not constructed at all — the kill-switch must prevent
+        # any OTEL pipeline initialisation.
+        mock_langfuse_cls.assert_not_called()
+
+    @pytest.mark.unit
+    def test_record_llm_usage_short_circuits_when_tracing_disabled(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("LANGFUSE_TRACING_ENABLED", "0")
+        mock_langfuse_cls = MagicMock()
+
+        with patch("fpl_lib.observability.Langfuse", mock_langfuse_cls):
+            record_llm_usage(model="m", input_tokens=1, output_tokens=1)
+
+        mock_langfuse_cls.assert_not_called()
+
+    @pytest.mark.unit
+    def test_client_construction_failure_is_swallowed(self) -> None:
+        """A broken Langfuse init must never break the request path."""
+        with patch("fpl_lib.observability.Langfuse", side_effect=RuntimeError("config")):
+            # Neither call should raise; both should no-op.
+            flush()
+            record_llm_usage(model="m", input_tokens=1, output_tokens=1)

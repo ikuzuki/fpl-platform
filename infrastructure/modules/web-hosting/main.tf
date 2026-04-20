@@ -79,11 +79,17 @@ resource "aws_cloudfront_distribution" "dashboard" {
 
   # --- Agent API origin (conditional — only when agent_api_domain is set) ---
   # The Lambda Function URL is a standard HTTPS endpoint fronted via
-  # custom_origin_config. OAC signing is intentionally OFF — the Function URL
-  # is `AuthType = NONE` + `Principal = "*"`, so SigV4 signing would be a
-  # no-op at best and was implicated in the unresolved CloudFront→Function URL
-  # 403 seen after PR #132. Host header is stripped via
-  # AllViewerExceptHostHeader policy on the cache behaviour.
+  # custom_origin_config. OAC is intentionally OFF — OAC requires the client
+  # to compute SHA256 of POST bodies and send it as `x-amz-content-sha256`,
+  # which browsers don't do, so POST /chat would fail signature validation
+  # (AWS docs confirm, verified in-incident; see ADR-0010 revision).
+  #
+  # In place of OAC we inject a shared-secret header on every origin request.
+  # The FastAPI middleware rejects requests that don't carry it, making the
+  # Function URL effectively unreachable except via this distribution. The
+  # secret is generated + rotated in Terraform and stored in Secrets Manager;
+  # CloudFront holds the current value here, the Lambda fetches it at
+  # cold-start. Host header is stripped via AllViewerExceptHostHeader policy.
   dynamic "origin" {
     for_each = var.enable_agent_api ? [1] : []
     content {
@@ -95,6 +101,14 @@ resource "aws_cloudfront_distribution" "dashboard" {
         https_port             = 443
         origin_protocol_policy = "https-only"
         origin_ssl_protocols   = ["TLSv1.2"]
+      }
+
+      dynamic "custom_header" {
+        for_each = var.agent_shared_secret_header_value == "" ? [] : [1]
+        content {
+          name  = var.agent_shared_secret_header_name
+          value = var.agent_shared_secret_header_value
+        }
       }
     }
   }

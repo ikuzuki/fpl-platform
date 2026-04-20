@@ -40,3 +40,16 @@ variable "agent_api_domain" {
   type        = string
   default     = ""
 }
+
+variable "agent_shared_secret_header_name" {
+  description = "Name of the custom header CloudFront adds to every /api/agent/* origin request. The FastAPI app validates this header, making the Function URL effectively unreachable except via CloudFront — replaces OAC for streaming POST endpoints where OAC's payload-hash requirement would block browser clients. See ADR-0010 revision."
+  type        = string
+  default     = "X-CloudFront-Secret"
+}
+
+variable "agent_shared_secret_header_value" {
+  description = "Value of the shared-secret header. Empty string disables the injection (the header is dropped from the origin config). Set to a high-entropy string; stored in Secrets Manager by the env root so rotation is a single terraform-apply."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
