@@ -51,9 +51,6 @@ from fpl_lib.observability import (
     observe,
     propagate_attributes,
 )
-from fpl_lib.observability import (
-    flush as langfuse_flush,
-)
 from fpl_lib.secrets import resolve_secret_to_env
 
 logger = logging.getLogger(__name__)
@@ -446,14 +443,19 @@ async def chat_sync(
             final_state = await _run_graph(graph, req.question, req.squad)
         except Exception as exc:  # noqa: BLE001 — surface any agent failure as 500
             logger.exception("agent run failed")
-            langfuse_flush()
             raise HTTPException(status_code=500, detail=f"agent_failure: {exc}") from exc
 
         _emit_quality_scores(final_state)
         await budget.record_batch(final_state.get("llm_usage", []))
         response = _agent_response(final_state).model_dump(mode="json")
 
-    langfuse_flush()
+    # NOTE: no explicit langfuse_flush() here. Langfuse 4.x's
+    # resource_manager.flush() calls _score_ingestion_queue.join() with no
+    # timeout, so a slow or unreachable Langfuse endpoint blocks the response
+    # thread indefinitely. The SDK's background batch processor (flush
+    # interval 1s) drains spans/scores on its own thread between invocations;
+    # a small tail of events may be stranded in the queue when the Lambda
+    # container freezes, which is the accepted trade-off at our scale.
     return JSONResponse(response)
 
 
@@ -479,7 +481,14 @@ async def chat_stream(
     not around ``EventSourceResponse(...)`` — because the generator runs
     async after the handler returns, and contextvars don't propagate
     across the boundary unless they're entered in the generator frame.
-    Same reason ``langfuse_flush`` is in the generator's ``finally``.
+
+    Note: we do not explicitly flush Langfuse here. ``flush()`` on Langfuse
+    4.x unconditionally blocks on ``_score_ingestion_queue.join()`` with no
+    timeout, which can hang the stream indefinitely when Langfuse Cloud is
+    slow. The background batch processor (``LANGFUSE_FLUSH_INTERVAL=1``)
+    drains spans and scores between requests on its own thread — at our
+    scale (1–2 rpm) the worst case is a small tail of events stranded when
+    the container freezes, which is acceptable.
     """
 
     async def event_generator() -> AsyncIterator[dict[str, str]]:
@@ -505,7 +514,6 @@ async def chat_stream(
             except Exception as exc:  # noqa: BLE001
                 logger.exception("agent stream failed")
                 yield _sse("error", {"message": str(exc)})
-                langfuse_flush()
                 return
 
             _emit_quality_scores(final_state)
@@ -515,11 +523,6 @@ async def chat_stream(
                 logger.exception("failed to record usage after graph run")
 
             yield _sse("result", _agent_response(final_state).model_dump(mode="json"))
-
-        # Outside propagate_attributes — flush must happen after the last
-        # event is yielded so client disconnect between steps still uploads
-        # accumulated spans.
-        langfuse_flush()
 
     return EventSourceResponse(event_generator())
 
