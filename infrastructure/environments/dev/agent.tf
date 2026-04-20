@@ -63,25 +63,15 @@ resource "aws_iam_role_policy" "lambda_agent_invoke_team_fetcher" {
   })
 }
 
-# Lambda Function URL with response streaming.
-#
-# TEMPORARILY REVERTED from the AWS_IAM + CloudFront-OAC hardening in #125
-# because every CloudFront→Function URL origin request was being rejected
-# with 403 (`Url4xxCount = UrlRequestCount` on the Lambda metrics, Lambda
-# never invoked), and CloudFront's custom_error_response masked the 403
-# with the SPA /index.html fallback, so the dashboard saw cached HTML
-# instead of JSON/SSE. Investigation showed OAC, resource-policy SourceArn,
-# and `lambda:FunctionUrlAuthType` condition all matching the live state,
-# yet OAC signing was still being rejected — suspected stuck OAC or an
-# interaction between RESPONSE_STREAM and OAC that we haven't nailed down.
-#
-# Back to `AuthType = NONE` + `principal = "*"` (the state between #123
-# and #125) to unblock the product while the OAC issue is investigated
-# separately. The eventual re-hardening is tracked in
-# docs/architecture/security-architecture.md.
+# Lambda Function URL with response streaming. `AuthType = AWS_IAM` means
+# the URL rejects any request that isn't SigV4-signed. CloudFront signs every
+# origin request via the Lambda OAC in the web-hosting module, so CloudFront
+# is the only caller that can reach this Lambda — hitting the Function URL
+# directly (e.g. `curl https://<host>.lambda-url.eu-west-2.on.aws/`) returns
+# 403 "signature missing". See #123 and docs/architecture/security-architecture.md.
 resource "aws_lambda_function_url" "agent" {
   function_name      = module.lambda_agent.function_name
-  authorization_type = "NONE"
+  authorization_type = "AWS_IAM"
   invoke_mode        = "RESPONSE_STREAM"
 
   # CORS is handled at the FastAPI application layer so the dashboard and
@@ -90,16 +80,32 @@ resource "aws_lambda_function_url" "agent" {
   # sync with the application config.
 }
 
-# Resource-based policy paired with the URL above. Function URLs have two
-# independent access gates AND'd together: the URL's `authorization_type`
-# (SigV4 check) and the function's resource policy (allowed principals).
-# `authorization_type = "NONE"` skips the SigV4 check but does NOT grant
-# invoke permission — without this permission every request hits the URL
-# and returns 403 because the resource policy would be empty. See #123.
-resource "aws_lambda_permission" "agent_function_url_public" {
-  statement_id           = "FunctionURLAllowPublicAccess"
+# Resource-based policy paired with the URL above. Function URLs gate invokes
+# by TWO independent checks AND'd together: the URL's `authorization_type`
+# (SigV4 signature validation) and the function's resource policy (allowed
+# principals). Both gates must pass.
+#
+# As of AWS's October 2025 change, the resource policy must also grant
+# `lambda:InvokeFunction` in a separate statement — without it, every
+# invocation returns `403 AccessDeniedException` regardless of `AuthType`
+# or who the principal is. See
+# https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html (the
+# "Starting in October 2025" note). Both statements here are scoped to
+# `cloudfront.amazonaws.com` + the distribution ARN so only CloudFront
+# can invoke this Lambda through its Function URL.
+resource "aws_lambda_permission" "agent_function_url_cloudfront_invoke_url" {
+  statement_id           = "AllowCloudFrontInvokeFunctionUrl"
   action                 = "lambda:InvokeFunctionUrl"
   function_name          = module.lambda_agent.function_name
-  principal              = "*"
-  function_url_auth_type = "NONE"
+  principal              = "cloudfront.amazonaws.com"
+  source_arn             = module.web_hosting.cloudfront_distribution_arn
+  function_url_auth_type = "AWS_IAM"
+}
+
+resource "aws_lambda_permission" "agent_function_url_cloudfront_invoke_function" {
+  statement_id  = "AllowCloudFrontInvokeFunction"
+  action        = "lambda:InvokeFunction"
+  function_name = module.lambda_agent.function_name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = module.web_hosting.cloudfront_distribution_arn
 }
