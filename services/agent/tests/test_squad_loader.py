@@ -40,7 +40,8 @@ def _raw_picks(*element_ids: int) -> list[dict[str, Any]]:
     return out
 
 
-def _raw_response(picks: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+def _raw_body(picks: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """The unwrapped FPL payload (what ``team_fetcher.main`` returns)."""
     return {
         "picks": picks if picks is not None else _raw_picks(341, 430, 235),
         "active_chip": "freehit",
@@ -57,16 +58,22 @@ def _raw_response(picks: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     }
 
 
-def _mock_lambda_payload(body: Any, *, function_error: str | None = None) -> MagicMock:
-    payload = MagicMock()
-    payload.read.return_value = (
-        json.dumps(body).encode("utf-8") if not isinstance(body, bytes) else body
-    )
-    response: dict[str, Any] = {"Payload": payload}
-    if function_error:
-        response["FunctionError"] = function_error
+def _run_handler_envelope(body: dict[str, Any], status_code: int = 200) -> dict[str, Any]:
+    """Wrap a body the way ``fpl_lib.core.run_handler.RunHandler`` does on the wire."""
+    return {"statusCode": status_code, "body": body}
+
+
+def _mock_lambda_client(payload: dict[str, Any]) -> MagicMock:
+    """Build a boto3 Lambda client mock whose ``invoke`` returns *payload* verbatim.
+
+    ``payload`` is the whole Lambda return value — in production that's always
+    the ``RunHandler`` envelope ``{"statusCode": N, "body": {...}}``. Tests use
+    ``_run_handler_envelope`` to construct it.
+    """
+    payload_mock = MagicMock()
+    payload_mock.read.return_value = json.dumps(payload).encode("utf-8")
     client = MagicMock()
-    client.invoke.return_value = response
+    client.invoke.return_value = {"Payload": payload_mock}
     return client
 
 
@@ -78,7 +85,7 @@ def _mock_neon(rows: list[dict[str, Any]]) -> MagicMock:
 
 @pytest.mark.asyncio
 async def test_load_user_squad_enriches_picks_with_neon_metadata() -> None:
-    raw = _raw_response()
+    raw = _run_handler_envelope(_raw_body())
     metadata_rows = [
         {
             "player_id": 341,
@@ -102,7 +109,7 @@ async def test_load_user_squad_enriches_picks_with_neon_metadata() -> None:
             "position": "MID",
         },
     ]
-    lambda_client = _mock_lambda_payload(raw)
+    lambda_client = _mock_lambda_client(raw)
     neon = _mock_neon(metadata_rows)
 
     with patch("fpl_agent.squad_loader.boto3.client", return_value=lambda_client):
@@ -135,8 +142,8 @@ async def test_load_user_squad_enriches_picks_with_neon_metadata() -> None:
 @pytest.mark.asyncio
 async def test_load_user_squad_falls_back_for_unknown_player() -> None:
     """If a pick's element isn't in Neon (brand-new transfer), use a placeholder."""
-    raw = _raw_response(picks=_raw_picks(999_999))
-    lambda_client = _mock_lambda_payload(raw)
+    raw = _run_handler_envelope(_raw_body(picks=_raw_picks(999_999)))
+    lambda_client = _mock_lambda_client(raw)
     neon = _mock_neon([])  # no rows match
 
     with patch("fpl_agent.squad_loader.boto3.client", return_value=lambda_client):
@@ -153,32 +160,29 @@ async def test_load_user_squad_falls_back_for_unknown_player() -> None:
 
 
 @pytest.mark.asyncio
-async def test_load_user_squad_raises_squad_not_found_on_team_error() -> None:
-    """Lambda surfaces TeamNotFoundError → loader raises SquadNotFoundError."""
-    lambda_client = _mock_lambda_payload(
-        {"errorType": "TeamNotFoundError", "errorMessage": "team 99999 not found"},
-        function_error="Unhandled",
-    )
+async def test_load_user_squad_raises_squad_fetch_error_on_non_200_status() -> None:
+    """RunHandler returns ``statusCode: 500`` when the handler raises — loader surfaces as SquadFetchError."""
+    raw = _run_handler_envelope({"error": "99999"}, status_code=500)
+    lambda_client = _mock_lambda_client(raw)
     neon = _mock_neon([])
 
     with (
         patch("fpl_agent.squad_loader.boto3.client", return_value=lambda_client),
-        pytest.raises(SquadNotFoundError),
+        pytest.raises(SquadFetchError, match="statusCode=500"),
     ):
         await load_user_squad(team_id=99999, gameweek=33, neon=neon, function_name="fn")
 
 
 @pytest.mark.asyncio
-async def test_load_user_squad_raises_squad_fetch_error_on_other_lambda_failures() -> None:
-    lambda_client = _mock_lambda_payload(
-        {"errorType": "FPLAccessError", "errorMessage": "403 forbidden"},
-        function_error="Unhandled",
-    )
+async def test_load_user_squad_raises_squad_fetch_error_on_bad_request() -> None:
+    """RunHandler returns ``statusCode: 400`` for ValueError — also a fetch failure from the loader's POV."""
+    raw = _run_handler_envelope({"error": "missing team_id"}, status_code=400)
+    lambda_client = _mock_lambda_client(raw)
     neon = _mock_neon([])
 
     with (
         patch("fpl_agent.squad_loader.boto3.client", return_value=lambda_client),
-        pytest.raises(SquadFetchError),
+        pytest.raises(SquadFetchError, match="statusCode=400"),
     ):
         await load_user_squad(team_id=1, gameweek=33, neon=neon, function_name="fn")
 
@@ -186,8 +190,8 @@ async def test_load_user_squad_raises_squad_fetch_error_on_other_lambda_failures
 @pytest.mark.asyncio
 async def test_load_user_squad_raises_squad_not_found_on_empty_picks() -> None:
     """An empty picks array (future GW, never-set team) → SquadNotFoundError."""
-    raw = {"picks": [], "active_chip": None, "entry_history": {}}
-    lambda_client = _mock_lambda_payload(raw)
+    raw = _run_handler_envelope({"picks": [], "active_chip": None, "entry_history": {}})
+    lambda_client = _mock_lambda_client(raw)
     neon = _mock_neon([])
 
     with (
@@ -199,8 +203,8 @@ async def test_load_user_squad_raises_squad_not_found_on_empty_picks() -> None:
 
 @pytest.mark.asyncio
 async def test_load_user_squad_invokes_lambda_with_correct_payload() -> None:
-    raw = _raw_response()
-    lambda_client = _mock_lambda_payload(raw)
+    raw = _run_handler_envelope(_raw_body())
+    lambda_client = _mock_lambda_client(raw)
     neon = _mock_neon(
         [
             {"player_id": eid, "web_name": "p", "team_name": "t", "price": 5.0, "position": "MID"}
@@ -220,9 +224,34 @@ async def test_load_user_squad_invokes_lambda_with_correct_payload() -> None:
 
 
 @pytest.mark.asyncio
+async def test_load_user_squad_unwraps_run_handler_envelope() -> None:
+    """Regression: ``RunHandler`` wraps every response as ``{"statusCode": N, "body": ...}``.
+
+    Before this guard, the loader treated the envelope as the body, so
+    ``raw.get("picks")`` was always ``None`` and every valid team returned
+    ``SquadNotFoundError``. The loader must peel off the envelope.
+    """
+    body = _raw_body()
+    envelope = _run_handler_envelope(body)
+    lambda_client = _mock_lambda_client(envelope)
+    neon = _mock_neon(
+        [
+            {"player_id": eid, "web_name": "p", "team_name": "t", "price": 5.0, "position": "MID"}
+            for eid in (341, 430, 235)
+        ]
+    )
+
+    with patch("fpl_agent.squad_loader.boto3.client", return_value=lambda_client):
+        squad = await load_user_squad(team_id=1, gameweek=33, neon=neon, function_name="fn")
+
+    # All three picks from the body are loaded — *not* zero picks from the envelope.
+    assert len(squad.picks) == 3
+
+
+@pytest.mark.asyncio
 async def test_load_user_squad_wraps_neon_failures_as_squad_fetch_error() -> None:
-    raw = _raw_response()
-    lambda_client = _mock_lambda_payload(raw)
+    raw = _run_handler_envelope(_raw_body())
+    lambda_client = _mock_lambda_client(raw)
     neon = MagicMock()
     neon.fetch = AsyncMock(side_effect=RuntimeError("connection lost"))
 
