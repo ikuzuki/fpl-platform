@@ -103,3 +103,19 @@ resource "aws_lambda_permission" "agent_function_url_public" {
   principal              = "*"
   function_url_auth_type = "NONE"
 }
+
+# Second statement required by AWS's October 2025 change: Function URLs now
+# require `lambda:InvokeFunction` IN ADDITION to `lambda:InvokeFunctionUrl`.
+# Without this, every request returns `403 Forbidden` with
+# `AccessDeniedException` even when the URL is `AuthType = NONE` and
+# the first statement allows `Principal = "*"`. The two permissions were
+# previously implicit-granted by a single `lambda:InvokeFunctionUrl`;
+# AWS now checks them independently.
+# See https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html
+# (the "Starting in October 2025" note).
+resource "aws_lambda_permission" "agent_function_url_public_invoke" {
+  statement_id  = "FunctionURLInvokeFunctionPublic"
+  action        = "lambda:InvokeFunction"
+  function_name = module.lambda_agent.function_name
+  principal     = "*"
+}
