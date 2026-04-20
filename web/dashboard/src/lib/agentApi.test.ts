@@ -115,6 +115,46 @@ describe("streamChat", () => {
     ]);
   });
 
+  it("parses frames separated by CRLF CRLF (sse-starlette over Lambda Function URL)", async () => {
+    // Regression: every frame the agent emits over CloudFront → Function URL
+    // is terminated with `\r\n\r\n`, not `\n\n`. The old parser only searched
+    // for `\n\n`, so it found zero frames and the UI reported
+    // "Stream ended before a final report." for every chat.
+    const frames = [
+      "event: step\r\ndata: {\"node\":\"planner\"}\r\n\r\n",
+      "event: result\r\ndata: {\"report\":{\"question\":\"q\",\"analysis\":\"a\",\"players\":[],\"comparison\":null,\"recommendation\":\"r\",\"caveats\":[],\"data_sources\":[]},\"iterations_used\":1,\"tool_calls_made\":[]}\r\n\r\n",
+    ];
+    vi.spyOn(window, "fetch").mockResolvedValue(
+      new Response(sseStreamFromFrames(frames), { status: 200 }),
+    );
+
+    const events: AgentEvent[] = [];
+    for await (const e of streamChat({ question: "q" })) {
+      events.push(e);
+    }
+    expect(events.map((e) => e.type)).toEqual(["step", "result"]);
+  });
+
+  it("flushes a trailing frame that closes without a blank line", async () => {
+    // Some proxies cut the connection the moment the server yields the last
+    // event, dropping the final `\n\n`. Without a trailing-buffer flush the
+    // terminal `result` event would be lost and the UI would report
+    // "Stream ended before a final report."
+    const frames = [
+      "event: step\ndata: {\"node\":\"planner\"}\n\n",
+      "event: result\ndata: {\"report\":{\"question\":\"q\",\"analysis\":\"a\",\"players\":[],\"comparison\":null,\"recommendation\":\"r\",\"caveats\":[],\"data_sources\":[]},\"iterations_used\":1,\"tool_calls_made\":[]}",
+    ];
+    vi.spyOn(window, "fetch").mockResolvedValue(
+      new Response(sseStreamFromFrames(frames), { status: 200 }),
+    );
+
+    const events: AgentEvent[] = [];
+    for await (const e of streamChat({ question: "q" })) {
+      events.push(e);
+    }
+    expect(events.map((e) => e.type)).toEqual(["step", "result"]);
+  });
+
   it("throws AgentApiError on 429 with Retry-After", async () => {
     vi.spyOn(window, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ detail: "rate_limit_exceeded" }), {
