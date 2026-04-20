@@ -106,14 +106,21 @@ async function* parseSseStream(
   const decoder = new TextDecoder("utf-8");
   let buffer = "";
 
+  // SSE spec says a frame ends on a blank line — which is any of `\n\n`,
+  // `\r\n\r\n`, or `\r\r`. Normalising to `\n` up front lets the frame
+  // splitter only look for `\n\n`. The terminal `result` event reached us
+  // as `\r\n\r\n`, so the old code searching for `\n\n` alone dropped it
+  // and the UI reported "Stream ended before a final report."
+  const normalise = (s: string): string => s.replace(/\r\n?/g, "\n");
+
   try {
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
-      buffer += decoder.decode(value, { stream: true });
+      buffer += normalise(decoder.decode(value, { stream: true }));
 
-      // SSE frames are separated by a blank line. Process every complete
-      // frame in the buffer; leave the remainder for the next chunk.
+      // Process every complete frame in the buffer; leave the remainder
+      // for the next chunk.
       let idx: number;
       while ((idx = buffer.indexOf("\n\n")) !== -1) {
         const frame = buffer.slice(0, idx);
@@ -121,6 +128,15 @@ async function* parseSseStream(
         const event = parseFrame(frame);
         if (event) yield event;
       }
+    }
+
+    // Flush whatever remains — some servers (and intermediate proxies)
+    // close the connection without a trailing blank line. Treat the tail
+    // as the last frame rather than silently dropping it.
+    const tail = buffer.trim();
+    if (tail) {
+      const event = parseFrame(tail);
+      if (event) yield event;
     }
   } finally {
     reader.releaseLock();
