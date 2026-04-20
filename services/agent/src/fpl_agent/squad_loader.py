@@ -42,6 +42,12 @@ def _invoke_team_fetcher_sync(function_name: str, team_id: int, gameweek: int) -
 
     boto3 itself is sync — wrapping with ``to_thread`` keeps the event loop
     responsive while the request is in flight (FPL can take 1-2s under load).
+
+    Returns the *unwrapped* ``body`` dict. The team-fetcher uses ``RunHandler``
+    which envelopes every response as ``{"statusCode": N, "body": <payload>}`` —
+    that envelope is what API Gateway / Function URL proxy integrations expect,
+    but we invoke the Lambda directly (not via HTTP), so we peel it off here
+    before returning. Non-200 statuses are surfaced as ``SquadFetchError``.
     """
     client = boto3.client("lambda")
     response = client.invoke(
@@ -49,17 +55,23 @@ def _invoke_team_fetcher_sync(function_name: str, team_id: int, gameweek: int) -
         InvocationType="RequestResponse",
         Payload=json.dumps({"team_id": team_id, "gameweek": gameweek}).encode("utf-8"),
     )
-    body = response["Payload"].read().decode("utf-8")
+    raw = cast(dict[str, Any], json.loads(response["Payload"].read().decode("utf-8")))
 
-    if response.get("FunctionError"):
-        # The team-fetcher Lambda raises TeamNotFoundError for 404s; the
-        # RunHandler wrapper turns that into a JSON error body. We surface
-        # 404-flavoured failures separately so the route can return HTTP 404.
-        if "TeamNotFoundError" in body:
-            raise SquadNotFoundError(f"team_id={team_id} not found")
-        raise SquadFetchError(f"team-fetcher Lambda error: {body}")
+    status_code = raw.get("statusCode")
+    body = raw.get("body") if isinstance(raw.get("body"), dict) else None
 
-    return cast(dict[str, Any], json.loads(body))
+    if status_code != 200 or body is None:
+        # RunHandler catches TeamNotFoundError as a generic Exception → 500 with
+        # `body.error = str(e)` where str(TeamNotFoundError(<id>)) is just the ID,
+        # so we can't reliably distinguish 404-flavoured failures here. An empty
+        # picks list (handled in ``load_user_squad``) covers the benign cases
+        # (future GW, never-set team); everything else is an upstream fetch error.
+        err = (body or {}).get("error") if isinstance(body, dict) else None
+        raise SquadFetchError(
+            f"team-fetcher returned statusCode={status_code}: {err or raw!r}"
+        )
+
+    return body
 
 
 async def _fetch_player_metadata(
