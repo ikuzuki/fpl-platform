@@ -40,6 +40,7 @@ from fpl_agent.middleware.rate_limit import RateLimiter
 from fpl_agent.models.requests import ChatRequest
 from fpl_agent.models.responses import AgentResponse, ScoutReport, UserSquad
 from fpl_agent.models.state import initial_state
+from fpl_agent.squad_cache import DynamoSquadCache, SquadCache
 from fpl_agent.squad_loader import SquadFetchError, SquadNotFoundError, load_user_squad
 from fpl_agent.tools.player_tools import make_tools
 from fpl_lib.clients.neon import NeonClient
@@ -61,6 +62,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 ENVIRONMENT = os.environ.get("ENV", "dev")
 BUDGET_TABLE = os.environ.get("AGENT_USAGE_TABLE", f"fpl-agent-usage-{ENVIRONMENT}")
+SQUAD_CACHE_TABLE = os.environ.get("SQUAD_CACHE_TABLE", f"fpl-squad-cache-{ENVIRONMENT}")
 MONTHLY_BUDGET_USD = float(os.environ.get("AGENT_MONTHLY_BUDGET_USD", "5.0"))
 NEON_DATABASE_URL_ENV = "NEON_DATABASE_URL"
 TEAM_FETCHER_FUNCTION_NAME_ENV = "TEAM_FETCHER_FUNCTION_NAME"
@@ -129,6 +131,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.graph = graph
     app.state.budget = BudgetTracker(BUDGET_TABLE, monthly_limit_usd=MONTHLY_BUDGET_USD)
     app.state.rate_limiter = RateLimiter()
+    # Squad picks are immutable once a GW deadline passes, so a write-once
+    # DynamoDB cache sidesteps both the repeat-FPL-hit cost and intermittent
+    # Fastly IP blocks on the Lambda egress. One shared client per cold-start.
+    app.state.squad_cache = DynamoSquadCache(SQUAD_CACHE_TABLE)
 
     try:
         yield
@@ -164,6 +170,15 @@ def get_graph(request: Request) -> Any:
             status_code=503, detail="agent not configured (NEON_DATABASE_URL missing)"
         )
     return graph
+
+
+def get_squad_cache(request: Request) -> SquadCache | None:
+    """Return the shared :class:`SquadCache`, or ``None`` if not configured.
+
+    Missing cache wiring must not break ``/team`` — the endpoint falls
+    through to the live Lambda fetch when the cache isn't available.
+    """
+    return getattr(request.app.state, "squad_cache", None)
 
 
 def get_neon(request: Request) -> NeonClient:
@@ -250,6 +265,7 @@ async def get_team(
     team_id: int = Query(..., ge=1, description="FPL manager team ID"),
     gameweek: int = Query(..., ge=1, le=38, description="Gameweek number 1-38"),
     neon: NeonClient = Depends(get_neon),
+    cache: SquadCache | None = Depends(get_squad_cache),
     _rl: None = Depends(check_rate_limit),
 ) -> UserSquad:
     """Fetch and enrich a user's FPL squad.
@@ -276,6 +292,7 @@ async def get_team(
             gameweek=gameweek,
             neon=neon,
             function_name=function_name,
+            cache=cache,
         )
     except SquadNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

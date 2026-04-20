@@ -29,14 +29,23 @@ interface StepPillsProps {
 
 export function StepPills({ steps, active }: StepPillsProps) {
   if (steps.length === 0 && !active) return null;
-  const seen = new Set(steps);
+  // Render based on the *position* of the most recent step, not the full
+  // set of nodes ever seen. The graph can loop back (reflector → planner)
+  // when it decides more data is needed, so a naive "once seen, always
+  // done" renderer would show Reviewing ✓ next to Gathering-data spinning,
+  // which breaks the linear mental model. Position-based rendering resets
+  // later pills to "pending" whenever execution jumps back to an earlier
+  // step, so the user always sees a coherent left-to-right progression.
   const lastStep = steps[steps.length - 1];
+  const currentIdx = lastStep ? NODE_ORDER.indexOf(lastStep) : -1;
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      {NODE_ORDER.map((node) => {
-        const done = seen.has(node);
-        const inFlight = active && node === lastStep;
+      {NODE_ORDER.map((node, nodeIdx) => {
+        const inFlight = active && nodeIdx === currentIdx;
+        // After the stream ends (``!active``) the last-seen step also
+        // counts as done; while streaming, only earlier steps do.
+        const done = active ? nodeIdx < currentIdx : nodeIdx <= currentIdx;
         const label = NODE_LABELS[node] ?? node;
         return (
           <span
