@@ -36,6 +36,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from fpl_agent.graph.builder import build_agent_graph
 from fpl_agent.middleware.budget import BudgetTracker
+from fpl_agent.middleware.cloudfront_secret import CloudFrontSecretMiddleware
 from fpl_agent.middleware.rate_limit import RateLimiter
 from fpl_agent.models.requests import ChatRequest
 from fpl_agent.models.responses import AgentResponse, ScoutReport, UserSquad
@@ -66,6 +67,10 @@ SQUAD_CACHE_TABLE = os.environ.get("SQUAD_CACHE_TABLE", f"fpl-squad-cache-{ENVIR
 MONTHLY_BUDGET_USD = float(os.environ.get("AGENT_MONTHLY_BUDGET_USD", "5.0"))
 NEON_DATABASE_URL_ENV = "NEON_DATABASE_URL"
 TEAM_FETCHER_FUNCTION_NAME_ENV = "TEAM_FETCHER_FUNCTION_NAME"
+CLOUDFRONT_SECRET_ENV = "CLOUDFRONT_SHARED_SECRET"
+CLOUDFRONT_SECRET_HEADER_NAME = os.environ.get(
+    "CLOUDFRONT_SECRET_HEADER_NAME", "X-CloudFront-Secret"
+)
 
 # Production traffic is same-origin via CloudFront — the browser hits the
 # dashboard domain and proxies to /api/agent/*, so CORS mostly matters for
@@ -100,6 +105,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         resolve_secret_to_env(ENVIRONMENT, "neon-database-url", NEON_DATABASE_URL_ENV)
     except Exception as exc:  # noqa: BLE001
         logger.warning("Neon secret fetch failed, chat/team will return 503: %s", exc)
+    # CloudFront-injected shared-secret header — ADR-0010 revision. Missing
+    # secret is tolerated for local dev / tests; production deployments set
+    # it via Terraform. The middleware no-ops when the env var is unset.
+    try:
+        resolve_secret_to_env(ENVIRONMENT, "cloudfront-agent-secret", CLOUDFRONT_SECRET_ENV)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "CloudFront shared-secret fetch failed — agent Function URL is publicly "
+            "reachable without the header check: %s",
+            exc,
+        )
     init_langfuse(environment=ENVIRONMENT)
 
     database_url = os.environ.get(NEON_DATABASE_URL_ENV)
@@ -144,6 +160,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="FPL Agent API", version="0.3.0", lifespan=lifespan)
+
+# Middleware order matters: Starlette applies `add_middleware` in reverse,
+# so the LAST registered runs FIRST on the request path. We register CORS
+# last so CORS runs first and answers OPTIONS preflights without needing the
+# CloudFront secret (browsers don't forward custom request headers on the
+# preflight, only on the real request). The secret check runs for the actual
+# GET/POST that follows.
+#
+# Secret middleware is deliberately no-op when the env var is unset — local
+# dev + unit tests don't need it, and production Terraform always sets it.
+app.add_middleware(
+    CloudFrontSecretMiddleware,
+    header_name=CLOUDFRONT_SECRET_HEADER_NAME,
+    secret_value=os.environ.get(CLOUDFRONT_SECRET_ENV, ""),
+)
 
 # Moved from API Gateway to the application layer per ADR-0010. CORS for
 # /chat endpoints that stream SSE — the browser sends a preflight before the

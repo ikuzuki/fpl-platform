@@ -1,4 +1,33 @@
 # -----------------------------------------------------------------------------
+# CloudFront → Agent shared-secret header
+#
+# Replaces OAC for the /api/agent/* path — OAC doesn't work for our browser
+# POST clients (requires x-amz-content-sha256 which browsers don't send). The
+# value is generated once by Terraform, stored in Secrets Manager for audit /
+# rotation, injected into the CloudFront origin header below, and read back
+# into the Lambda env at cold-start via resolve_secret_to_env. Rotation:
+#   terraform taint random_password.cloudfront_agent_secret && terraform apply
+# CloudFront propagation is ~5 min; during that window some in-flight requests
+# may 401 until the Lambda cold-starts and picks up the new value. Acceptable
+# at dev scale — documented in docs/architecture/security-architecture.md.
+# -----------------------------------------------------------------------------
+resource "random_password" "cloudfront_agent_secret" {
+  length  = 48
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "cloudfront_agent_secret" {
+  name                    = "/fpl-platform/${var.environment}/cloudfront-agent-secret"
+  description             = "Shared secret CloudFront injects into /api/agent/* origin requests. The agent Lambda validates incoming requests carry this header."
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "cloudfront_agent_secret" {
+  secret_id     = aws_secretsmanager_secret.cloudfront_agent_secret.id
+  secret_string = random_password.cloudfront_agent_secret.result
+}
+
+# -----------------------------------------------------------------------------
 # Web Hosting — S3 + CloudFront for the React dashboard
 # -----------------------------------------------------------------------------
 module "web_hosting" {
@@ -11,8 +40,9 @@ module "web_hosting" {
   # on the agent behaviour can be resolved at plan time. agent_api_domain is
   # a computed attribute (the Function URL is unknown until apply) — that's
   # fine once the module no longer gates its resources on the string itself.
-  enable_agent_api = true
-  agent_api_domain = trimsuffix(replace(aws_lambda_function_url.agent.function_url, "https://", ""), "/")
+  enable_agent_api                 = true
+  agent_api_domain                 = trimsuffix(replace(aws_lambda_function_url.agent.function_url, "https://", ""), "/")
+  agent_shared_secret_header_value = random_password.cloudfront_agent_secret.result
 }
 
 # -----------------------------------------------------------------------------

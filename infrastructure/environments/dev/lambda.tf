@@ -227,10 +227,34 @@ module "lambda_agent" {
     AGENT_USAGE_TABLE          = aws_dynamodb_table.agent_usage.name
     SQUAD_CACHE_TABLE          = aws_dynamodb_table.squad_cache.name
     TEAM_FETCHER_FUNCTION_NAME = module.lambda_team_fetcher.function_name
-    # Langfuse's @observe decorator blocks the request path when the tracing
-    # endpoint is unreachable from this Lambda — /team direct-invoke hung for
-    # the full 60s timeout until this was flipped off. Staying off until the
-    # underlying reachability/timeout issue is fixed. See CHANGELOG 2026-04-20.
-    LANGFUSE_TRACING_ENABLED = "false"
+
+    # Langfuse tracing is on with the SDK pinned to tight timeouts so a slow
+    # or unreachable Langfuse endpoint adds at most ~5s to the response path
+    # (vs. the 60s default that blew up /team in #133). Matches the pattern
+    # Langfuse maintainers recommend for low-traffic Lambda deployments —
+    # ADOT Lambda Extension is the production answer at higher RPS and stays
+    # deferred pending observed trace-drop rate (see ADR-0005 revision).
+    LANGFUSE_TRACING_ENABLED = "true"
+    # OTLP exporter: give up on any single HTTP upload to cloud.langfuse.com
+    # after 3s (default 10s). Below the 5s BSP cap so one retry can still fit.
+    OTEL_EXPORTER_OTLP_TIMEOUT = "3000"
+    # BatchSpanProcessor: hard ceiling on the entire flush including retries.
+    # Lambda freezes the process the instant the handler returns, so any
+    # flush() call on the response thread blocks up to this value.
+    OTEL_BSP_EXPORT_TIMEOUT = "5000"
+    # Emit each span immediately — we'd rather pay 1 flush per span at low
+    # traffic than batch spans that could be stranded in the queue when the
+    # container freezes. At 1-2 rpm the upload cost is negligible.
+    LANGFUSE_FLUSH_AT       = "1"
+    LANGFUSE_FLUSH_INTERVAL = "1000"
+
+    # Shared-secret gate: CloudFront injects this header on every origin
+    # request (terraform-managed, stored in Secrets Manager). The FastAPI
+    # middleware rejects requests that don't carry it, making the Function
+    # URL effectively unreachable except via CloudFront. Replaces the
+    # AWS_IAM + OAC approach rejected in the ADR-0010 revision — OAC requires
+    # the browser to compute x-amz-content-sha256 for POST bodies, which it
+    # doesn't do. See docs/architecture/security-architecture.md.
+    CLOUDFRONT_SECRET_HEADER_NAME = "X-CloudFront-Secret"
   }
 }

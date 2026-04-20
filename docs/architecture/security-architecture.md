@@ -28,7 +28,7 @@ graph LR
         CF["CloudFront<br/><i>Shield Standard · TLS</i>"]
     end
     subgraph Infra["AWS infrastructure"]
-        FU["Function URL<br/><i>AuthType=AWS_IAM</i><br/>only CloudFront-signed<br/>requests accepted"]
+        FU["Function URL<br/><i>AuthType=NONE</i><br/>shared-secret header<br/>enforced by middleware"]
         LC["Lambda reserved<br/>concurrency = 10"]
     end
     subgraph App["Application layer (FastAPI)"]
@@ -51,11 +51,19 @@ Automatic and free whenever traffic flows through CloudFront. Covers SYN floods,
 - Geo restrictions currently off; available as a one-line distribution setting if abuse patterns warrant.
 
 ### 3. Lambda Function URL — transport
-`AuthType = AWS_IAM`. The Function URL rejects any request that isn't SigV4-signed. CloudFront signs every origin request via a Lambda Origin Access Control (`origin_access_control_origin_type = "lambda"`, `signing_behavior = "always"`), and the Lambda resource policy only grants `lambda:InvokeFunctionUrl` to the `cloudfront.amazonaws.com` principal scoped by `aws:SourceArn` to our one distribution.
+`AuthType = NONE`, `principal = "*"` on the resource policy (both `lambda:InvokeFunctionUrl` AND `lambda:InvokeFunction`, per AWS's Oct-2025 Function URL rule). CloudFront is the enforced entry point via a **shared-secret header** rather than AWS_IAM + OAC — see "Why not OAC" below.
 
-Net effect: the Function URL's `*.lambda-url.eu-west-2.on.aws` host is not publicly reachable. A direct `curl` returns 403 "signature missing"; a request signed by any other AWS account or distribution returns 403 "principal mismatch". The only path to the agent is through this CloudFront distribution.
+**How the gate works.** Terraform generates a 48-char random password at apply time, stores it in Secrets Manager (`/fpl-platform/${env}/cloudfront-agent-secret`), and uses it as both:
+- A CloudFront `origin_custom_header` value on the `/api/agent/*` behaviour — CloudFront injects `X-CloudFront-Secret: <value>` on every origin request.
+- The secret value the Lambda fetches at cold-start into `$CLOUDFRONT_SHARED_SECRET`. [`cloudfront_secret.py`](../../services/agent/src/fpl_agent/middleware/cloudfront_secret.py) middleware compares incoming headers with `hmac.compare_digest` and returns 401 on mismatch.
 
-This closes the edge-bypass class of attack: any future WAF rule, rate-based policy, geo-block, or edge logging added to the CloudFront `/api/agent/*` behaviour cannot be sidestepped by hitting the Function URL directly.
+Net effect: the Function URL's `*.lambda-url.eu-west-2.on.aws` host is not usefully reachable. A direct `curl` returns 401; a request signed by any other AWS account returns 401; only requests carrying the secret header succeed, and only CloudFront carries it. The only practical path to the agent is through this distribution.
+
+This closes the edge-bypass class of attack: any future WAF rule, rate-based policy, geo-block, or edge logging added to the CloudFront `/api/agent/*` behaviour cannot be sidestepped by hitting the Function URL directly. `/health` is exempt from the middleware so Lambda Web Adapter's in-container readiness probe can run before CloudFront is in scope.
+
+**Why not OAC.** OAC with `origin_type = "lambda"` signs origin requests with SigV4. For POST requests, SigV4 requires the *client* (browser, in our case) to compute `SHA256(body)` and pass it in the `x-amz-content-sha256` header — CloudFront OAC doesn't hash bodies itself. Browsers don't compute that hash, so every `POST /chat` would fail signature validation at the Function URL. We verified this in-incident: with OAC + AWS_IAM, Lambda metrics showed `Url4xxCount == UrlRequestCount` (100% rejection) despite correct IAM configuration. Documented at [AWS re:Post](https://repost.aws/questions/QUbHCI9AfyRdaUPCCo_3XKMQ). `GET /team` would have worked on OAC; POST wouldn't. Shared-secret works uniformly for both.
+
+**Rotation.** `terraform taint random_password.cloudfront_agent_secret && terraform apply` regenerates the secret. CloudFront distribution update (~5 min propagation) and the Lambda cold-start race briefly — in-flight requests during the window may 401 until the next Lambda cold-start picks up the new value from Secrets Manager. Acceptable at dev scale; production would overlap old+new by keeping both valid for a grace window.
 
 ### 4. Lambda reserved concurrency — infrastructure backpressure
 `reserved_concurrent_executions = 10` on the agent Lambda. When more than 10 requests are in-flight concurrently, Lambda itself returns 429 without invoking the function. This replaces API Gateway's endpoint throttling (removed per ADR-0010) with infrastructure-level enforcement.

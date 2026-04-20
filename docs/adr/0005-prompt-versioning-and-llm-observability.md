@@ -107,3 +107,14 @@ Prompt version metadata flows into every Langfuse trace, enabling A/B comparison
 - Two secrets to manage in Secrets Manager
 - If Langfuse's cloud service is down, tracing silently fails (by design — doesn't block the pipeline)
 - Langfuse SDK has breaking API changes between major versions (v2→v3→v4); code examples in this ADR target v4 (`propagate_attributes`, `Langfuse()` instance methods)
+
+## Revision — 2026-04-20: Langfuse SDK v4 on Lambda tuning
+
+Langfuse SDK v4 is an OpenTelemetry rewrite. On Lambda, the OTLP batch exporter's default timeouts (30s export + 2× 10s HTTP retries) stacked to a ~60s hang on the response thread whenever `cloud.langfuse.com` was slow or unreachable — `/team` returned HTTP 200 but took 60s to return (see CHANGELOG 2026-04-20). Root cause: Lambda freezes the execution environment on handler return, so any `flush()` call on the response thread pays the full export deadline inline.
+
+Two accepted patterns:
+
+1. **SDK-only config (chosen).** Module-scope `Langfuse()` client (constructed lazily on first use and cached for the warm container's lifetime) plus tight OTEL env vars — `OTEL_EXPORTER_OTLP_TIMEOUT=3000`, `OTEL_BSP_EXPORT_TIMEOUT=5000`, `LANGFUSE_FLUSH_AT=1`. Worst-case per-request latency cost: ~5s on cold start when Langfuse is unreachable. At our scale (1–2 rpm hobby traffic) this is the recommended pattern — Langfuse maintainers reiterate it in [discussion #7669](https://github.com/orgs/langfuse/discussions/7669) and it's what almost every real-world Lambda + Langfuse deployment uses.
+2. **ADOT Lambda Extension.** Runs a local OpenTelemetry Collector as an external extension process. The app exports to `localhost:4318`; the collector buffers and flushes during the extension lifecycle (after the handler returns but before the container freezes). User-facing request latency is untouched. Widely regarded as overkill below double-digit RPS, and adds Dockerfile complexity (the collector has to be baked into the container image — Layers don't work with container-image Lambdas).
+
+Pattern 2 is the production answer if (a) trace-drop rate becomes visible in the Langfuse UI, or (b) the ~5s worst-case cold-start tax shows up as user-visible latency. Pattern 1 remains the default. `LANGFUSE_TRACING_ENABLED=false` is preserved as a kill-switch — a single `aws lambda update-function-configuration` call disables tracing in seconds if a future Langfuse outage overruns the 5s cap.
