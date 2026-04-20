@@ -44,9 +44,19 @@ class DynamoSquadCache:
     responsive during the sub-10ms DynamoDB round trip.
     """
 
-    def __init__(self, table_name: str, *, client: Any = None) -> None:
+    def __init__(
+        self,
+        table_name: str,
+        *,
+        region_name: str = "eu-west-2",
+        client: Any = None,
+    ) -> None:
+        # Default region matches the rest of the platform; passing it
+        # explicitly means boto3 doesn't need an ambient ``AWS_REGION`` —
+        # CI runners without AWS env vars would otherwise raise
+        # ``NoRegionError`` at import / lifespan time.
         self.table_name = table_name
-        self._client = client or boto3.client("dynamodb")
+        self._client = client or boto3.client("dynamodb", region_name=region_name)
 
     async def get(self, team_id: int, gameweek: int) -> dict[str, Any] | None:
         try:
