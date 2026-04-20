@@ -226,5 +226,10 @@ module "lambda_agent" {
     ENV                        = var.environment
     AGENT_USAGE_TABLE          = aws_dynamodb_table.agent_usage.name
     TEAM_FETCHER_FUNCTION_NAME = module.lambda_team_fetcher.function_name
+    # Langfuse's @observe decorator blocks the request path when the tracing
+    # endpoint is unreachable from this Lambda — /team direct-invoke hung for
+    # the full 60s timeout until this was flipped off. Staying off until the
+    # underlying reachability/timeout issue is fixed. See CHANGELOG 2026-04-20.
+    LANGFUSE_TRACING_ENABLED = "false"
   }
 }
