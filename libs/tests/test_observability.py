@@ -37,9 +37,7 @@ def _clear_langfuse_env(monkeypatch: pytest.MonkeyPatch) -> None:
 # ---------------------------------------------------------------------------
 class TestInitLangfuse:
     @pytest.mark.unit
-    def test_fetches_both_parameters_from_ssm(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_fetches_both_parameters_from_ssm(self, monkeypatch: pytest.MonkeyPatch) -> None:
         mock_client = MagicMock()
         mock_client.get_parameter.side_effect = [
             {"Parameter": {"Value": "pk-test"}},
