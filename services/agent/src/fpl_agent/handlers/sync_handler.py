@@ -20,14 +20,14 @@ from fpl_lib.core.run_handler import RunHandler
 logger = logging.getLogger(__name__)
 
 DEFAULT_BUCKET = "fpl-data-lake-dev"
-NEON_SECRET_ID = "/fpl-platform/dev/neon-database-url"
+NEON_PARAMETER_NAME = "/fpl-platform/dev/neon-database-url"
 
 
 def _get_neon_database_url() -> str:
-    """Retrieve the Neon database URL from Secrets Manager."""
-    sm = boto3.client("secretsmanager", region_name="eu-west-2")
-    resp = sm.get_secret_value(SecretId=NEON_SECRET_ID)
-    return resp["SecretString"]
+    """Retrieve the Neon database URL from SSM Parameter Store."""
+    ssm = boto3.client("ssm", region_name="eu-west-2")
+    resp = ssm.get_parameter(Name=NEON_PARAMETER_NAME, WithDecryption=True)
+    return resp["Parameter"]["Value"]
 
 
 async def main(

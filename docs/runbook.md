@@ -43,17 +43,41 @@ one generation span per LLM node (`node.planner`, `node.reflector`,
 
 ### Is tracing actually working?
 The Lambda logs `"Langfuse init failed, tracing disabled: …"` at cold-start
-if Secrets Manager couldn't be reached — the service still serves traffic,
-just without spans. Fix by confirming the two secrets are populated:
+if SSM Parameter Store couldn't be reached — the service still serves
+traffic, just without spans. Fix by confirming the two parameters are
+populated:
 
 ```bash
-aws secretsmanager get-secret-value --secret-id /fpl-platform/dev/langfuse-public-key
-aws secretsmanager get-secret-value --secret-id /fpl-platform/dev/langfuse-secret-key
+aws ssm get-parameter --name /fpl-platform/dev/langfuse-public-key --with-decryption --query Parameter.Value --output text
+aws ssm get-parameter --name /fpl-platform/dev/langfuse-secret-key --with-decryption --query Parameter.Value --output text
 ```
 
-If both have `SecretString` values and traces still don't appear, check the
-Lambda execution role has `secretsmanager:GetSecretValue` on
-`/fpl-platform/*` (covered by the shared `lambda-role` module).
+If both return real values and traces still don't appear, check the Lambda
+execution role has `ssm:GetParameter` on `/fpl-platform/*` (covered by the
+shared `lambda-role` module). See ADR-0011 for the choice of Parameter
+Store over Secrets Manager.
+
+### Populating SSM SecureString parameters
+
+After a fresh `terraform apply` the four user-supplied parameters
+(`anthropic-api-key`, `langfuse-public-key`, `langfuse-secret-key`,
+`neon-database-url`) hold the placeholder string `"REPLACE_ME"`.
+`cloudfront-agent-secret` is auto-populated by Terraform via
+`random_password`. Set the four real values via the Console
+(*Systems Manager → Parameter Store → {param} → Edit*) or via CLI:
+
+```bash
+aws ssm put-parameter \
+  --name /fpl-platform/dev/anthropic-api-key \
+  --type SecureString \
+  --value "sk-ant-…" \
+  --overwrite
+```
+
+Terraform's `lifecycle { ignore_changes = [value] }` means subsequent
+applies leave the populated value alone. Lambda cold-starts pick up the
+new value on the next invocation; force a refresh by republishing the
+function or waiting for the existing container to drain.
 
 ## Loading a User's FPL Squad
 

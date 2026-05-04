@@ -78,7 +78,7 @@ Integration via the `@observe` decorator on enricher methods and Lambda handlers
 - **Batch-level metadata and scoring** — the `@observe(name="enricher_batch_call")` decorator on `_call_llm` records enricher name, prompt version, model, and batch size per span, then scores output count validity. See `services/enrich/src/fpl_enrich/enrichers/base.py`.
 - **Trace-level quality scoring** — after all batches complete, the base enricher scores the trace with `validation_pass_rate`. Same file as above.
 
-Keys stored in Secrets Manager (`/fpl-platform/dev/langfuse-public-key`, `/fpl-platform/dev/langfuse-secret-key`).
+Keys stored in SSM Parameter Store as SecureString parameters (`/fpl-platform/dev/langfuse-public-key`, `/fpl-platform/dev/langfuse-secret-key`). See ADR-0011 for the choice of Parameter Store over Secrets Manager.
 
 > **Note:** This project uses Langfuse SDK v4 (`propagate_attributes`, `Langfuse()` instance methods). See the code references above for current usage patterns.
 
@@ -104,7 +104,7 @@ Prompt version metadata flows into every Langfuse trace, enabling A/B comparison
 - No compile-time validation that prompt placeholders match code expectations
 - Prompt and code must stay in sync — a new output field requires both a prompt change and a validator update
 - Adds `langfuse` as a dependency (OpenTelemetry, protobuf transitive deps)
-- Two secrets to manage in Secrets Manager
+- Two parameters to manage in SSM Parameter Store
 - If Langfuse's cloud service is down, tracing silently fails (by design — doesn't block the pipeline)
 - Langfuse SDK has breaking API changes between major versions (v2→v3→v4); code examples in this ADR target v4 (`propagate_attributes`, `Langfuse()` instance methods)
 

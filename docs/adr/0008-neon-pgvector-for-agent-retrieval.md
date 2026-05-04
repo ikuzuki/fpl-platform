@@ -69,7 +69,7 @@ Each player's enriched profile (stats + LLM summary + fixture outlook + form tre
 - Embedding sync runs once per gameweek (~5 seconds) — trivial compute
 
 **Harder:**
-- New external dependency outside AWS — connection string in Secrets Manager, network access from Lambda
+- New external dependency outside AWS — connection string in SSM Parameter Store, network access from Lambda
 - Cold starts on Neon free tier can add 1-2 seconds to first query after idle period
 - Embedding model (`all-MiniLM-L6-v2`) adds ~90MB to the Lambda container image
 - If Neon's free tier terms change, we'd need to migrate — but the data is small and reproducible from S3

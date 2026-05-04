@@ -53,7 +53,7 @@ Automatic and free whenever traffic flows through CloudFront. Covers SYN floods,
 ### 3. Lambda Function URL — transport
 `AuthType = NONE`, `principal = "*"` on the resource policy (both `lambda:InvokeFunctionUrl` AND `lambda:InvokeFunction`, per AWS's Oct-2025 Function URL rule). CloudFront is the enforced entry point via a **shared-secret header** rather than AWS_IAM + OAC — see "Why not OAC" below.
 
-**How the gate works.** Terraform generates a 48-char random password at apply time, stores it in Secrets Manager (`/fpl-platform/${env}/cloudfront-agent-secret`), and uses it as both:
+**How the gate works.** Terraform generates a 48-char random password at apply time, stores it as an SSM SecureString parameter (`/fpl-platform/${env}/cloudfront-agent-secret`), and uses it as both:
 - A CloudFront `origin_custom_header` value on the `/api/agent/*` behaviour — CloudFront injects `X-CloudFront-Secret: <value>` on every origin request.
 - The secret value the Lambda fetches at cold-start into `$CLOUDFRONT_SHARED_SECRET`. [`cloudfront_secret.py`](../../services/agent/src/fpl_agent/middleware/cloudfront_secret.py) middleware compares incoming headers with `hmac.compare_digest` and returns 401 on mismatch.
 
@@ -63,7 +63,7 @@ This closes the edge-bypass class of attack: any future WAF rule, rate-based pol
 
 **Why not OAC.** OAC with `origin_type = "lambda"` signs origin requests with SigV4. For POST requests, SigV4 requires the *client* (browser, in our case) to compute `SHA256(body)` and pass it in the `x-amz-content-sha256` header — CloudFront OAC doesn't hash bodies itself. Browsers don't compute that hash, so every `POST /chat` would fail signature validation at the Function URL. We verified this in-incident: with OAC + AWS_IAM, Lambda metrics showed `Url4xxCount == UrlRequestCount` (100% rejection) despite correct IAM configuration. Documented at [AWS re:Post](https://repost.aws/questions/QUbHCI9AfyRdaUPCCo_3XKMQ). `GET /team` would have worked on OAC; POST wouldn't. Shared-secret works uniformly for both.
 
-**Rotation.** `terraform taint random_password.cloudfront_agent_secret && terraform apply` regenerates the secret. CloudFront distribution update (~5 min propagation) and the Lambda cold-start race briefly — in-flight requests during the window may 401 until the next Lambda cold-start picks up the new value from Secrets Manager. Acceptable at dev scale; production would overlap old+new by keeping both valid for a grace window.
+**Rotation.** `terraform taint random_password.cloudfront_agent_secret && terraform apply` regenerates the secret. CloudFront distribution update (~5 min propagation) and the Lambda cold-start race briefly — in-flight requests during the window may 401 until the next Lambda cold-start picks up the new value from SSM Parameter Store. Acceptable at dev scale; production would overlap old+new by keeping both valid for a grace window.
 
 ### 4. Lambda reserved concurrency — infrastructure backpressure
 `reserved_concurrent_executions = 10` on the agent Lambda. When more than 10 requests are in-flight concurrently, Lambda itself returns 429 without invoking the function. This replaces API Gateway's endpoint throttling (removed per ADR-0010) with infrastructure-level enforcement.
@@ -90,15 +90,15 @@ Inside the graph: reflector cannot loop more than 3 times; each tool call has a 
 
 ## Secrets management
 
-- All runtime secrets live in AWS Secrets Manager under `/fpl-platform/{env}/*`: Anthropic API key, Langfuse public + secret keys, Neon database URL.
-- Lambda IAM role grants `secretsmanager:GetSecretValue` scoped to the specific secret ARNs — no wildcards.
+- All runtime secrets live in AWS SSM Parameter Store as SecureString parameters under `/fpl-platform/{env}/*`: Anthropic API key, Langfuse public + secret keys, Neon database URL, and the CloudFront shared-secret header. Encrypted at rest with the AWS-managed `alias/aws/ssm` key. Choice of Parameter Store over Secrets Manager documented in ADR-0011.
+- Lambda IAM role grants `ssm:GetParameter` and `ssm:GetParameters` scoped to the path prefix `/fpl-platform/{env}/*` — no wildcards across environments.
 - Secrets are never logged. Langfuse traces include LLM inputs/outputs but not API keys.
 - `.env` files are git-ignored; no credentials committed.
 - Terraform state (`s3://fpl-dev-tf-state`) has versioning + encryption; access restricted to the CI role and the developer's AWS profile.
 
 ## IAM posture
 
-- Per-Lambda execution roles with least-privilege: each Lambda's role grants only the actions on only the resources that Lambda touches (S3 prefix, Secrets Manager ARN, DynamoDB table).
+- Per-Lambda execution roles with least-privilege: each Lambda's role grants only the actions on only the resources that Lambda touches (S3 prefix, SSM parameter path, DynamoDB table).
 - No `*` on Action or Resource except where unavoidable (CloudWatch Logs for all Lambdas).
 - Shared `lambda-role` module applies consistent trust policy + basic execution + X-Ray write. Service-specific inline policies layer on top.
 

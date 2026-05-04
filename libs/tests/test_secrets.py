@@ -1,4 +1,4 @@
-"""Unit tests for the shared Secrets Manager resolver."""
+"""Unit tests for the shared SSM Parameter Store resolver."""
 
 from __future__ import annotations
 
@@ -19,16 +19,17 @@ def _clear_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.unit
 def test_fetches_from_conventional_path() -> None:
-    """Secret id is ``{prefix}/{env}/{name}`` — the convention the IAM policy scopes to."""
+    """Parameter name is ``{prefix}/{env}/{name}`` — the convention the IAM policy scopes to."""
     mock_client = MagicMock()
-    mock_client.get_secret_value.return_value = {"SecretString": "the-value"}
+    mock_client.get_parameter.return_value = {"Parameter": {"Value": "the-value"}}
 
     with patch("fpl_lib.secrets.boto3.client", return_value=mock_client):
         resolve_secret_to_env("dev", "anthropic-api-key", "MY_SECRET")
 
     assert os.environ["MY_SECRET"] == "the-value"
-    mock_client.get_secret_value.assert_called_once_with(
-        SecretId="/fpl-platform/dev/anthropic-api-key"
+    mock_client.get_parameter.assert_called_once_with(
+        Name="/fpl-platform/dev/anthropic-api-key",
+        WithDecryption=True,
     )
 
 
@@ -45,11 +46,11 @@ def test_is_noop_when_target_var_already_set(monkeypatch: pytest.MonkeyPatch) ->
 
 
 @pytest.mark.unit
-def test_propagates_secrets_manager_exceptions() -> None:
-    """The helper raises on AWS failure — callers that tolerate missing secrets
+def test_propagates_ssm_exceptions() -> None:
+    """The helper raises on AWS failure — callers that tolerate missing parameters
     (Langfuse, Neon on health-only boot) wrap in try/except themselves."""
     mock_client = MagicMock()
-    mock_client.get_secret_value.side_effect = RuntimeError("access denied")
+    mock_client.get_parameter.side_effect = RuntimeError("access denied")
 
     with (
         patch("fpl_lib.secrets.boto3.client", return_value=mock_client),
@@ -63,7 +64,7 @@ def test_propagates_secrets_manager_exceptions() -> None:
 @pytest.mark.unit
 def test_honours_custom_prefix_and_region() -> None:
     mock_client = MagicMock()
-    mock_client.get_secret_value.return_value = {"SecretString": "x"}
+    mock_client.get_parameter.return_value = {"Parameter": {"Value": "x"}}
 
     with patch("fpl_lib.secrets.boto3.client", return_value=mock_client) as mock_ctor:
         resolve_secret_to_env(
@@ -74,5 +75,22 @@ def test_honours_custom_prefix_and_region() -> None:
             secret_prefix="/other",
         )
 
-    mock_ctor.assert_called_once_with("secretsmanager", region_name="us-east-1")
-    mock_client.get_secret_value.assert_called_once_with(SecretId="/other/prod/neon-database-url")
+    mock_ctor.assert_called_once_with("ssm", region_name="us-east-1")
+    mock_client.get_parameter.assert_called_once_with(
+        Name="/other/prod/neon-database-url",
+        WithDecryption=True,
+    )
+
+
+@pytest.mark.unit
+def test_decrypts_securestring_parameters() -> None:
+    """Every fetch passes ``WithDecryption=True`` so SecureString parameters
+    return their plaintext value rather than the ciphertext blob."""
+    mock_client = MagicMock()
+    mock_client.get_parameter.return_value = {"Parameter": {"Value": "decoded"}}
+
+    with patch("fpl_lib.secrets.boto3.client", return_value=mock_client):
+        resolve_secret_to_env("dev", "anthropic-api-key", "MY_SECRET")
+
+    _, kwargs = mock_client.get_parameter.call_args
+    assert kwargs["WithDecryption"] is True

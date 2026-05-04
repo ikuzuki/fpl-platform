@@ -34,7 +34,7 @@ graph TB
         NEON["Neon Postgres<br/><i>player_embeddings + pgvector</i>"]
         TF["team-fetcher Lambda<br/><i>boto3.invoke</i>"]
         LF["Langfuse<br/><i>traces + token usage</i>"]
-        SM["Secrets Manager<br/><i>ANTHROPIC_API_KEY,<br/>NEON_DATABASE_URL,<br/>LANGFUSE_*</i>"]
+        SM["SSM Parameter Store<br/><i>ANTHROPIC_API_KEY,<br/>NEON_DATABASE_URL,<br/>LANGFUSE_*</i>"]
     end
 
     USER --> CLIENT
@@ -209,7 +209,7 @@ There is no login. The agent endpoint is public; protection is layered elsewhere
 
 Session ID has a second job: it's the trace grouping key in Langfuse. All messages from one browser tab appear as a single session timeline, which makes "why did the agent say X" debugging a one-click filter.
 
-Secrets live in Secrets Manager and are fetched at cold-start by the lifespan handler. No keys in container env vars, no keys in Terraform state. See [security-architecture.md](security-architecture.md) for the threat model and upgrade triggers.
+Secrets live in SSM Parameter Store (SecureString) and are fetched at cold-start by the lifespan handler. No keys in container env vars, no keys in Terraform state. See [security-architecture.md](security-architecture.md) for the threat model and upgrade triggers, and ADR-0011 for the choice of Parameter Store over Secrets Manager.
 
 ## Deployment
 

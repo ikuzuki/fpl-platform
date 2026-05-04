@@ -13,3 +13,4 @@ Decisions that shaped the FPL platform, from infrastructure through to the AI ag
 | [0007](0007-static-dashboard-architecture.md) | Static React SPA with pre-generated JSON on CloudFront | Software engineering, cloud architecture |
 | [0008](0008-neon-pgvector-for-agent-retrieval.md) | Neon serverless Postgres + pgvector for agent retrieval | AI engineering, data engineering |
 | [0009](0009-scout-report-agent-architecture.md) | 4-node LangGraph agent with tiered models and budget controls | AI engineering, system design |
+| [0011](0011-ssm-parameter-store-over-secrets-manager.md) | SSM Parameter Store SecureString over Secrets Manager for runtime credentials | Cloud architecture, cost engineering |

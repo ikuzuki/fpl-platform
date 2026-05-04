@@ -27,11 +27,11 @@ COST_RATES: dict[str, dict[str, float]] = {
 }
 
 
-def _get_secret(secret_name: str, region: str = "eu-west-2") -> str:
-    """Retrieve a secret value from AWS Secrets Manager."""
-    client = boto3.client("secretsmanager", region_name=region)
-    response = client.get_secret_value(SecretId=secret_name)
-    return response["SecretString"]
+def _get_secret(parameter_name: str, region: str = "eu-west-2") -> str:
+    """Retrieve a value from SSM Parameter Store (SecureString)."""
+    client = boto3.client("ssm", region_name=region)
+    response = client.get_parameter(Name=parameter_name, WithDecryption=True)
+    return response["Parameter"]["Value"]
 
 
 def _calculate_cost(enrichers: list[Any]) -> dict[str, Any]:

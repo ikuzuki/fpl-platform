@@ -37,13 +37,13 @@ def _clear_langfuse_env(monkeypatch: pytest.MonkeyPatch) -> None:
 # ---------------------------------------------------------------------------
 class TestInitLangfuse:
     @pytest.mark.unit
-    def test_fetches_both_secrets_from_secrets_manager(
+    def test_fetches_both_parameters_from_ssm(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         mock_client = MagicMock()
-        mock_client.get_secret_value.side_effect = [
-            {"SecretString": "pk-test"},
-            {"SecretString": "sk-test"},
+        mock_client.get_parameter.side_effect = [
+            {"Parameter": {"Value": "pk-test"}},
+            {"Parameter": {"Value": "sk-test"}},
         ]
         with patch("fpl_lib.secrets.boto3.client", return_value=mock_client):
             result = init_langfuse(environment="dev")
@@ -51,7 +51,7 @@ class TestInitLangfuse:
         assert result is True
         assert os.environ["LANGFUSE_PUBLIC_KEY"] == "pk-test"
         assert os.environ["LANGFUSE_SECRET_KEY"] == "sk-test"
-        assert mock_client.get_secret_value.call_count == 2
+        assert mock_client.get_parameter.call_count == 2
 
     @pytest.mark.unit
     def test_is_idempotent_when_env_already_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -62,13 +62,13 @@ class TestInitLangfuse:
             result = init_langfuse()
 
         assert result is True
-        # Secrets Manager must not be called when env is already populated.
+        # SSM must not be called when env is already populated.
         mock_boto.assert_not_called()
 
     @pytest.mark.unit
-    def test_returns_false_and_does_not_raise_when_secrets_manager_fails(self) -> None:
+    def test_returns_false_and_does_not_raise_when_ssm_fails(self) -> None:
         mock_client = MagicMock()
-        mock_client.get_secret_value.side_effect = RuntimeError("AWS blew up")
+        mock_client.get_parameter.side_effect = RuntimeError("AWS blew up")
 
         with patch("fpl_lib.secrets.boto3.client", return_value=mock_client):
             result = init_langfuse(environment="dev")
@@ -80,17 +80,17 @@ class TestInitLangfuse:
     @pytest.mark.unit
     def test_respects_secret_prefix_and_environment(self) -> None:
         mock_client = MagicMock()
-        mock_client.get_secret_value.return_value = {"SecretString": "x"}
+        mock_client.get_parameter.return_value = {"Parameter": {"Value": "x"}}
         with patch("fpl_lib.secrets.boto3.client", return_value=mock_client):
             init_langfuse(environment="prod", secret_prefix="/custom")
 
-        ids = [
-            call.kwargs["SecretId"]
-            for call in mock_client.get_secret_value.call_args_list
-            if call.kwargs.get("SecretId")
+        names = [
+            call.kwargs["Name"]
+            for call in mock_client.get_parameter.call_args_list
+            if call.kwargs.get("Name")
         ]
-        assert "/custom/prod/langfuse-public-key" in ids
-        assert "/custom/prod/langfuse-secret-key" in ids
+        assert "/custom/prod/langfuse-public-key" in names
+        assert "/custom/prod/langfuse-secret-key" in names
 
 
 # ---------------------------------------------------------------------------
