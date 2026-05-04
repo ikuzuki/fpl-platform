@@ -219,8 +219,8 @@ module "lambda_agent" {
   reserved_concurrent_executions = 10
   # Secrets are fetched at cold-start by path (``/fpl-platform/{env}/<name>``)
   # via ``fpl_lib.secrets.resolve_secret_to_env`` — the ``lambda_role`` policy
-  # already scopes ``GetSecretValue`` to that prefix, so the only per-Lambda
-  # wiring needed is ``ENV``. Adding a new secret is a pure Terraform +
+  # already scopes ``ssm:GetParameter`` to that prefix, so the only per-Lambda
+  # wiring needed is ``ENV``. Adding a new parameter is a pure Terraform +
   # resolver-call change; no new env var here.
   environment_variables = {
     ENV                        = var.environment

@@ -3,9 +3,10 @@
 #
 # Replaces OAC for the /api/agent/* path — OAC doesn't work for our browser
 # POST clients (requires x-amz-content-sha256 which browsers don't send). The
-# value is generated once by Terraform, stored in Secrets Manager for audit /
-# rotation, injected into the CloudFront origin header below, and read back
-# into the Lambda env at cold-start via resolve_secret_to_env. Rotation:
+# value is generated once by Terraform, stored in SSM Parameter Store for
+# audit / rotation, injected into the CloudFront origin header below, and
+# read back into the Lambda env at cold-start via resolve_secret_to_env.
+# Rotation:
 #   terraform taint random_password.cloudfront_agent_secret && terraform apply
 # CloudFront propagation is ~5 min; during that window some in-flight requests
 # may 401 until the Lambda cold-starts and picks up the new value. Acceptable
@@ -16,15 +17,11 @@ resource "random_password" "cloudfront_agent_secret" {
   special = false
 }
 
-resource "aws_secretsmanager_secret" "cloudfront_agent_secret" {
-  name                    = "/fpl-platform/${var.environment}/cloudfront-agent-secret"
-  description             = "Shared secret CloudFront injects into /api/agent/* origin requests. The agent Lambda validates incoming requests carry this header."
-  recovery_window_in_days = 0
-}
-
-resource "aws_secretsmanager_secret_version" "cloudfront_agent_secret" {
-  secret_id     = aws_secretsmanager_secret.cloudfront_agent_secret.id
-  secret_string = random_password.cloudfront_agent_secret.result
+resource "aws_ssm_parameter" "cloudfront_agent_secret" {
+  name        = "/fpl-platform/${var.environment}/cloudfront-agent-secret"
+  description = "Shared secret CloudFront injects into /api/agent/* origin requests. The agent Lambda validates incoming requests carry this header."
+  type        = "SecureString"
+  value       = random_password.cloudfront_agent_secret.result
 }
 
 # -----------------------------------------------------------------------------

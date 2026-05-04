@@ -43,17 +43,20 @@ resource "aws_iam_role_policy" "s3" {
   })
 }
 
-resource "aws_iam_role_policy" "secrets" {
-  name = "${var.project}-lambda-secrets-${var.environment}"
+resource "aws_iam_role_policy" "ssm_parameters" {
+  name = "${var.project}-lambda-ssm-${var.environment}"
   role = aws_iam_role.this.id
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue"]
-        Resource = "arn:aws:secretsmanager:eu-west-2:*:secret:${var.secrets_path_prefix}/*"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter",
+          "ssm:GetParameters",
+        ]
+        Resource = "arn:aws:ssm:eu-west-2:*:parameter${var.parameter_path_prefix}/*"
       }
     ]
   })

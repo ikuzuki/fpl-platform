@@ -19,8 +19,8 @@ variable "s3_bucket_arns" {
   type        = list(string)
 }
 
-variable "secrets_path_prefix" {
-  description = "Secrets Manager path prefix (e.g. /fpl-platform/dev)"
+variable "parameter_path_prefix" {
+  description = "SSM Parameter Store path prefix (e.g. /fpl-platform/dev) — scopes the Lambda role's GetParameter permission."
   type        = string
 }
 

@@ -79,10 +79,10 @@ def init_langfuse(
     region: str = DEFAULT_REGION,
     secret_prefix: str = DEFAULT_SECRET_PREFIX,
 ) -> bool:
-    """Populate ``LANGFUSE_PUBLIC_KEY`` / ``LANGFUSE_SECRET_KEY`` from Secrets Manager.
+    """Populate ``LANGFUSE_PUBLIC_KEY`` / ``LANGFUSE_SECRET_KEY`` from SSM Parameter Store.
 
     Returns ``True`` if keys are now available in the environment (either
-    fetched this call or already set), ``False`` if secrets could not be
+    fetched this call or already set), ``False`` if parameters could not be
     loaded. A ``False`` return means ``@observe`` decorators continue to
     no-op — the service will run, just without tracing. This is deliberate:
     observability must never block the request path, which is why we
