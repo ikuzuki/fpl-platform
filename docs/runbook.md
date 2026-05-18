@@ -116,6 +116,79 @@ manager.
 3. If it fails with a Neon error, check Neon status and the
    `NEON_DATABASE_URL` secret hasn't rotated.
 
+## Embedding Sync
+
+The `SyncEmbeddings` step runs after `CurateData` in the weekly pipeline. It
+reads curated player data from S3, generates embeddings via Anthropic, and
+upserts into Neon pgvector. Failure here does **not** fail the pipeline — the
+state machine routes to `PipelineSucceededWithWarning` and the agent continues
+serving the previous gameweek's embeddings until the next run.
+
+### Manually trigger a sync
+
+Invoke the Lambda directly with a `(season, gameweek)` payload:
+
+```bash
+aws --profile fpl-dev lambda invoke \
+  --function-name fpl-dev-sync-embeddings \
+  --payload '{"season":"2025-26","gameweek":33}' \
+  --cli-binary-format raw-in-base64-out \
+  /tmp/sync.json && cat /tmp/sync.json
+```
+
+A successful response has `statusCode: 200` and a body with
+`players_synced`, `embedding_dim`, and `duration_seconds`.
+
+### Verify embeddings landed in Neon
+
+Connect with the URL stored in SSM and count rows for the target gameweek:
+
+```bash
+PSQL_URL=$(aws --profile fpl-dev ssm get-parameter \
+  --name /fpl-platform/dev/neon-database-url \
+  --with-decryption --query Parameter.Value --output text)
+
+psql "$PSQL_URL" -c \
+  "select gameweek, count(*) from player_embeddings group by gameweek order by gameweek desc limit 5;"
+```
+
+Row count for the current gameweek should match the pipeline's curated player
+roster (~600 for a normal Premier League gameweek).
+
+### Backfill historical gameweeks
+
+Loop manual invokes — the Lambda is idempotent (upsert on `(player_id,
+season, gameweek)`):
+
+```bash
+for gw in $(seq 1 32); do
+  aws --profile fpl-dev lambda invoke \
+    --function-name fpl-dev-sync-embeddings \
+    --payload "{\"season\":\"2025-26\",\"gameweek\":${gw}}" \
+    --cli-binary-format raw-in-base64-out \
+    /tmp/sync-${gw}.json
+  echo "GW${gw}: $(jq -r '.statusCode' /tmp/sync-${gw}.json)"
+done
+```
+
+Each invoke is independent — failures don't poison subsequent gameweeks.
+
+### Neon cold-start troubleshooting
+
+Neon's serverless compute scales to zero after ~5 minutes of inactivity.
+First connection after idle takes 5–10 s; the Lambda's 120 s timeout covers
+this comfortably, but if you see a single retry burn ~10 s on connect, that's
+expected and benign.
+
+Symptoms of a genuine Neon outage (vs. cold-start):
+- Both retries time out at 120 s with `asyncpg.exceptions.ConnectionFailureError`.
+- `psql "$PSQL_URL"` from a workstation also hangs or 5xx-s.
+- Neon status page (https://neonstatus.com/) flags the eu-west region.
+
+Mitigation: wait it out — the pipeline already routed to
+`PipelineSucceededWithWarning` and the agent still serves last week's
+embeddings. Re-trigger the sync manually once Neon recovers.
+
 ## Common Issues
 
 *To be populated as issues are encountered.*

@@ -408,11 +408,43 @@
           "Next": "PipelineFailed"
         }
       ],
+      "Next": "SyncEmbeddings"
+    },
+
+    "SyncEmbeddings": {
+      "Type": "Task",
+      "Comment": "Refresh Neon pgvector embeddings from curated data. Failure is non-fatal — the pipeline still succeeds (with warning) because the agent will fall back to the previous embeddings.",
+      "Resource": "${lambda_arn_sync_embeddings}",
+      "Parameters": {
+        "season.$": "$.season",
+        "gameweek.$": "$.gameweek"
+      },
+      "ResultPath": "$.embeddings",
+      "TimeoutSeconds": 120,
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "IntervalSeconds": 10,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.embedding_error",
+          "Next": "PipelineSucceededWithWarning"
+        }
+      ],
       "Next": "PipelineSucceeded"
     },
 
     "PipelineSucceeded": {
       "Type": "Succeed"
+    },
+    "PipelineSucceededWithWarning": {
+      "Type": "Succeed",
+      "Comment": "Curated data landed but embedding sync failed — agent continues serving previous embeddings until the next run. Check $.embedding_error in execution history."
     },
     "PipelineSkipped": {
       "Type": "Succeed",
