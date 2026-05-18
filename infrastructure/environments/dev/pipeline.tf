@@ -19,6 +19,7 @@ module "pipeline" {
     lambda_arn_enrich_fixture_outlook = module.lambda_enrich_fixture_outlook.function_arn
     lambda_arn_merge_enrichments      = module.lambda_merge_enrichments.function_arn
     lambda_arn_curate_data            = module.lambda_curate_data.function_arn
+    lambda_arn_sync_embeddings        = module.lambda_sync_embeddings.function_arn
   })
 
   lambda_arns = [
@@ -34,6 +35,7 @@ module "pipeline" {
     module.lambda_enrich_fixture_outlook.function_arn,
     module.lambda_merge_enrichments.function_arn,
     module.lambda_curate_data.function_arn,
+    module.lambda_sync_embeddings.function_arn,
   ]
 }
 

@@ -194,6 +194,26 @@ module "lambda_curate_data" {
   }
 }
 
+module "lambda_sync_embeddings" {
+  source             = "../../modules/lambda"
+  name               = "sync-embeddings"
+  environment        = var.environment
+  image_uri          = "${module.ecr_agent.repository_url}:latest"
+  execution_role_arn = module.lambda_role.role_arn
+  command            = ["fpl_agent.handlers.sync_handler.lambda_handler"]
+  # 120 s matches the SyncEmbeddings state timeout in the Step Functions
+  # definition. Neon scale-to-zero compute can take 5–10 s to wake; the
+  # rest is Anthropic embedding API + pgvector upserts for ~600 players.
+  timeout = 120
+  # Embedding generation streams batches through the Anthropic SDK — peak
+  # memory is comfortably under 1 GB even with the pgvector client loaded.
+  memory_size = 1024
+  environment_variables = {
+    ENV              = var.environment
+    DATA_LAKE_BUCKET = module.data_lake.bucket_name
+  }
+}
+
 module "lambda_agent" {
   source             = "../../modules/lambda"
   name               = "agent"
