@@ -22,3 +22,8 @@ output "app_bucket_arn" {
   description = "ARN of the S3 app bucket."
   value       = aws_s3_bucket.app.arn
 }
+
+output "cloudfront_distribution_hosted_zone_id" {
+  description = "CloudFront's Route 53 hosted zone ID (constant Z2FDTNDATAQYW2). Used as the alias target zone for A/AAAA records pointing at the distribution."
+  value       = aws_cloudfront_distribution.dashboard.hosted_zone_id
+}

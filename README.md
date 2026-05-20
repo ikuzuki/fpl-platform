@@ -2,7 +2,7 @@
 
 Fantasy Premier League analytics platform that collects weekly player data, enriches it with AI-generated insights, and serves transfer recommendations.
 
-**[See it live](https://dxz2mzo798tf9.cloudfront.net/)** · **[About the author](https://isseikuzuki.co.uk)** · Built with Python, Terraform, React, and Claude.
+**[See it live](https://fpl.isseikuzuki.co.uk)** · **[About the author](https://isseikuzuki.co.uk)** · Built with Python, Terraform, React, and Claude.
 
 ## Why this project exists
 
@@ -90,7 +90,7 @@ npm run build                  # production build
 
 The README gets you running. For the thinking behind the system:
 
-- **[About Page](https://dxz2mzo798tf9.cloudfront.net/about)** — Architecture, design decisions, tech stack breakdown, and roadmap
+- **[About Page](https://fpl.isseikuzuki.co.uk/about)** — Architecture, design decisions, tech stack breakdown, and roadmap
 - **[Architecture Decision Records](docs/adr/)** — The "why" behind key technical choices (monorepo structure, S3 data lake design, direct API over LangChain, LLM cost optimisation, and more)
 
 ## License
