@@ -1,4 +1,4 @@
-import { ExternalLink, Mail } from "lucide-react";
+import { ExternalLink, Globe, Mail } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PulseLogo } from "@/components/icons/FplIcons";
@@ -149,7 +149,17 @@ export function AboutPage() {
                   League obsession into a demonstration of production
                   engineering principles.
                 </p>
-                <div className="flex gap-3 mt-4">
+                <div className="flex gap-3 mt-4 flex-wrap">
+                  <a
+                    href="https://isseikuzuki.co.uk"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+                  >
+                    <Globe className="h-4 w-4" />
+                    Website
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
                   <a
                     href="https://github.com/ikuzuki"
                     target="_blank"

@@ -2,7 +2,7 @@
 
 Fantasy Premier League analytics platform that collects weekly player data, enriches it with AI-generated insights, and serves transfer recommendations.
 
-**[See it live](https://dxz2mzo798tf9.cloudfront.net/)** · Built with Python, Terraform, React, and Claude.
+**[See it live](https://dxz2mzo798tf9.cloudfront.net/)** · **[About the author](https://isseikuzuki.co.uk)** · Built with Python, Terraform, React, and Claude.
 
 ## Why this project exists
 
@@ -30,8 +30,7 @@ fpl-platform/
 │   └── agent/                  # LangGraph transfer recommendation agent
 │
 ├── web/
-│   ├── dashboard/              # React 19 + TypeScript + Tailwind v4
-│   └── portfolio/              # Static portfolio site
+│   └── dashboard/              # React 19 + TypeScript + Tailwind v4
 │
 ├── scripts/                    # Backfill and utility scripts
 ├── docs/adr/                   # Architecture Decision Records (7 ADRs)
