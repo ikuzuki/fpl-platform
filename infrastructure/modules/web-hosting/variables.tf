@@ -53,3 +53,15 @@ variable "agent_shared_secret_header_value" {
   default     = ""
   sensitive   = true
 }
+
+variable "acm_certificate_arn" {
+  description = "ARN of an ACM certificate in us-east-1 to serve HTTPS for the custom domain(s) in var.aliases. If null, CloudFront uses its default *.cloudfront.net certificate and aliases are ignored."
+  type        = string
+  default     = null
+}
+
+variable "aliases" {
+  description = "List of custom domain names (CNAMEs) the distribution serves. Each must be covered by the ACM certificate provided in acm_certificate_arn. Empty list disables custom-domain wiring."
+  type        = list(string)
+  default     = []
+}

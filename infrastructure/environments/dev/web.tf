@@ -40,6 +40,11 @@ module "web_hosting" {
   enable_agent_api                 = true
   agent_api_domain                 = trimsuffix(replace(aws_lambda_function_url.agent.function_url, "https://", ""), "/")
   agent_shared_secret_header_value = random_password.cloudfront_agent_secret.result
+  # Custom domain wiring (see domain.tf). The certificate_validation resource
+  # blocks until ACM has the cert ISSUED, so CloudFront only attaches the new
+  # cert after it is valid.
+  acm_certificate_arn = aws_acm_certificate_validation.dashboard.certificate_arn
+  aliases             = ["fpl.isseikuzuki.co.uk"]
 }
 
 # -----------------------------------------------------------------------------
