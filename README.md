@@ -86,6 +86,19 @@ npm run build                  # production build
 
 **PRs:** All changes go through pull requests. CI runs lint + tests on every push.
 
+## Agent evaluation
+
+The transfer-recommendation agent ships with a measurement framework, not just "I tried it and it worked". 29 golden cases across 11 categories — single-player analysis, head-to-head comparison, criteria search, injury concern, differential picks (with refuse-to-pick semantics), squad-aware questions, vague prompts, unknown-player fabrication guards, multi-position trade-offs, edge cases. Each case carries two grading layers: deterministic hard checks (tool routing, mention checks, schema shape, caveat discipline) and a Claude Haiku judge scoring a per-case rubric on a 1–5 scale.
+
+Scores are reproducible — the agent reads from a parquet snapshot of `player_embeddings` committed under [`services/agent/tests/fixtures/`](services/agent/tests/fixtures/), via a pandas-backed parallel tool registry that mirrors the production pgvector SQL. A fresh Premier League gameweek doesn't shift the metric; only agent changes do. The snapshot regeneration script gates writes behind pinned-roster-fact assertions, so snapshot rot can't silently break the eval set.
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+python services/agent/scripts/run_evals.py --concurrency 3 --output docs/evals/baseline-v1.1.json
+```
+
+**[See the v1.1 baseline writeup →](docs/evals/baseline.md)** — methodology, results, calibration deltas, what failed and why, what's deliberately not measured.
+
 ## For the full picture
 
 The README gets you running. For the thinking behind the system:

@@ -30,6 +30,12 @@ dev = [
     "mypy>=1.8.0",
     "httpx>=0.27.0",
     "moto[dynamodb]>=5.0.0",
+    # Eval CLI deps — needed by scripts/run_evals.py and tests/test_evaluation.py.
+    # pandas + pyarrow are pulled in transitively (sentence-transformers), but the
+    # eval framework uses them directly; declaring them is honesty about deps.
+    "rich>=13.0.0",
+    "pandas>=2.0.0",
+    "pyarrow>=14.0.0",
 ]
 
 [tool.setuptools.packages.find]
@@ -38,4 +44,7 @@ where = ["src"]
 # Prompts must ship in the wheel — otherwise the Lambda can't find them at
 # runtime. Default setuptools wheels drop non-Python files.
 [tool.setuptools.package-data]
-fpl_agent = ["graph/prompts/v1/*.md"]
+fpl_agent = [
+    "graph/prompts/v1/*.md",
+    "evaluation/prompts/v1/*.md",
+]
