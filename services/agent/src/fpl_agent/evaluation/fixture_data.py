@@ -135,20 +135,52 @@ class PlayerFixture:
             _row("Salah", "MID", "Liverpool", 13.0, 7.4, 180, 2.3, 1, "up", "in form"),
             _row("Saka", "MID", "Arsenal", 10.0, 6.8, 150, 2.6, 5, "stable", "consistent"),
             _row("Palmer", "MID", "Chelsea", 11.0, 7.1, 165, 2.8, 2, "stable", "elite ceiling"),
-            _row("Foden", "MID", "Man City", 9.5, 5.2, 110, 2.4, 3, "down", "tactical role uncertain"),
-            _row("Grealish", "MID", "Everton", 6.5, 4.2, 70, 3.0, 10, "down", "on loan, persistent injury concerns"),
+            _row(
+                "Foden", "MID", "Man City", 9.5, 5.2, 110, 2.4, 3, "down", "tactical role uncertain"
+            ),
+            _row(
+                "Grealish",
+                "MID",
+                "Everton",
+                6.5,
+                4.2,
+                70,
+                3.0,
+                10,
+                "down",
+                "on loan, persistent injury concerns",
+            ),
             _row("Haaland", "FWD", "Man City", 15.0, 8.2, 200, 2.5, 1, "stable", "elite returns"),
             _row("Watkins", "FWD", "Aston Villa", 9.0, 5.8, 130, 3.0, 2, "up", "good run"),
             _row("Isak", "FWD", "Newcastle", 8.5, 6.0, 120, 2.9, 3, "up", "form returning"),
             _row("Saliba", "DEF", "Arsenal", 6.0, 5.5, 110, 2.6, 1, "stable", "defensive rock"),
-            _row("Trippier", "DEF", "Newcastle", 6.5, 4.8, 95, 3.1, 2, "stable", "set-piece threat"),
-            _row("Robertson", "DEF", "Liverpool", 6.5, 5.0, 100, 2.4, 2, "stable", "attacking output"),
-            _row("Virgil", "DEF", "Liverpool", 6.5, 5.8, 120, 2.4, 1, "stable", "stored under first name in FPL — mirrors real schema quirk"),
+            _row(
+                "Trippier", "DEF", "Newcastle", 6.5, 4.8, 95, 3.1, 2, "stable", "set-piece threat"
+            ),
+            _row(
+                "Robertson", "DEF", "Liverpool", 6.5, 5.0, 100, 2.4, 2, "stable", "attacking output"
+            ),
+            _row(
+                "Virgil",
+                "DEF",
+                "Liverpool",
+                6.5,
+                5.8,
+                120,
+                2.4,
+                1,
+                "stable",
+                "stored under first name in FPL — mirrors real schema quirk",
+            ),
             _row("Gabriel", "DEF", "Arsenal", 6.0, 5.3, 105, 2.6, 1, "stable", "aerial threat"),
             _row("Estupiñán", "DEF", "Brighton", 5.0, 4.5, 80, 3.3, 3, "down", "minutes risk"),
             _row("Raya", "GKP", "Arsenal", 5.5, 4.8, 95, 2.6, 0, "stable", "first-choice GK"),
-            _row("Ederson", "GKP", "Man City", 5.5, 4.5, 88, 2.5, 1, "stable", "elite distribution"),
-            _row("Pickford", "GKP", "Everton", 5.0, 4.2, 80, 3.5, 2, "stable", "save-point potential"),
+            _row(
+                "Ederson", "GKP", "Man City", 5.5, 4.5, 88, 2.5, 1, "stable", "elite distribution"
+            ),
+            _row(
+                "Pickford", "GKP", "Everton", 5.0, 4.2, 80, 3.5, 2, "stable", "save-point potential"
+            ),
             _row("Sels", "GKP", "Nottingham Forest", 4.5, 4.7, 90, 3.2, 1, "up", "budget option"),
             _row("Cunha", "FWD", "Wolves", 7.0, 4.2, 85, 3.4, 4, "down", "form dipping"),
             _row("Iwobi", "MID", "Fulham", 5.5, 4.8, 80, 3.0, 2, "stable", "low-owned option"),
@@ -279,7 +311,9 @@ def canned_user_squad(
     # deliberate, so the rubric for squad-bench-or-start-salah tests the case
     # where the named player is owned and started but not captain.
     for must_name in must_include_web_names:
-        match = df[df["web_name"].astype(str).str.contains(must_name, case=False, na=False, regex=False)]
+        match = df[
+            df["web_name"].astype(str).str.contains(must_name, case=False, na=False, regex=False)
+        ]
         if match.empty:
             raise ValueError(
                 f"must_include_web_names entry {must_name!r} not found in fixture. "

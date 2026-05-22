@@ -346,9 +346,7 @@ EVAL_CASES: tuple[EvalCase, ...] = (
         question="How risky is keeping Grealish in my team?",
         category="injury-concern",
         difficulty="medium",
-        expected_tools=frozenset(
-            {"query_player", "get_injury_signals", "get_fixture_outlook"}
-        ),
+        expected_tools=frozenset({"query_player", "get_injury_signals", "get_fixture_outlook"}),
         must_mention_players=("Grealish",),
         min_caveats=1,
         pinned_roster_facts=(

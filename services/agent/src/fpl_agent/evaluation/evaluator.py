@@ -92,7 +92,11 @@ def _check_expected_tools(case: EvalCase, tool_calls_made: list[str]) -> HardChe
             check_name="expected_tools",
             passed=False,
             reason=f"Required tools not called: {sorted(missing)}",
-            details={"expected": sorted(expected), "called": sorted(called), "missing": sorted(missing)},
+            details={
+                "expected": sorted(expected),
+                "called": sorted(called),
+                "missing": sorted(missing),
+            },
         )
     return HardCheckResult(
         check_name="expected_tools",
@@ -298,9 +302,7 @@ class AgentEvaluator:
         typically fail several of them, surfacing the error as a graded
         outcome rather than an exception.
         """
-        squad: UserSquad | None = (
-            canned_user_squad(self._fixture) if case.has_user_squad else None
-        )
+        squad: UserSquad | None = canned_user_squad(self._fixture) if case.has_user_squad else None
         start = time.perf_counter()
         try:
             state = await self._graph.ainvoke(initial_state(case.question, squad))

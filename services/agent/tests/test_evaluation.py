@@ -56,9 +56,7 @@ _SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
 
 def _load_run_evals_module() -> Any:
     """Import scripts/run_evals.py as a module — scripts/ isn't a package."""
-    spec = importlib.util.spec_from_file_location(
-        "run_evals_module", _SCRIPTS_DIR / "run_evals.py"
-    )
+    spec = importlib.util.spec_from_file_location("run_evals_module", _SCRIPTS_DIR / "run_evals.py")
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules["run_evals_module"] = module
@@ -90,23 +88,43 @@ def _good_scout_report(case_id: str = "comparison-saka-vs-palmer") -> ScoutRepor
         analysis="Saka has higher form than Palmer this run; both have green fixtures.",
         players=[
             PlayerAnalysis(
-                player_name="Saka", position="MID", price=10.0, form=6.8,
-                fixture_outlook="green", verdict="In form.", confidence=0.8,
+                player_name="Saka",
+                position="MID",
+                price=10.0,
+                form=6.8,
+                fixture_outlook="green",
+                verdict="In form.",
+                confidence=0.8,
             ),
             PlayerAnalysis(
-                player_name="Palmer", position="MID", price=11.0, form=7.1,
-                fixture_outlook="amber", verdict="High ceiling.", confidence=0.75,
+                player_name="Palmer",
+                position="MID",
+                price=11.0,
+                form=7.1,
+                fixture_outlook="amber",
+                verdict="High ceiling.",
+                confidence=0.75,
             ),
         ],
         comparison=ComparisonResult(
             players=[
                 PlayerAnalysis(
-                    player_name="Saka", position="MID", price=10.0, form=6.8,
-                    fixture_outlook="green", verdict="In form.", confidence=0.8,
+                    player_name="Saka",
+                    position="MID",
+                    price=10.0,
+                    form=6.8,
+                    fixture_outlook="green",
+                    verdict="In form.",
+                    confidence=0.8,
                 ),
                 PlayerAnalysis(
-                    player_name="Palmer", position="MID", price=11.0, form=7.1,
-                    fixture_outlook="amber", verdict="High ceiling.", confidence=0.75,
+                    player_name="Palmer",
+                    position="MID",
+                    price=11.0,
+                    form=7.1,
+                    fixture_outlook="amber",
+                    verdict="High ceiling.",
+                    confidence=0.75,
                 ),
             ],
             winner="Palmer",
@@ -131,7 +149,9 @@ def _empty_scout_report(question: str = "") -> ScoutReport:
     )
 
 
-def _mock_anthropic_response(tool_input: dict[str, Any], tool_name: str = "record_judge_verdict") -> MagicMock:
+def _mock_anthropic_response(
+    tool_input: dict[str, Any], tool_name: str = "record_judge_verdict"
+) -> MagicMock:
     """Build a MagicMock that satisfies the Anthropic SDK response shape."""
     block = MagicMock()
     block.type = "tool_use"
@@ -175,7 +195,11 @@ def test_canned_user_squad_has_15_picks_with_captain(synthetic_fixture: PlayerFi
     [
         ("query_player", {"name": "Saka"}, {"web_name", "total_points", "position"}),
         ("get_fixture_outlook", {"player_name": "Salah"}, {"player", "team", "difficulty", "note"}),
-        ("get_injury_signals", {"player_name": "Grealish"}, {"player", "injury_risk_score", "form_trend", "summary"}),
+        (
+            "get_injury_signals",
+            {"player_name": "Grealish"},
+            {"player", "injury_risk_score", "form_trend", "summary"},
+        ),
     ],
 )
 async def test_fixture_tools_return_expected_keys(
@@ -222,7 +246,12 @@ async def test_fixture_tools_raise_tool_error_on_unknown_player(
 ) -> None:
     """Every single-player tool raises ToolError when the player isn't in the fixture."""
     unknown = "Xherdan Shaqiri"
-    for tool_name in ("query_player", "get_fixture_outlook", "get_injury_signals", "search_similar_players"):
+    for tool_name in (
+        "query_player",
+        "get_fixture_outlook",
+        "get_injury_signals",
+        "search_similar_players",
+    ):
         kwarg = "name" if tool_name == "query_player" else "player_name"
         with pytest.raises(ToolError):
             await fixture_tools[tool_name](**{kwarg: unknown})
@@ -277,8 +306,13 @@ def test_hard_check_forbidden_tools_fails_on_violation(
 def test_player_mention_word_boundary_avoids_substring_false_positives() -> None:
     """'Saka' with word boundary must not match 'Sakai'."""
     report = ScoutReport(
-        question="", analysis="Sakai impressed in midfield.",
-        players=[], comparison=None, recommendation="", caveats=[], data_sources=[],
+        question="",
+        analysis="Sakai impressed in midfield.",
+        players=[],
+        comparison=None,
+        recommendation="",
+        caveats=[],
+        data_sources=[],
     )
     assert not _player_mentioned(report, "Saka", word_boundary=True)
     # Without word boundary, the substring fallback fires.
@@ -288,8 +322,13 @@ def test_player_mention_word_boundary_avoids_substring_false_positives() -> None
 def test_player_mention_word_boundary_matches_hyphenated_names() -> None:
     """'Alexander-Arnold' matches as a single token despite the hyphen."""
     report = ScoutReport(
-        question="", analysis="Alexander-Arnold delivered three assists.",
-        players=[], comparison=None, recommendation="", caveats=[], data_sources=[],
+        question="",
+        analysis="Alexander-Arnold delivered three assists.",
+        players=[],
+        comparison=None,
+        recommendation="",
+        caveats=[],
+        data_sources=[],
     )
     assert _player_mentioned(report, "Alexander-Arnold", word_boundary=True)
 
@@ -305,8 +344,13 @@ def test_hard_check_must_have_empty_players_list_catches_fabrication(
         analysis="Shaqiri is a Swiss midfielder.",
         players=[
             PlayerAnalysis(
-                player_name="Shaqiri", position="MID", price=6.5, form=4.0,
-                fixture_outlook="amber", verdict="Made up.", confidence=0.5,
+                player_name="Shaqiri",
+                position="MID",
+                price=6.5,
+                form=4.0,
+                fixture_outlook="amber",
+                verdict="Made up.",
+                confidence=0.5,
             ),
         ],
         comparison=None,
@@ -552,9 +596,7 @@ def test_cli_filter_cases_raises_on_no_matches() -> None:
         (0.0, 0.5, 1),
     ],
 )
-def test_cli_compute_exit_code(
-    pass_rate: float, threshold: float, expected_exit: int
-) -> None:
+def test_cli_compute_exit_code(pass_rate: float, threshold: float, expected_exit: int) -> None:
     module = _load_run_evals_module()
     summary = EvalSummary(
         results=[],
@@ -582,9 +624,7 @@ def test_cli_write_json_round_trips(tmp_path: Path) -> None:
                     HardCheckResult(check_name="expected_tools", passed=True, reason="OK")
                 ],
                 judge=JudgeVerdict(
-                    bullet_scores=[
-                        BulletScore(bullet="b1", score=4, reasoning="r1")
-                    ],
+                    bullet_scores=[BulletScore(bullet="b1", score=4, reasoning="r1")],
                     overall=4.0,
                     reasoning="ok",
                 ),

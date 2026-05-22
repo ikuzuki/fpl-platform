@@ -231,9 +231,7 @@ def _find_category(summary: EvalSummary, case_id: str) -> str:
     return "(unknown)"
 
 
-def _render_breakdown(
-    console: Console, title: str, stats: dict[str, CategoryStats]
-) -> None:
+def _render_breakdown(console: Console, title: str, stats: dict[str, CategoryStats]) -> None:
     """Render a category- or difficulty-sliced summary as a Rich table."""
     if not stats:
         return

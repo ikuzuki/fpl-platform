@@ -200,9 +200,7 @@ async def judge_case(
         output_tokens,
     )
     if stop_reason == "max_tokens":
-        logger.warning(
-            "judge hit max_tokens on case %s — verdict likely truncated", case.id
-        )
+        logger.warning("judge hit max_tokens on case %s — verdict likely truncated", case.id)
     record_llm_usage(
         model=model,
         input_tokens=input_tokens,

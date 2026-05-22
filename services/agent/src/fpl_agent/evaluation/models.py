@@ -69,7 +69,9 @@ class BulletScore(BaseModel):
     model_config = _STRICT_CONFIG
 
     bullet: str = Field(description="Verbatim rubric bullet text the judge scored.")
-    score: int = Field(ge=1, le=5, description="Per-bullet score 1 (fails badly) to 5 (clearly meets).")
+    score: int = Field(
+        ge=1, le=5, description="Per-bullet score 1 (fails badly) to 5 (clearly meets)."
+    )
     reasoning: str = Field(description="Why the judge picked this score — one or two sentences.")
 
 
@@ -102,7 +104,9 @@ class EvalResult(BaseModel):
     model_config = _STRICT_CONFIG
 
     case_id: str
-    passed: bool = Field(description="True iff every hard check passed. Independent of judge score.")
+    passed: bool = Field(
+        description="True iff every hard check passed. Independent of judge score."
+    )
     hard_checks: list[HardCheckResult]
     judge: JudgeVerdict | None = Field(
         default=None,
