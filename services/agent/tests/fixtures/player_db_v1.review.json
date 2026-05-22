@@ -1,0 +1,27 @@
+{
+  "row_count": 300,
+  "unique_teams": 20,
+  "positions": {
+    "DEF": 113,
+    "MID": 101,
+    "FWD": 47,
+    "GKP": 39
+  },
+  "pinned_roster_facts": [
+    "Foden present in snapshot",
+    "Grealish present in snapshot with high injury_risk_score (replaced Maddison who was filtered from the active pool)",
+    "Haaland present in snapshot",
+    "Isak present in snapshot",
+    "No 'John Smith' present in snapshot",
+    "Palmer present in snapshot",
+    "Robertson present in snapshot (verify team affiliation hasn't rotated)",
+    "Saka present in snapshot",
+    "Saka present in snapshot (Bukayo \u2192 Saka first-name-to-surname aliasing)",
+    "Salah present in snapshot",
+    "Salah present in snapshot and in the canned user_squad fixture",
+    "Saliba present in snapshot",
+    "Shaqiri NOT present in snapshot (out of Premier League)",
+    "Trippier present in snapshot (verify team affiliation hasn't rotated)",
+    "Watkins present in snapshot"
+  ]
+}

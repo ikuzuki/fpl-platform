@@ -1,0 +1,149 @@
+{
+  "results": [
+    {
+      "case_id": "squad-bench-or-start-salah",
+      "passed": true,
+      "hard_checks": [
+        {
+          "check_name": "expected_tools",
+          "passed": true,
+          "reason": "All 2 required tool(s) called.",
+          "details": {
+            "expected": [
+              "get_fixture_outlook",
+              "query_player"
+            ],
+            "called": [
+              "get_fixture_outlook",
+              "get_injury_signals",
+              "query_player"
+            ]
+          }
+        },
+        {
+          "check_name": "forbidden_tools",
+          "passed": true,
+          "reason": "No forbidden tools declared — vacuous pass.",
+          "details": {
+            "forbidden": []
+          }
+        },
+        {
+          "check_name": "must_mention_players",
+          "passed": true,
+          "reason": "All 1 required player(s) mentioned.",
+          "details": {
+            "required": [
+              "Salah"
+            ]
+          }
+        },
+        {
+          "check_name": "must_set_comparison",
+          "passed": true,
+          "reason": "Comparison correctly left null.",
+          "details": {}
+        },
+        {
+          "check_name": "must_have_empty_players_list",
+          "passed": true,
+          "reason": "Check not enforced for this case — vacuous pass.",
+          "details": {}
+        },
+        {
+          "check_name": "min_caveats",
+          "passed": true,
+          "reason": "No minimum caveats required — vacuous pass.",
+          "details": {
+            "actual": 4,
+            "minimum": 0
+          }
+        }
+      ],
+      "judge": {
+        "bullet_scores": [
+          {
+            "bullet": "Verdict is one of {start, bench, captain elsewhere} stated clearly.",
+            "score": 5,
+            "reasoning": "The recommendation states unambiguously: 'Keep Salah in your starting XI.' This is a clear **start** verdict, explicitly repeated in the analysis section: 'he should still start given the lack of viable bench replacements.'"
+          },
+          {
+            "bullet": "Fixture difficulty is the dominant axis given the framing.",
+            "score": 4,
+            "reasoning": "Fixture difficulty is prominently discussed early ('aggregate fixture difficulty rating sits at 3.33, which falls in the amber zone') and influences the analysis, but the response deliberately weights **form dip heavily against** fixture concern in the final recommendation. The framing 'should I bench him this week' demands fixture-difficulty focus, yet the agent argues form dip is 'purely form-based rather than fitness-related' and that benching for a 'short-term form blip' is 'rarely the right call'—implicitly deprioritizing fixture difficulty as the deciding factor."
+          },
+          {
+            "bullet": "Salah's form is weighed against the fixture concern, not ignored.",
+            "score": 5,
+            "reasoning": "The response explicitly weighs both axes: 'Salah's aggregate fixture difficulty rating…does support some concern…More worrying is his current FPL form score of just 0.5…' and then directly compares them in logic: 'benching a £14.0m midfielder averaging 4.4 ppg over the season for a short-term form blip…is rarely the right call.' Form (0.5 current vs 4.4 season average) is clearly foregrounded and weighed."
+          },
+          {
+            "bullet": "If 'bench' is suggested, a viable bench-promotion from user_squad is named.",
+            "score": 5,
+            "reasoning": "The response recommends **start**, not bench, so this bullet is not triggered. However, the analysis proactively names bench options to establish why benching is not viable: 'you have Rice (£7.3m) and Semenyo (£8.2m) as midfield bench options — both carry lower ceilings and neither realistically replaces Salah's upside.' This demonstrates defensive reasoning even though bench is not the verdict."
+          }
+        ],
+        "overall": 4.8,
+        "reasoning": "The response delivers a clear **start** verdict backed by explicit reasoning that weighs form against fixtures. Fixture difficulty is prominently discussed but intentionally deprioritized in favor of form and season-long value—which may misalign with the user's framing of 'tough fixtures' as the primary concern. The agent proactively names bench options to justify the decision, and form dip is never ignored. One minor gap: the response could have more forcefully *validated* fixture difficulty as a legitimate concern before explaining why it doesn't override the start call; instead it reads as somewhat fixture-minimizing relative to the user's question.\""
+      },
+      "agent_report": {
+        "question": "Salah's fixtures look tough — should I bench him this week?",
+        "analysis": "Salah's aggregate fixture difficulty rating sits at 3.33, which falls in the amber zone and does support some concern, but it is not a clear red-light scenario. More worrying is his current FPL form score of just 0.5 — a dramatic decline from his season average of 4.4 points per game — indicating he has been blanking in recent gameweeks. He has zero injury risk, so the dip is purely form-based rather than fitness-related, and his underlying season numbers (5 goals, 6 assists, 97 pts) show he remains a world-class asset. However, in your squad Salah is not captained (B.Fernandes holds the armband at 2×), so the cost of a bad Salah week is lower than it would be for a captain. Crucially, you have Rice (£7.3m) and Semenyo (£8.2m) as midfield bench options — both carry lower ceilings and neither realistically replaces Salah's upside even in amber fixtures. Benching a £14.0m midfielder averaging 4.4 ppg over the season for a short-term form blip, especially when you are not captaining him, is rarely the right call.",
+        "players": [
+          {
+            "player_name": "M.Salah",
+            "position": "MID",
+            "price": 14.0,
+            "form": 0.5,
+            "fixture_outlook": "amber",
+            "verdict": "Elite season-long output (97 pts, 11 G/A) but recent form has collapsed to 0.5. Amber fixtures and a non-captain role reduce the downside risk, but he should still start given the lack of viable bench replacements.",
+            "confidence": 0.72
+          }
+        ],
+        "comparison": null,
+        "recommendation": "Keep Salah in your starting XI — his season-long quality and non-captain role in your team mean the risk of benching him far outweighs the reward; ride out the form dip.",
+        "caveats": [
+          "Fixture difficulty is a single aggregate score (3.33); per-GW breakdown for GW10 specifically is not available, so the exact opponent is unconfirmed.",
+          "Form score of 0.5 reflects a recent window — the exact number of games in that window is not specified, so severity of the dip is approximate.",
+          "Injury data was last updated 2026-04-19; confirm no late fitness concerns closer to the deadline.",
+          "Semenyo is listed under Man City in squad data but plays for Bournemouth — this appears to be a data labelling issue and does not affect the Salah analysis."
+        ],
+        "data_sources": [
+          "query_player",
+          "get_fixture_outlook",
+          "get_injury_signals"
+        ]
+      },
+      "tool_calls_made": [
+        "query_player",
+        "get_fixture_outlook",
+        "get_injury_signals"
+      ],
+      "iterations_used": 3,
+      "error": null,
+      "duration_seconds": 36.48452050000196
+    }
+  ],
+  "total": 1,
+  "hard_check_passed": 1,
+  "hard_check_pass_rate": 1.0,
+  "mean_judge_score": 4.8,
+  "by_category": {
+    "squad-aware": {
+      "count": 1,
+      "passed": 1,
+      "pass_rate": 1.0,
+      "mean_judge_score": 4.8
+    }
+  },
+  "by_difficulty": {
+    "medium": {
+      "count": 1,
+      "passed": 1,
+      "pass_rate": 1.0,
+      "mean_judge_score": 4.8
+    }
+  },
+  "snapshot_version": "player_db_v1",
+  "eval_cases_version": "v1.1"
+}
