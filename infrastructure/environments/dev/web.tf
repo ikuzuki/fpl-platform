@@ -45,6 +45,11 @@ module "web_hosting" {
   # cert after it is valid.
   acm_certificate_arn = aws_acm_certificate_validation.dashboard.certificate_arn
   aliases             = ["fpl.isseikuzuki.co.uk"]
+
+  # Analytics: deliver access logs to the shared bucket (ikuzuki/analytics)
+  # under the FPL prefix. Logging only; no client beacon in this rollout.
+  log_bucket_domain = "ikuzuki-analytics-logs.s3.eu-west-2.amazonaws.com"
+  log_prefix        = "cloudfront/fpl/"
 }
 
 # -----------------------------------------------------------------------------

@@ -185,6 +185,16 @@ resource "aws_cloudfront_distribution" "dashboard" {
     error_caching_min_ttl = 0
   }
 
+  # Standard access logging to the shared analytics bucket (per-site prefix).
+  dynamic "logging_config" {
+    for_each = var.log_bucket_domain == null ? [] : [1]
+    content {
+      bucket          = var.log_bucket_domain
+      prefix          = var.log_prefix
+      include_cookies = false
+    }
+  }
+
   restrictions {
     geo_restriction {
       restriction_type = "none"
