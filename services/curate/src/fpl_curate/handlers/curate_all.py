@@ -200,9 +200,17 @@ async def main(
         existing_history = []
         logger.info("No existing player history found, starting fresh")
 
-    # Only overwrite latest JSON files if this is the most recent gameweek
-    max_existing_gw = max((r.get("gameweek", 0) for r in existing_history), default=0)
-    is_latest = gameweek >= max_existing_gw
+    # Only overwrite latest JSON files if this is the most recent gameweek.
+    # Compared as (season, gameweek) tuples, not gameweek alone — gameweek
+    # numbers reset to 1 every August, so a raw comparison would treat
+    # GW1 of a new season as older than GW38 of the last one and freeze
+    # the dashboard on last season's final gameweek. Season strings sort
+    # correctly as plain strings ("2025-26" < "2026-27").
+    max_existing = max(
+        ((r.get("season", ""), r.get("gameweek", 0)) for r in existing_history),
+        default=("", 0),
+    )
+    is_latest = (season, gameweek) >= max_existing
 
     if is_latest:
         for name, rows in datasets.items():
@@ -218,9 +226,11 @@ async def main(
         logger.info("Wrote briefing to %s", briefing_key)
     else:
         logger.info(
-            "Skipping latest JSON writes — GW%d is older than current latest GW%d",
+            "Skipping latest JSON writes — %s GW%d is older than current latest %s GW%d",
+            season,
             gameweek,
-            max_existing_gw,
+            max_existing[0],
+            max_existing[1],
         )
 
     history_rows = build_player_history(

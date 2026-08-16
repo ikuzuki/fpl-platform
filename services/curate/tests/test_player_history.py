@@ -88,3 +88,33 @@ class TestBuildPlayerHistory:
         existing = [_make_player(1, 31, 60.0)]
         result = build_player_history([], existing, "2025-26", 32)
         assert len(result) == 1  # Existing untouched, nothing new added
+
+    def test_season_rollover_sorts_before_gameweek(self) -> None:
+        """GW1 of a new season must sort after GW38 of the last one, even
+        though 1 < 38 — gameweek numbers reset every August, so sorting by
+        gameweek alone would interleave the two seasons."""
+        existing = [
+            {**_make_player(1, 37, 55.0), "season": "2025-26"},
+            {**_make_player(1, 38, 60.0), "season": "2025-26"},
+        ]
+        new_dashboard = [_make_player(1, 1, 40.0)]
+        result = build_player_history(new_dashboard, existing, "2026-27", 1)
+
+        assert len(result) == 3
+        ordering = [(r["season"], r["gameweek"]) for r in result]
+        assert ordering == [
+            ("2025-26", 37),
+            ("2025-26", 38),
+            ("2026-27", 1),
+        ]
+
+    def test_same_gameweek_number_different_season_does_not_collide(self) -> None:
+        """GW1 of a new season must not overwrite GW1 of the last one — the
+        upsert-by-gameweek removal must also match on season."""
+        existing = [{**_make_player(1, 1, 50.0), "season": "2025-26"}]
+        new_dashboard = [_make_player(1, 1, 45.0)]
+        result = build_player_history(new_dashboard, existing, "2026-27", 1)
+
+        assert len(result) == 2  # Both seasons' GW1 rows survive
+        by_season = {r["season"]: r["fpl_score"] for r in result}
+        assert by_season == {"2025-26": 50.0, "2026-27": 45.0}
