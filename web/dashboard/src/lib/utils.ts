@@ -119,6 +119,25 @@ export function playerTier(rank: number): string | null {
   return null;
 }
 
+/**
+ * Filter rows to only the most recent season present.
+ *
+ * `player_history.json` accumulates one row per player per gameweek forever
+ * — gameweek numbers reset to 1 every August, and FPL reassigns player IDs
+ * between seasons, so grouping/joining accumulated history by gameweek or
+ * player_id alone (without this filter) silently splices two different
+ * players' data together at the season boundary. Season strings sort
+ * correctly as plain strings ("2025-26" < "2026-27").
+ */
+export function latestSeasonOnly<T extends { season: string }>(rows: T[]): T[] {
+  if (rows.length === 0) return rows;
+  let latestSeason = rows[0].season;
+  for (const row of rows) {
+    if (row.season > latestSeason) latestSeason = row.season;
+  }
+  return rows.filter((r) => r.season === latestSeason);
+}
+
 export const TOOLTIP_STYLE = {
   backgroundColor: "var(--card)",
   borderColor: "var(--border)",

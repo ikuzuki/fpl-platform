@@ -10,6 +10,7 @@ import {
   scoreBarColor,
   heatmapBg,
   playerTier,
+  latestSeasonOnly,
   POS_CHART_COLORS,
   CHART_COLORS,
   SCORE_COMPONENTS,
@@ -172,6 +173,41 @@ describe("playerTier", () => {
   it("returns null for ranks above 50", () => {
     expect(playerTier(51)).toBeNull();
     expect(playerTier(200)).toBeNull();
+  });
+});
+
+describe("latestSeasonOnly", () => {
+  it("keeps only rows from the most recent season", () => {
+    const rows = [
+      { season: "2025-26", gameweek: 37 },
+      { season: "2025-26", gameweek: 38 },
+      { season: "2026-27", gameweek: 1 },
+    ];
+    const result = latestSeasonOnly(rows);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual({ season: "2026-27", gameweek: 1 });
+  });
+
+  it("does not drop rows when only one season is present", () => {
+    const rows = [
+      { season: "2025-26", gameweek: 1 },
+      { season: "2025-26", gameweek: 2 },
+    ];
+    expect(latestSeasonOnly(rows)).toEqual(rows);
+  });
+
+  it("returns an empty array unchanged", () => {
+    expect(latestSeasonOnly([])).toEqual([]);
+  });
+
+  it("is order-independent", () => {
+    const rows = [
+      { season: "2026-27", gameweek: 1 },
+      { season: "2025-26", gameweek: 38 },
+      { season: "2024-25", gameweek: 38 },
+    ];
+    const result = latestSeasonOnly(rows);
+    expect(result).toEqual([{ season: "2026-27", gameweek: 1 }]);
   });
 });
 

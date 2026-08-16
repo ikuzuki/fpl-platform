@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { PlayerHistory } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { cn, positionColor } from "@/lib/utils";
+import { cn, positionColor, latestSeasonOnly } from "@/lib/utils";
 import { MetricIcons } from "@/components/icons/FplIcons";
 
 function scoreToColor(score: number): string {
@@ -14,8 +14,12 @@ function scoreToColor(score: number): string {
   return "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300";
 }
 
-export function MomentumHeatmap({ history }: { history: PlayerHistory[] }) {
+export function MomentumHeatmap({ history: rawHistory }: { history: PlayerHistory[] }) {
   const [hoveredPlayer, setHoveredPlayer] = useState<number | null>(null);
+
+  // Accumulated history spans every season ever run — restrict to the
+  // current one before grouping by gameweek/player_id (see latestSeasonOnly).
+  const history = useMemo(() => latestSeasonOnly(rawHistory), [rawHistory]);
 
   const gameweeks = useMemo(
     () => [...new Set(history.map((r) => r.gameweek))].sort((a, b) => a - b),
