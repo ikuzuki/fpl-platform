@@ -55,8 +55,9 @@ resource "aws_cloudwatch_event_target" "pipeline_target" {
 
   # gameweek=0 triggers auto-resolution via the FPL API (ResolveGameweek).
   # gameweek>0 skips resolution and runs that specific gameweek (backfill mode).
+  # season is omitted so ResolveGameweek derives it from the current date; pass it
+  # explicitly only when invoking the state machine by hand to backfill.
   input = jsonencode({
-    season            = "2025-26"
     gameweek          = 0
     last_processed_gw = 0
     force             = false

@@ -9,19 +9,21 @@ from typing import Any
 
 from fpl_data.collectors.gameweek_resolver import resolve_gameweek
 from fpl_lib.core.run_handler import RunHandler
+from fpl_lib.utils.date_utils import current_season
 
 logger = logging.getLogger(__name__)
 
 
 async def main(
-    season: str = "2025-26",
+    season: str | None = None,
     last_processed_gw: int = 0,
     force: bool = False,
 ) -> dict[str, Any]:
     """Resolve the latest finished gameweek and decide whether to run the pipeline.
 
     Args:
-        season: Season identifier.
+        season: Season identifier. Defaults to the season the current date falls in,
+            which is what the scheduled pipeline relies on. Pass explicitly to backfill.
         last_processed_gw: The last gameweek that was successfully processed.
             If 0, process the latest finished gameweek.
         force: If True, always return a gameweek to process (ignore last_processed_gw).
@@ -29,6 +31,8 @@ async def main(
     Returns:
         Dict with season, gameweek, force, and should_run flag.
     """
+    season = season or current_season()
+
     info = await resolve_gameweek(season=season)
 
     target_gw = info.latest_finished_gw

@@ -27,7 +27,7 @@ class GameweekInfo:
         }
 
 
-async def resolve_gameweek(season: str = "2025-26") -> GameweekInfo:
+async def resolve_gameweek(season: str) -> GameweekInfo:
     """Fetch bootstrap data and determine the current and latest finished gameweek.
 
     Args:
