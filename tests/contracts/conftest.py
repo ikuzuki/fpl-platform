@@ -44,6 +44,7 @@ def minimal_bootstrap_raw() -> dict[str, Any]:
                 "creativity": "264.7",
                 "threat": "1217.0",
                 "ict_index": "246.0",
+                "defensive_contribution": 3,
             },
             {
                 "id": 2,
@@ -79,6 +80,7 @@ def minimal_bootstrap_raw() -> dict[str, Any]:
                 "creativity": "900.0",
                 "threat": "700.0",
                 "ict_index": "240.0",
+                "defensive_contribution": 10,
             },
             {
                 "id": 3,
@@ -114,6 +116,7 @@ def minimal_bootstrap_raw() -> dict[str, Any]:
                 "creativity": "20.0",
                 "threat": "10.0",
                 "ict_index": "8.0",
+                "defensive_contribution": 25,
             },
         ],
         "teams": [
