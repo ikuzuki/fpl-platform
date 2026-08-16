@@ -17,14 +17,12 @@ logger = logging.getLogger(__name__)
 async def main(
     team_id: int,
     gameweek: int,
-    season: str = "2025-26",
 ) -> dict[str, Any]:
     """Fetch a user's FPL squad picks.
 
     Args:
         team_id: The FPL manager team ID.
         gameweek: The gameweek number.
-        season: Season string (currently unused, reserved for future).
 
     Returns:
         Raw squad dict with picks, active_chip, automatic_subs, entry_history.
@@ -45,5 +43,4 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     return RunHandler(
         main_func=main,
         required_main_params=["team_id", "gameweek"],
-        optional_main_params=["season"],
     ).lambda_executor(lambda_event=event)
