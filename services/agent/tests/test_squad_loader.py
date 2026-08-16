@@ -116,6 +116,7 @@ async def test_load_user_squad_enriches_picks_with_neon_metadata() -> None:
         squad = await load_user_squad(
             team_id=5767400,
             gameweek=33,
+            season="2025-26",
             neon=neon,
             function_name="fpl-dev-team-fetcher",
         )
@@ -150,6 +151,7 @@ async def test_load_user_squad_falls_back_for_unknown_player() -> None:
         squad = await load_user_squad(
             team_id=1,
             gameweek=33,
+            season="2025-26",
             neon=neon,
             function_name="fn",
         )
@@ -170,7 +172,9 @@ async def test_load_user_squad_raises_squad_fetch_error_on_non_200_status() -> N
         patch("fpl_agent.squad_loader.boto3.client", return_value=lambda_client),
         pytest.raises(SquadFetchError, match="statusCode=500"),
     ):
-        await load_user_squad(team_id=99999, gameweek=33, neon=neon, function_name="fn")
+        await load_user_squad(
+            team_id=99999, gameweek=33, season="2025-26", neon=neon, function_name="fn"
+        )
 
 
 @pytest.mark.asyncio
@@ -184,7 +188,9 @@ async def test_load_user_squad_raises_squad_fetch_error_on_bad_request() -> None
         patch("fpl_agent.squad_loader.boto3.client", return_value=lambda_client),
         pytest.raises(SquadFetchError, match="statusCode=400"),
     ):
-        await load_user_squad(team_id=1, gameweek=33, neon=neon, function_name="fn")
+        await load_user_squad(
+            team_id=1, gameweek=33, season="2025-26", neon=neon, function_name="fn"
+        )
 
 
 @pytest.mark.asyncio
@@ -198,7 +204,9 @@ async def test_load_user_squad_raises_squad_not_found_on_empty_picks() -> None:
         patch("fpl_agent.squad_loader.boto3.client", return_value=lambda_client),
         pytest.raises(SquadNotFoundError),
     ):
-        await load_user_squad(team_id=1, gameweek=99, neon=neon, function_name="fn")
+        await load_user_squad(
+            team_id=1, gameweek=99, season="2025-26", neon=neon, function_name="fn"
+        )
 
 
 @pytest.mark.asyncio
@@ -214,7 +222,11 @@ async def test_load_user_squad_invokes_lambda_with_correct_payload() -> None:
 
     with patch("fpl_agent.squad_loader.boto3.client", return_value=lambda_client):
         await load_user_squad(
-            team_id=5767400, gameweek=33, neon=neon, function_name="fpl-dev-team-fetcher"
+            team_id=5767400,
+            gameweek=33,
+            season="2025-26",
+            neon=neon,
+            function_name="fpl-dev-team-fetcher",
         )
 
     call_kwargs = lambda_client.invoke.call_args.kwargs
@@ -242,7 +254,9 @@ async def test_load_user_squad_unwraps_run_handler_envelope() -> None:
     )
 
     with patch("fpl_agent.squad_loader.boto3.client", return_value=lambda_client):
-        squad = await load_user_squad(team_id=1, gameweek=33, neon=neon, function_name="fn")
+        squad = await load_user_squad(
+            team_id=1, gameweek=33, season="2025-26", neon=neon, function_name="fn"
+        )
 
     # All three picks from the body are loaded — *not* zero picks from the envelope.
     assert len(squad.picks) == 3
@@ -251,24 +265,24 @@ async def test_load_user_squad_unwraps_run_handler_envelope() -> None:
 class _FakeCache:
     """Dict-backed :class:`SquadCache` for tests — no DynamoDB, no asyncio.to_thread."""
 
-    def __init__(self, initial: dict[tuple[int, int], dict[str, Any]] | None = None) -> None:
-        self._store: dict[tuple[int, int], dict[str, Any]] = dict(initial or {})
-        self.gets: list[tuple[int, int]] = []
-        self.puts: list[tuple[int, int, dict[str, Any]]] = []
+    def __init__(self, initial: dict[tuple[int, str, int], dict[str, Any]] | None = None) -> None:
+        self._store: dict[tuple[int, str, int], dict[str, Any]] = dict(initial or {})
+        self.gets: list[tuple[int, str, int]] = []
+        self.puts: list[tuple[int, str, int, dict[str, Any]]] = []
 
-    async def get(self, team_id: int, gameweek: int) -> dict[str, Any] | None:
-        self.gets.append((team_id, gameweek))
-        return self._store.get((team_id, gameweek))
+    async def get(self, team_id: int, season: str, gameweek: int) -> dict[str, Any] | None:
+        self.gets.append((team_id, season, gameweek))
+        return self._store.get((team_id, season, gameweek))
 
-    async def put(self, team_id: int, gameweek: int, body: dict[str, Any]) -> None:
-        self.puts.append((team_id, gameweek, body))
-        self._store[(team_id, gameweek)] = body
+    async def put(self, team_id: int, season: str, gameweek: int, body: dict[str, Any]) -> None:
+        self.puts.append((team_id, season, gameweek, body))
+        self._store[(team_id, season, gameweek)] = body
 
 
 @pytest.mark.asyncio
 async def test_load_user_squad_reads_from_cache_and_skips_lambda() -> None:
     """Cache hit means zero Lambda invokes — the whole point of the cache."""
-    cache = _FakeCache(initial={(5767400, 33): _raw_body()})
+    cache = _FakeCache(initial={(5767400, "2025-26", 33): _raw_body()})
     # A broken lambda client proves the cache short-circuits before boto3 is touched.
     lambda_client = MagicMock()
     lambda_client.invoke.side_effect = AssertionError("lambda must not be invoked on cache hit")
@@ -281,13 +295,47 @@ async def test_load_user_squad_reads_from_cache_and_skips_lambda() -> None:
 
     with patch("fpl_agent.squad_loader.boto3.client", return_value=lambda_client):
         squad = await load_user_squad(
-            team_id=5767400, gameweek=33, neon=neon, function_name="fn", cache=cache
+            team_id=5767400,
+            gameweek=33,
+            season="2025-26",
+            neon=neon,
+            function_name="fn",
+            cache=cache,
         )
 
     assert len(squad.picks) == 3
-    assert cache.gets == [(5767400, 33)]
+    assert cache.gets == [(5767400, "2025-26", 33)]
     assert cache.puts == []  # cache was already warm, no write needed
     lambda_client.invoke.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_load_user_squad_cache_miss_does_not_reuse_other_season_entry() -> None:
+    """A cached entry for last season's GW1 must not be served for this season's GW1."""
+    cache = _FakeCache(initial={(5767400, "2025-26", 1): _raw_body()})
+    body = _raw_body()
+    lambda_client = _mock_lambda_client(_run_handler_envelope(body))
+    neon = _mock_neon(
+        [
+            {"player_id": eid, "web_name": "p", "team_name": "t", "price": 5.0, "position": "MID"}
+            for eid in (341, 430, 235)
+        ]
+    )
+
+    with patch("fpl_agent.squad_loader.boto3.client", return_value=lambda_client):
+        await load_user_squad(
+            team_id=5767400,
+            gameweek=1,
+            season="2026-27",
+            neon=neon,
+            function_name="fn",
+            cache=cache,
+        )
+
+    # Cache miss on the new season's key forces a live fetch rather than
+    # silently returning last season's cached GW1 picks.
+    lambda_client.invoke.assert_called_once()
+    assert cache.puts == [(5767400, "2026-27", 1, body)]
 
 
 @pytest.mark.asyncio
@@ -305,10 +353,15 @@ async def test_load_user_squad_writes_cache_on_miss_after_successful_fetch() -> 
 
     with patch("fpl_agent.squad_loader.boto3.client", return_value=lambda_client):
         await load_user_squad(
-            team_id=5767400, gameweek=33, neon=neon, function_name="fn", cache=cache
+            team_id=5767400,
+            gameweek=33,
+            season="2025-26",
+            neon=neon,
+            function_name="fn",
+            cache=cache,
         )
 
-    assert cache.puts == [(5767400, 33, body)]
+    assert cache.puts == [(5767400, "2025-26", 33, body)]
     lambda_client.invoke.assert_called_once()
 
 
@@ -324,7 +377,14 @@ async def test_load_user_squad_does_not_cache_empty_picks() -> None:
         patch("fpl_agent.squad_loader.boto3.client", return_value=lambda_client),
         pytest.raises(SquadNotFoundError),
     ):
-        await load_user_squad(team_id=1, gameweek=99, neon=neon, function_name="fn", cache=cache)
+        await load_user_squad(
+            team_id=1,
+            gameweek=99,
+            season="2025-26",
+            neon=neon,
+            function_name="fn",
+            cache=cache,
+        )
 
     assert cache.puts == []  # did NOT persist the empty body
 
@@ -342,7 +402,7 @@ async def test_load_user_squad_works_when_cache_is_none() -> None:
 
     with patch("fpl_agent.squad_loader.boto3.client", return_value=lambda_client):
         squad = await load_user_squad(
-            team_id=1, gameweek=33, neon=neon, function_name="fn", cache=None
+            team_id=1, gameweek=33, season="2025-26", neon=neon, function_name="fn", cache=None
         )
 
     assert len(squad.picks) == 3
@@ -360,4 +420,34 @@ async def test_load_user_squad_wraps_neon_failures_as_squad_fetch_error() -> Non
         patch("fpl_agent.squad_loader.boto3.client", return_value=lambda_client),
         pytest.raises(SquadFetchError, match="metadata lookup failed"),
     ):
-        await load_user_squad(team_id=1, gameweek=33, neon=neon, function_name="fn")
+        await load_user_squad(
+            team_id=1, gameweek=33, season="2025-26", neon=neon, function_name="fn"
+        )
+
+
+@pytest.mark.asyncio
+async def test_load_user_squad_filters_metadata_by_season() -> None:
+    """Neon lookup must scope to the current season, not just player_id.
+
+    ``player_embeddings`` is a single global table upserted in place per
+    player_id — a stale row from last season (before this season's first
+    sync) must not be confidently attached to a pick just because the
+    numeric ID happens to match.
+    """
+    raw = _run_handler_envelope(_raw_body())
+    lambda_client = _mock_lambda_client(raw)
+    neon = _mock_neon(
+        [
+            {"player_id": eid, "web_name": "p", "team_name": "t", "price": 5.0, "position": "MID"}
+            for eid in (341, 430, 235)
+        ]
+    )
+
+    with patch("fpl_agent.squad_loader.boto3.client", return_value=lambda_client):
+        await load_user_squad(
+            team_id=5767400, gameweek=33, season="2026-27", neon=neon, function_name="fn"
+        )
+
+    args = neon.fetch.call_args.args
+    assert args[-1] == "2026-27"
+    assert "season = $2" in args[0]
