@@ -77,6 +77,8 @@ def collector(mock_s3_client: MagicMock) -> UnderstatCollector:
 def test_season_to_understat_year() -> None:
     assert _season_to_understat_year("2025-26") == "2025"
     assert _season_to_understat_year("2024-25") == "2024"
+    # 2026/27 rollover — must resolve to "2026", not fall back to a stale year.
+    assert _season_to_understat_year("2026-27") == "2026"
 
 
 # --- collect_league_stats tests ---
