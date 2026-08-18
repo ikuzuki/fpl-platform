@@ -17,8 +17,8 @@
     "ResolveGameweek": {
       "Type": "Task",
       "Resource": "${lambda_arn_resolve_gameweek}",
+      "Comment": "season is omitted deliberately — the handler derives it from the current date. A Parameters path for a key the scheduled input does not send is an uncatchable States.Runtime failure.",
       "Parameters": {
-        "season.$": "$.season",
         "last_processed_gw.$": "$.last_processed_gw",
         "force.$": "$.force"
       },
