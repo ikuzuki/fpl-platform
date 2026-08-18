@@ -74,16 +74,28 @@ def _invoke_team_fetcher_sync(function_name: str, team_id: int, gameweek: int) -
 
 
 async def _fetch_player_metadata(
-    neon: NeonClient, element_ids: list[int]
+    neon: NeonClient, element_ids: list[int], season: str
 ) -> dict[int, dict[str, Any]]:
-    """Pull web_name / team_name / price for the squad's 15 element IDs in one query."""
+    """Pull web_name / team_name / price for the squad's 15 element IDs in one query.
+
+    Filtered on ``season`` as well as ``player_id`` — FPL reassigns element IDs
+    between seasons, and ``player_embeddings`` is a single global table keyed
+    only by ``player_id`` (upserted in place on every sync, see
+    ``fpl_agent.embeddings.sync_embeddings``). Right after a season rollover,
+    before the first post-rollover sync has run, every row still carries last
+    season's ``season`` value under IDs that may now mean a different player.
+    Matching on season too means a stale row is treated as "not found" (falls
+    back to the placeholder in :func:`_enrich_pick`) instead of confidently
+    attaching the wrong name/team/price to a pick.
+    """
     rows = await neon.fetch(
         """
         SELECT player_id, web_name, team_name, price, position
         FROM player_embeddings
-        WHERE player_id = ANY($1::int[])
+        WHERE player_id = ANY($1::int[]) AND season = $2
         """,
         element_ids,
+        season,
     )
     return {int(row["player_id"]): dict(row) for row in rows}
 
@@ -125,6 +137,7 @@ async def load_user_squad(
     *,
     team_id: int,
     gameweek: int,
+    season: str,
     neon: NeonClient,
     function_name: str,
     cache: SquadCache | None = None,
@@ -132,18 +145,21 @@ async def load_user_squad(
     """Fetch and enrich one user's squad. The single entry point used by the route.
 
     If ``cache`` is provided, check it before invoking the team-fetcher
-    Lambda — squad picks for a given ``(team_id, gameweek)`` pair are
+    Lambda — squad picks for a given ``(team_id, season, gameweek)`` triple are
     immutable once the GW deadline passes, so a cached body is always
     current. Any cache read failure falls through to the live fetch; a
     cache write failure after a successful fetch is swallowed and logged
     (the user still gets their squad, the next request just pays the
     fetch cost again).
+
+    ``season`` is required (not derived here) so callers decide explicitly —
+    the live route resolves it via ``current_season()``.
     """
     raw: dict[str, Any] | None = None
     if cache is not None:
-        raw = await cache.get(team_id, gameweek)
+        raw = await cache.get(team_id, season, gameweek)
         if raw is not None:
-            logger.info("squad cache hit for team %d GW%d", team_id, gameweek)
+            logger.info("squad cache hit for team %d %s GW%d", team_id, season, gameweek)
 
     if raw is None:
         raw = await asyncio.to_thread(_invoke_team_fetcher_sync, function_name, team_id, gameweek)
@@ -153,7 +169,7 @@ async def load_user_squad(
             # later (FPL pre-populates a team on first login for the user's
             # first ever gameweek). Caching the empty body would freeze the
             # "not found" state forever.
-            await cache.put(team_id, gameweek, raw)
+            await cache.put(team_id, season, gameweek, raw)
 
     picks_raw: list[dict[str, Any]] = raw.get("picks", [])
     if not picks_raw:
@@ -164,7 +180,7 @@ async def load_user_squad(
 
     element_ids = [int(p["element"]) for p in picks_raw]
     try:
-        metadata = await _fetch_player_metadata(neon, element_ids)
+        metadata = await _fetch_player_metadata(neon, element_ids, season)
     except Exception as exc:
         logger.exception("Neon metadata lookup failed for team %d GW%d", team_id, gameweek)
         raise SquadFetchError(f"metadata lookup failed: {exc}") from exc

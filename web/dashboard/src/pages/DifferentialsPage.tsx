@@ -27,6 +27,7 @@ import {
   positionColor,
   scoreColor,
   fdrClass,
+  latestSeasonOnly,
   POS_CHART_COLORS,
   TOOLTIP_STYLE,
 } from "@/lib/utils";
@@ -172,10 +173,13 @@ export function DifferentialsPage() {
   } = useApi(api.players, [] as PlayerDashboard[]);
 
   const {
-    data: history,
+    data: rawHistory,
     loading: loadingHistory,
     error: errorHistory,
   } = useApi(api.history, [] as PlayerHistory[]);
+  // Accumulated history spans every season ever run — restrict to the
+  // current one before grouping by player_id/gameweek (see latestSeasonOnly).
+  const history = useMemo(() => latestSeasonOnly(rawHistory), [rawHistory]);
 
   const loading = loadingPlayers || loadingHistory;
   const error = errorPlayers || errorHistory;

@@ -16,6 +16,8 @@ module "lambda_fpl_collector" {
   }
 }
 
+# The FPL API 403s Lambda IPs intermittently; fpl_fetch's capped backoff ladder
+# plus a cold start needs more headroom than the 30s this Lambda used to have.
 module "lambda_resolve_gameweek" {
   source             = "../../modules/lambda"
   name               = "resolve-gameweek"
@@ -23,7 +25,7 @@ module "lambda_resolve_gameweek" {
   image_uri          = "${module.ecr_data.repository_url}:latest"
   execution_role_arn = module.lambda_role.role_arn
   command            = ["fpl_data.handlers.resolve_gameweek.lambda_handler"]
-  timeout            = 30
+  timeout            = 120
   memory_size        = 256
   environment_variables = {
     ENV = var.environment
@@ -172,7 +174,7 @@ module "lambda_team_fetcher" {
   image_uri          = "${module.ecr_data.repository_url}:latest"
   execution_role_arn = module.lambda_role.role_arn
   command            = ["fpl_data.handlers.team_fetcher.lambda_handler"]
-  timeout            = 30
+  timeout            = 120
   memory_size        = 256
   environment_variables = {
     ENV = var.environment

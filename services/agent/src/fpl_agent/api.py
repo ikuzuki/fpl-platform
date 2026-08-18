@@ -52,6 +52,7 @@ from fpl_lib.observability import (
     propagate_attributes,
 )
 from fpl_lib.secrets import resolve_secret_to_env
+from fpl_lib.utils.date_utils import current_season
 
 logger = logging.getLogger(__name__)
 
@@ -318,6 +319,7 @@ async def get_team(
         return await load_user_squad(
             team_id=team_id,
             gameweek=gameweek,
+            season=current_season(),
             neon=neon,
             function_name=function_name,
             cache=cache,

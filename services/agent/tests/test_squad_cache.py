@@ -32,7 +32,7 @@ def _mock_client_with(body: dict[str, Any]) -> MagicMock:
     client = MagicMock()
     client.get_item.return_value = {
         "Item": {
-            "team_gameweek": {"S": "5767400#33"},
+            "team_gameweek": {"S": "5767400#2025-26#33"},
             "body": {"S": json.dumps(body)},
         }
     }
@@ -41,7 +41,12 @@ def _mock_client_with(body: dict[str, Any]) -> MagicMock:
 
 
 def test_key_format() -> None:
-    assert _key(5767400, 33) == "5767400#33"
+    assert _key(5767400, "2025-26", 33) == "5767400#2025-26#33"
+
+
+def test_key_disambiguates_across_season_boundary() -> None:
+    """GW1 of a new season must not collide with GW1 of the last one."""
+    assert _key(5767400, "2025-26", 1) != _key(5767400, "2026-27", 1)
 
 
 @pytest.mark.asyncio
@@ -49,12 +54,12 @@ async def test_get_returns_parsed_body_on_hit() -> None:
     client = _mock_client_with(_body())
     cache = DynamoSquadCache("fpl-squad-cache-test", client=client)
 
-    got = await cache.get(5767400, 33)
+    got = await cache.get(5767400, "2025-26", 33)
 
     assert got == _body()
     client.get_item.assert_called_once_with(
         TableName="fpl-squad-cache-test",
-        Key={"team_gameweek": {"S": "5767400#33"}},
+        Key={"team_gameweek": {"S": "5767400#2025-26#33"}},
         ConsistentRead=False,
     )
 
@@ -62,16 +67,16 @@ async def test_get_returns_parsed_body_on_hit() -> None:
 @pytest.mark.asyncio
 async def test_get_returns_none_on_miss() -> None:
     cache = DynamoSquadCache("tbl", client=_mock_client_empty())
-    assert await cache.get(1, 1) is None
+    assert await cache.get(1, "2025-26", 1) is None
 
 
 @pytest.mark.asyncio
 async def test_get_returns_none_when_item_missing_body_attr() -> None:
     """Corrupted row shape — treat as miss rather than blow up the route."""
     client = MagicMock()
-    client.get_item.return_value = {"Item": {"team_gameweek": {"S": "1#1"}}}
+    client.get_item.return_value = {"Item": {"team_gameweek": {"S": "1#2025-26#1"}}}
     cache = DynamoSquadCache("tbl", client=client)
-    assert await cache.get(1, 1) is None
+    assert await cache.get(1, "2025-26", 1) is None
 
 
 @pytest.mark.asyncio
@@ -81,7 +86,7 @@ async def test_get_swallows_exceptions() -> None:
     client.get_item.side_effect = RuntimeError("throttled")
     cache = DynamoSquadCache("tbl", client=client)
 
-    assert await cache.get(1, 1) is None
+    assert await cache.get(1, "2025-26", 1) is None
 
 
 @pytest.mark.asyncio
@@ -89,12 +94,12 @@ async def test_put_writes_json_encoded_body() -> None:
     client = _mock_client_empty()
     cache = DynamoSquadCache("tbl", client=client)
 
-    await cache.put(5767400, 33, _body())
+    await cache.put(5767400, "2025-26", 33, _body())
 
     client.put_item.assert_called_once()
     kwargs = client.put_item.call_args.kwargs
     assert kwargs["TableName"] == "tbl"
-    assert kwargs["Item"]["team_gameweek"] == {"S": "5767400#33"}
+    assert kwargs["Item"]["team_gameweek"] == {"S": "5767400#2025-26#33"}
     assert json.loads(kwargs["Item"]["body"]["S"]) == _body()
 
 
@@ -106,4 +111,4 @@ async def test_put_swallows_exceptions() -> None:
     cache = DynamoSquadCache("tbl", client=client)
 
     # Must not raise.
-    await cache.put(1, 1, _body())
+    await cache.put(1, "2025-26", 1, _body())

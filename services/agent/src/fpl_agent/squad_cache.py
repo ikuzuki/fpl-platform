@@ -1,10 +1,14 @@
 """Write-once DynamoDB cache for raw FPL squad responses.
 
-Squad picks for a given ``(team_id, gameweek)`` pair are immutable once the
-gameweek deadline passes — the user's lineup is locked and FPL's
+Squad picks for a given ``(team_id, season, gameweek)`` triple are immutable
+once the gameweek deadline passes — the user's lineup is locked and FPL's
 ``/entry/{team_id}/event/{gw}/picks/`` endpoint returns the same payload
 forever after. That makes this cache the simplest possible shape: write on
 first successful fetch, read forever thereafter, no TTL, no invalidation.
+
+``season`` is part of the key (not just ``team_id``/``gameweek``) because FPL
+resets gameweek numbers to 1 every August — without it, a cache entry written
+for GW1 of one season would be served straight back as GW1 of the next.
 
 The cache also insulates the Lambda from intermittent FPL / Fastly IP blocks
 — once a squad is cached, subsequent reads never touch FPL, so the user can
@@ -30,14 +34,14 @@ logger = logging.getLogger(__name__)
 class SquadCache(Protocol):
     """Interface for a squad cache — used so tests can swap in an in-memory fake."""
 
-    async def get(self, team_id: int, gameweek: int) -> dict[str, Any] | None: ...
-    async def put(self, team_id: int, gameweek: int, body: dict[str, Any]) -> None: ...
+    async def get(self, team_id: int, season: str, gameweek: int) -> dict[str, Any] | None: ...
+    async def put(self, team_id: int, season: str, gameweek: int, body: dict[str, Any]) -> None: ...
 
 
 class DynamoSquadCache:
     """DynamoDB-backed :class:`SquadCache`.
 
-    Hash key: ``team_gameweek`` (string ``"{team_id}#{gameweek}"``).
+    Hash key: ``team_gameweek`` (string ``"{team_id}#{season}#{gameweek}"``).
     One payload attribute: ``body`` (JSON-encoded string of the raw
     team-fetcher response). boto3 is synchronous; every public method
     wraps the call with :func:`asyncio.to_thread` to keep the event loop
@@ -58,17 +62,19 @@ class DynamoSquadCache:
         self.table_name = table_name
         self._client = client or boto3.client("dynamodb", region_name=region_name)
 
-    async def get(self, team_id: int, gameweek: int) -> dict[str, Any] | None:
+    async def get(self, team_id: int, season: str, gameweek: int) -> dict[str, Any] | None:
         try:
-            return await asyncio.to_thread(self._get_sync, team_id, gameweek)
+            return await asyncio.to_thread(self._get_sync, team_id, season, gameweek)
         except Exception:
-            logger.exception("squad cache read failed for team %d GW%d", team_id, gameweek)
+            logger.exception(
+                "squad cache read failed for team %d %s GW%d", team_id, season, gameweek
+            )
             return None
 
-    def _get_sync(self, team_id: int, gameweek: int) -> dict[str, Any] | None:
+    def _get_sync(self, team_id: int, season: str, gameweek: int) -> dict[str, Any] | None:
         response = self._client.get_item(
             TableName=self.table_name,
-            Key={"team_gameweek": {"S": _key(team_id, gameweek)}},
+            Key={"team_gameweek": {"S": _key(team_id, season, gameweek)}},
             ConsistentRead=False,
         )
         item = response.get("Item")
@@ -77,21 +83,23 @@ class DynamoSquadCache:
         body: dict[str, Any] = json.loads(item["body"]["S"])
         return body
 
-    async def put(self, team_id: int, gameweek: int, body: dict[str, Any]) -> None:
+    async def put(self, team_id: int, season: str, gameweek: int, body: dict[str, Any]) -> None:
         try:
-            await asyncio.to_thread(self._put_sync, team_id, gameweek, body)
+            await asyncio.to_thread(self._put_sync, team_id, season, gameweek, body)
         except Exception:
-            logger.exception("squad cache write failed for team %d GW%d", team_id, gameweek)
+            logger.exception(
+                "squad cache write failed for team %d %s GW%d", team_id, season, gameweek
+            )
 
-    def _put_sync(self, team_id: int, gameweek: int, body: dict[str, Any]) -> None:
+    def _put_sync(self, team_id: int, season: str, gameweek: int, body: dict[str, Any]) -> None:
         self._client.put_item(
             TableName=self.table_name,
             Item={
-                "team_gameweek": {"S": _key(team_id, gameweek)},
+                "team_gameweek": {"S": _key(team_id, season, gameweek)},
                 "body": {"S": json.dumps(body)},
             },
         )
 
 
-def _key(team_id: int, gameweek: int) -> str:
-    return f"{team_id}#{gameweek}"
+def _key(team_id: int, season: str, gameweek: int) -> str:
+    return f"{team_id}#{season}#{gameweek}"

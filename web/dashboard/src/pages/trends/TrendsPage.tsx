@@ -22,6 +22,7 @@ import {
   cn,
   positionColor,
   scoreColor,
+  latestSeasonOnly,
   CHART_COLORS,
   TOOLTIP_STYLE,
 } from "@/lib/utils";
@@ -31,7 +32,11 @@ const METRIC_KEY = "fpl_score" as const;
 const METRIC_FORMAT = (v: number) => v.toFixed(1);
 
 export function TrendsPage() {
-  const { data, loading, error } = useApi(() => api.history(), [] as PlayerHistory[]);
+  const { data: rawData, loading, error } = useApi(() => api.history(), [] as PlayerHistory[]);
+  // player_history.json accumulates every season ever run — restrict to the
+  // current one so gameweek numbers and player_ids aren't compared/joined
+  // across a season boundary (see latestSeasonOnly).
+  const data = useMemo(() => latestSeasonOnly(rawData), [rawData]);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const search = searchParams.get("q") ?? "";

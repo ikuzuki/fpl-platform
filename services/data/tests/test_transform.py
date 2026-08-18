@@ -52,6 +52,7 @@ def _make_raw_bootstrap(players: list[dict] | None = None) -> dict:
                 "creativity": "900.0",
                 "threat": "1100.0",
                 "ict_index": "320.0",
+                "defensive_contribution": 5,
             },
             {
                 "id": 2,
@@ -87,6 +88,7 @@ def _make_raw_bootstrap(players: list[dict] | None = None) -> dict:
                 "creativity": "500.0",
                 "threat": "1500.0",
                 "ict_index": "300.0",
+                "defensive_contribution": 42,
             },
         ]
     return {"elements": players, "teams": [], "events": []}

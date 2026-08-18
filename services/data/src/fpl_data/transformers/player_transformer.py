@@ -44,6 +44,10 @@ COLUMN_MAP: dict[str, str] = {
     "creativity": "creativity",
     "threat": "threat",
     "ict_index": "ict_index",
+    # Defensive contribution points (CBIT-based), added by the FPL API for
+    # the 2025-26 season. Captured explicitly so it isn't silently dropped
+    # by the "select known columns only" step below.
+    "defensive_contribution": "defensive_contribution",
 }
 
 INT_COLUMNS = [
@@ -64,6 +68,7 @@ INT_COLUMNS = [
     "starts",
     "transfers_in_event",
     "transfers_out_event",
+    "defensive_contribution",
 ]
 
 FLOAT_COLUMNS = [

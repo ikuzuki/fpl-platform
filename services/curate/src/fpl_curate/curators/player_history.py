@@ -67,8 +67,10 @@ def build_player_history(
     # Append new rows
     history.extend(new_rows)
 
-    # Sort by gameweek then player_id for consistent ordering
-    history.sort(key=lambda r: (r.get("gameweek", 0), r.get("player_id", 0)))
+    # Sort by season, then gameweek, then player_id. Season must sort first —
+    # gameweek numbers reset to 1 every August, so sorting by gameweek alone
+    # would interleave GW1 of a new season between GW1 and GW2 of the last one.
+    history.sort(key=lambda r: (r.get("season", ""), r.get("gameweek", 0), r.get("player_id", 0)))
 
     logger.info(
         "Built player history: %d total rows (%d gameweeks, %d new rows for GW%d)",

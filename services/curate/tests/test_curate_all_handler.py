@@ -188,6 +188,43 @@ class TestCurateAllHandler:
         assert briefing_call.args[2]["advice_gameweek"] is None
 
     @pytest.mark.asyncio
+    async def test_latest_json_writes_survive_season_rollover(
+        self,
+        mock_s3_client: MagicMock,
+        mock_settings: CurateSettings,
+        sample_enriched_df: pd.DataFrame,
+        sample_bootstrap: dict[str, Any],
+        sample_fixtures: list[dict[str, Any]],
+    ) -> None:
+        """GW1 of a new season must still be treated as "latest", even though
+        1 < 38 — a raw gameweek comparison would freeze the dashboard's
+        public JSON on last season's final gameweek forever."""
+        table = pa.Table.from_pandas(sample_enriched_df)
+        mock_s3_client.read_parquet.return_value = table
+        mock_s3_client.list_objects.side_effect = [
+            ["raw/fpl-api/season=2026-27/fixtures/2026-08-20.json"],
+            ["raw/fpl-api/season=2026-27/bootstrap/2026-08-20.json"],
+        ]
+        existing_history = [
+            {"player_id": 1, "gameweek": 38, "season": "2025-26", "total_points": 200}
+        ]
+        mock_s3_client.read_json.side_effect = [
+            sample_fixtures,
+            sample_bootstrap,
+            existing_history,
+        ]
+
+        with (
+            patch("fpl_curate.handlers.curate_all.S3Client", return_value=mock_s3_client),
+            patch("fpl_curate.handlers.curate_all.get_curate_settings", return_value=mock_settings),
+        ):
+            await main(season="2026-27", gameweek=1, force=True)
+
+        written_keys = {c.args[1] for c in mock_s3_client.put_json.call_args_list}
+        assert "public/api/v1/player_dashboard.json" in written_keys
+        assert "public/api/v1/gameweek_briefing.json" in written_keys
+
+    @pytest.mark.asyncio
     async def test_fails_when_no_fixtures(
         self,
         mock_s3_client: MagicMock,
