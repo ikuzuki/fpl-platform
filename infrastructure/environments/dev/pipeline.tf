@@ -40,12 +40,18 @@ module "pipeline" {
 }
 
 # -----------------------------------------------------------------------------
-# EventBridge Schedule — Tuesday 8am UTC (after Monday GW deadline)
+# EventBridge Schedule — daily 8am UTC
+#
+# The FPL calendar is not weekly: midweek rounds finish and are superseded
+# within a single week, so a weekly trigger silently never processes them.
+# Daily runs pick every round up within 24h, and ResolveGameweek derives what
+# has already been processed from S3, so a day with nothing new costs one
+# sub-second Lambda invocation.
 # -----------------------------------------------------------------------------
 resource "aws_cloudwatch_event_rule" "weekly_pipeline" {
   name                = "fpl-weekly-pipeline-${var.environment}"
-  description         = "Trigger FPL pipeline every Tuesday at 8am UTC"
-  schedule_expression = "cron(0 8 ? * TUE *)"
+  description         = "Trigger FPL pipeline daily at 8am UTC; ResolveGameweek no-ops until a new gameweek finishes"
+  schedule_expression = "cron(0 8 * * ? *)"
 }
 
 resource "aws_cloudwatch_event_target" "pipeline_target" {
@@ -55,12 +61,12 @@ resource "aws_cloudwatch_event_target" "pipeline_target" {
 
   # gameweek=0 triggers auto-resolution via the FPL API (ResolveGameweek).
   # gameweek>0 skips resolution and runs that specific gameweek (backfill mode).
-  # season is omitted so ResolveGameweek derives it from the current date; pass it
-  # explicitly only when invoking the state machine by hand to backfill.
+  # season and last_processed_gw are both omitted so ResolveGameweek derives them
+  # — season from the current date, last_processed_gw from the completed runs in
+  # S3. Pass either explicitly only when invoking the state machine by hand.
   input = jsonencode({
-    gameweek          = 0
-    last_processed_gw = 0
-    force             = false
+    gameweek = 0
+    force    = false
   })
 }
 
