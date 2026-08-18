@@ -343,6 +343,47 @@ async def test_fpl_fetch_raises_on_server_error() -> None:
         await fpl_fetch(f"{FPL_BASE_URL}/bootstrap-static/")
 
 
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_fpl_fetch_403_backoff_fits_inside_the_lambda_timeout() -> None:
+    """A fully-403 run must not sleep away its caller's whole execution budget.
+
+    Uncapped doubling sleeps 2+4+8+16 = 30s before the final attempt, which alone
+    exhausts a 30s Lambda — the retry can never actually fire.
+    """
+    from curl_cffi.requests.errors import RequestsError
+
+    from fpl_data.collectors.http import MAX_BACKOFF_SECONDS, fpl_fetch
+
+    mock_response = MagicMock()
+    mock_response.status_code = 403
+    mock_response.content = b""
+    mock_response.json.return_value = {}
+    mock_response.raise_for_status.side_effect = RequestsError("HTTP 403", code=403)
+
+    mock_session = AsyncMock()
+    mock_session.get = AsyncMock(return_value=mock_response)
+
+    waits: list[float] = []
+
+    async def record_sleep(seconds: float) -> None:
+        waits.append(seconds)
+
+    with (
+        patch("fpl_data.collectors.http.AsyncSession") as mock_cls,
+        patch("fpl_data.collectors.http.asyncio.sleep", side_effect=record_sleep),
+        pytest.raises(RequestsError),
+    ):
+        mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+        await fpl_fetch(f"{FPL_BASE_URL}/bootstrap-static/", max_retries=5)
+
+    assert mock_session.get.await_count == 5
+    assert max(waits) <= MAX_BACKOFF_SECONDS
+    # 30s is the shortest timeout any Lambda calling fpl_fetch runs with.
+    assert sum(waits) < 30
+
+
 # --- handler tests ---
 
 

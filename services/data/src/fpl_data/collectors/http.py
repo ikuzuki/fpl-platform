@@ -14,6 +14,11 @@ logger = logging.getLogger(__name__)
 
 FPL_BASE_URL = "https://fantasy.premierleague.com/api"
 
+# Uncapped doubling sleeps 30s in total before the fifth attempt, exhausting a
+# 30s Lambda before the final request is ever sent. Keep the ladder inside the
+# budget of the shortest-lived caller.
+MAX_BACKOFF_SECONDS = 8
+
 
 async def fpl_fetch(url: str, max_retries: int = 5) -> dict | list:
     """Fetch JSON from the FPL API with exponential backoff on 403.
@@ -43,7 +48,7 @@ async def fpl_fetch(url: str, max_retries: int = 5) -> dict | list:
                 return response.json()
 
             if response.status_code == 403 and attempt < max_retries - 1:
-                wait = 2 ** (attempt + 1)  # 2, 4, 8, 16, 32 seconds
+                wait = min(2 ** (attempt + 1), MAX_BACKOFF_SECONDS)  # 2, 4, 8, 8
                 logger.warning(
                     "[FPL API] 403 Forbidden — retrying in %ds (attempt %d/%d)",
                     wait,
