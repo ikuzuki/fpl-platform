@@ -219,6 +219,33 @@ def _calculate_single_cost(enricher: Any) -> dict[str, Any]:
     }
 
 
+def _enriched_output_key(enricher_name: str, season: str, gameweek: int) -> str:
+    return f"enriched/{enricher_name}/season={season}/gameweek={gameweek:02d}/results.json"
+
+
+def _already_enriched(
+    s3_client: S3Client, bucket: str, enricher_name: str, season: str, gameweek: int
+) -> dict[str, Any] | None:
+    """Return a no-op result if this enricher already has output for the gameweek.
+
+    Matches the idempotency guards in transform and curate_all. Without it a
+    repeat run pays for a full LLM pass to rewrite identical output, and does so
+    from a news window that has moved on since the gameweek was played.
+    """
+    key = _enriched_output_key(enricher_name, season, gameweek)
+    if not s3_client.object_exists(bucket, key):
+        return None
+    logger.info("%s enrichment already exists at %s, skipping", enricher_name, key)
+    return {
+        "enricher": enricher_name,
+        "records_enriched": 0,
+        "records_failed": 0,
+        "cost": {"model": "", "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0},
+        "output_path": key,
+        "skipped": True,
+    }
+
+
 async def _run_single_enricher(
     enricher_name: str,
     enricher: Any,
@@ -242,7 +269,7 @@ async def _run_single_enricher(
             }
         )
 
-    output_key = f"enriched/{enricher_name}/season={season}/gameweek={gameweek:02d}/results.json"
+    output_key = _enriched_output_key(enricher_name, season, gameweek)
     s3_client.put_json(bucket, output_key, output_records)
     logger.info("Wrote %s results to s3://%s/%s", enricher_name, bucket, output_key)
 
@@ -266,9 +293,14 @@ async def player_summary_main(
     gameweek: int,
     output_bucket: str = "fpl-data-lake-dev",
     prompt_version: str = "v1",
+    force: bool = False,
 ) -> dict[str, Any]:
     """Run player summary enricher. Uses clean player stats only."""
     s3_client = S3Client()
+    if not force and (
+        skipped := _already_enriched(s3_client, output_bucket, "player_summary", season, gameweek)
+    ):
+        return skipped
     players = _load_players(s3_client, output_bucket, season, gameweek)
 
     api_key = _get_secret("/fpl-platform/dev/anthropic-api-key")
@@ -288,9 +320,14 @@ async def injury_signal_main(
     gameweek: int,
     output_bucket: str = "fpl-data-lake-dev",
     prompt_version: str = "v1",
+    force: bool = False,
 ) -> dict[str, Any]:
     """Run injury signal enricher. Attaches news articles to each player."""
     s3_client = S3Client()
+    if not force and (
+        skipped := _already_enriched(s3_client, output_bucket, "injury_signal", season, gameweek)
+    ):
+        return skipped
     players = _load_players(s3_client, output_bucket, season, gameweek)
     articles = _load_news_articles(s3_client, output_bucket)
     players = _attach_news_to_players(players, articles)
@@ -312,9 +349,14 @@ async def sentiment_main(
     gameweek: int,
     output_bucket: str = "fpl-data-lake-dev",
     prompt_version: str = "v1",
+    force: bool = False,
 ) -> dict[str, Any]:
     """Run sentiment enricher. Attaches news articles to each player."""
     s3_client = S3Client()
+    if not force and (
+        skipped := _already_enriched(s3_client, output_bucket, "sentiment", season, gameweek)
+    ):
+        return skipped
     players = _load_players(s3_client, output_bucket, season, gameweek)
     articles = _load_news_articles(s3_client, output_bucket)
     players = _attach_news_to_players(players, articles)
@@ -336,9 +378,14 @@ async def fixture_outlook_main(
     gameweek: int,
     output_bucket: str = "fpl-data-lake-dev",
     prompt_version: str = "v1",
+    force: bool = False,
 ) -> dict[str, Any]:
     """Run fixture outlook enricher. Attaches upcoming fixtures to each player."""
     s3_client = S3Client()
+    if not force and (
+        skipped := _already_enriched(s3_client, output_bucket, "fixture_outlook", season, gameweek)
+    ):
+        return skipped
     players = _load_players(s3_client, output_bucket, season, gameweek)
     fixtures = _load_fixtures(s3_client, output_bucket, season)
     players = _attach_fixtures_to_players(players, fixtures, gameweek)
@@ -372,7 +419,7 @@ def player_summary_handler(event: dict[str, Any], context: Any) -> dict[str, Any
         result = RunHandler(
             main_func=player_summary_main,
             required_main_params=["season", "gameweek"],
-            optional_main_params=["output_bucket", "prompt_version"],
+            optional_main_params=["output_bucket", "prompt_version", "force"],
         ).lambda_executor(lambda_event=event)
     langfuse_flush()
     return result
@@ -390,7 +437,7 @@ def injury_signal_handler(event: dict[str, Any], context: Any) -> dict[str, Any]
         result = RunHandler(
             main_func=injury_signal_main,
             required_main_params=["season", "gameweek"],
-            optional_main_params=["output_bucket", "prompt_version"],
+            optional_main_params=["output_bucket", "prompt_version", "force"],
         ).lambda_executor(lambda_event=event)
     langfuse_flush()
     return result
@@ -408,7 +455,7 @@ def sentiment_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         result = RunHandler(
             main_func=sentiment_main,
             required_main_params=["season", "gameweek"],
-            optional_main_params=["output_bucket", "prompt_version"],
+            optional_main_params=["output_bucket", "prompt_version", "force"],
         ).lambda_executor(lambda_event=event)
     langfuse_flush()
     return result
@@ -429,7 +476,7 @@ def fixture_outlook_handler(event: dict[str, Any], context: Any) -> dict[str, An
         result = RunHandler(
             main_func=fixture_outlook_main,
             required_main_params=["season", "gameweek"],
-            optional_main_params=["output_bucket", "prompt_version"],
+            optional_main_params=["output_bucket", "prompt_version", "force"],
         ).lambda_executor(lambda_event=event)
     langfuse_flush()
     return result
