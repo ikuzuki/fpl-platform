@@ -3,6 +3,11 @@ import { Crown, TrendingUp, Target, Zap } from "lucide-react";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 import type { PlayerDashboard } from "@/lib/types";
+import {
+  computeCandidates,
+  WEIGHTS,
+  type CaptainCandidate,
+} from "@/lib/captain";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { TableSkeleton } from "@/components/ui/skeleton";
@@ -21,24 +26,6 @@ import {
 /*  Captain score types & computation                                  */
 /* ------------------------------------------------------------------ */
 
-interface CaptainCandidate {
-  player: PlayerDashboard;
-  captainScore: number;
-  formNorm: number;
-  xgPerNinetyNorm: number;
-  fixtureNorm: number;
-  pointsNorm: number;
-  ownershipNorm: number;
-}
-
-const WEIGHTS = {
-  form: 0.3,
-  xg: 0.2,
-  fixture: 0.2,
-  points: 0.15,
-  ownership: 0.15,
-} as const;
-
 const FACTOR_COLORS = [
   { key: "formNorm", label: "Form", color: "var(--chart-1)" },
   { key: "xgPerNinetyNorm", label: "xG/90", color: "var(--chart-2)" },
@@ -46,60 +33,6 @@ const FACTOR_COLORS = [
   { key: "pointsNorm", label: "Points", color: "var(--chart-4)" },
   { key: "ownershipNorm", label: "Own%", color: "var(--chart-5)" },
 ] as const;
-
-function minMaxNorm(value: number, min: number, max: number): number {
-  if (max === min) return 50;
-  return ((value - min) / (max - min)) * 100;
-}
-
-function computeCandidates(players: PlayerDashboard[]): CaptainCandidate[] {
-  // Only consider players with meaningful minutes (>= 270 = ~3 full games)
-  const eligible = players.filter(
-    (p) => p.minutes >= 270 && (p.position === "MID" || p.position === "FWD" || p.position === "DEF"),
-  );
-
-  if (eligible.length === 0) return [];
-
-  // Derive raw values
-  const ppgValues = eligible.map((p) => p.points_per_game);
-  const xgPer90Values = eligible.map((p) =>
-    p.xg != null && p.minutes > 0 ? (p.xg / p.minutes) * 90 : 0,
-  );
-  const totalPtsValues = eligible.map((p) => p.total_points);
-
-  const ppgMin = Math.min(...ppgValues);
-  const ppgMax = Math.max(...ppgValues);
-  const xgMin = Math.min(...xgPer90Values);
-  const xgMax = Math.max(...xgPer90Values);
-  const ptsMin = Math.min(...totalPtsValues);
-  const ptsMax = Math.max(...totalPtsValues);
-
-  return eligible.map((p, idx) => {
-    const formNorm = minMaxNorm(p.points_per_game, ppgMin, ppgMax);
-    const xgPerNinetyNorm = minMaxNorm(xgPer90Values[idx], xgMin, xgMax);
-    const fixtureNorm =
-      p.fdr_next_3 != null ? ((5 - p.fdr_next_3) / 4) * 100 : 50;
-    const pointsNorm = minMaxNorm(p.total_points, ptsMin, ptsMax);
-    const ownershipNorm = Math.min(p.ownership_pct, 100);
-
-    const captainScore =
-      formNorm * WEIGHTS.form +
-      xgPerNinetyNorm * WEIGHTS.xg +
-      fixtureNorm * WEIGHTS.fixture +
-      pointsNorm * WEIGHTS.points +
-      ownershipNorm * WEIGHTS.ownership;
-
-    return {
-      player: p,
-      captainScore,
-      formNorm,
-      xgPerNinetyNorm,
-      fixtureNorm,
-      pointsNorm,
-      ownershipNorm,
-    };
-  });
-}
 
 /* ------------------------------------------------------------------ */
 /*  Page component                                                     */
@@ -170,7 +103,16 @@ export function CaptainPage() {
       </div>
 
       {/* Hero — Top Pick */}
-      {topPick && <TopPickHero candidate={topPick} />}
+      {topPick ? (
+        <TopPickHero candidate={topPick} />
+      ) : (
+        <Card>
+          <CardContent className="py-10 text-center text-sm text-[var(--muted-foreground)]">
+            No captain candidates yet — no outfield player has enough minutes to
+            rank on. This fills in once the season is under way.
+          </CardContent>
+        </Card>
+      )}
 
       {/* Decision Matrix Table */}
       {ranges && (
