@@ -376,7 +376,7 @@ async def test_fpl_fetch_403_backoff_fits_inside_the_lambda_timeout() -> None:
     ):
         mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-        await fpl_fetch(f"{FPL_BASE_URL}/bootstrap-static/", max_retries=5)
+        await fpl_fetch(f"{FPL_BASE_URL}/bootstrap-static/", max_retries=5, allow_mirror=False)
 
     assert mock_session.get.await_count == 5
     assert max(waits) <= MAX_BACKOFF_SECONDS

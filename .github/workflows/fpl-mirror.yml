@@ -1,0 +1,51 @@
+# Cloudflare rejects most AWS Lambda egress addresses, so the collectors cannot
+# depend on reaching the FPL API. A GitHub Actions runner reaches it cleanly, so
+# it snapshots the endpoints the pipeline needs into S3 ahead of the 08:00 run,
+# and a blocked Lambda falls back to that snapshot.
+name: Mirror FPL API
+
+on:
+  schedule:
+    - cron: "40 7 * * *"
+  workflow_dispatch:
+    inputs:
+      season:
+        description: "Season identifier, e.g. 2026-27 (defaults to the current date's season)"
+        required: false
+      bucket:
+        description: "Data lake bucket"
+        required: false
+        default: fpl-data-lake-dev
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        run: |
+          uv pip install --system -e ./libs
+          uv pip install --system -e ./services/data
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_CICD_ROLE_ARN }}
+          aws-region: eu-west-2
+
+      - name: Mirror FPL API to S3
+        run: |
+          python scripts/mirror_fpl_api.py \
+            ${{ inputs.season && format('--season {0}', inputs.season) || '' }} \
+            --bucket ${{ inputs.bucket || 'fpl-data-lake-dev' }}
