@@ -25,6 +25,14 @@ OPTIONAL_PARAMS = ["output_bucket", "force"]
 
 SCHEMA_VERSION = "1.0.0"
 
+# The dashboard fetches these straight from the CDN. With no Cache-Control a
+# browser falls back to heuristic freshness, a tenth of the object's age at
+# fetch time, so a file left stale over the summer break gets cached client
+# side for over a week and a reader keeps seeing last season's briefing after
+# the pipeline has published the new one. Always revalidate; the ETag makes
+# that a 304 whenever nothing has changed.
+PUBLIC_CACHE_CONTROL = "no-cache"
+
 
 def _log_advice_gameweek_sanity(
     bootstrap_data: dict[str, Any], gameweek: int, advice_gameweek: int | None
@@ -215,12 +223,14 @@ async def main(
     if is_latest:
         for name, rows in datasets.items():
             json_key = f"public/api/v1/{name}.json"
-            s3_client.put_json(output_bucket, json_key, rows)
+            s3_client.put_json(output_bucket, json_key, rows, cache_control=PUBLIC_CACHE_CONTROL)
             logger.info("Wrote %d rows to %s", len(rows), json_key)
 
         # Write briefing JSON
         briefing_key = "public/api/v1/gameweek_briefing.json"
-        s3_client.put_json(output_bucket, briefing_key, briefing)
+        s3_client.put_json(
+            output_bucket, briefing_key, briefing, cache_control=PUBLIC_CACHE_CONTROL
+        )
         output_paths.append(f"s3://{output_bucket}/{briefing_key}")
         row_counts["gameweek_briefing"] = 1
         logger.info("Wrote briefing to %s", briefing_key)
@@ -239,7 +249,7 @@ async def main(
         season=season,
         gameweek=gameweek,
     )
-    s3_client.put_json(output_bucket, history_key, history_rows)
+    s3_client.put_json(output_bucket, history_key, history_rows, cache_control=PUBLIC_CACHE_CONTROL)
     row_counts["player_history"] = len(history_rows)
     output_paths.append(f"s3://{output_bucket}/{history_key}")
 

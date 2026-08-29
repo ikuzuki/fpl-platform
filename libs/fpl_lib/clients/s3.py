@@ -18,13 +18,30 @@ class S3Client:
     def __init__(self, region: str = "eu-west-2") -> None:
         self._client = boto3.client("s3", region_name=region)
 
-    def put_json(self, bucket: str, key: str, data: dict[str, Any] | list[Any]) -> None:
-        """Write JSON data to S3."""
+    def put_json(
+        self,
+        bucket: str,
+        key: str,
+        data: dict[str, Any] | list[Any],
+        cache_control: str | None = None,
+    ) -> None:
+        """Write JSON data to S3.
+
+        Args:
+            bucket: Target bucket.
+            key: Target key.
+            data: JSON-serialisable payload.
+            cache_control: Cache-Control header to store with the object. Anything
+                a browser fetches needs one, or it falls back to heuristic
+                freshness and can serve a stale copy for days.
+        """
+        extra = {"CacheControl": cache_control} if cache_control else {}
         self._client.put_object(
             Bucket=bucket,
             Key=key,
             Body=json.dumps(data, default=str),
             ContentType="application/json",
+            **extra,
         )
         logger.info("Wrote JSON to s3://%s/%s", bucket, key)
 
