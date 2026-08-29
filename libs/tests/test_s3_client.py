@@ -26,6 +26,26 @@ class TestS3Client:
         assert json.loads(call_kwargs["Body"]) == {"key": "value"}
 
     @patch("fpl_lib.clients.s3.boto3")
+    def test_put_json_omits_cache_control_by_default(self, mock_boto3: MagicMock) -> None:
+        mock_client = MagicMock()
+        mock_boto3.client.return_value = mock_client
+
+        S3Client().put_json("my-bucket", "data/test.json", {"key": "value"})
+
+        assert "CacheControl" not in mock_client.put_object.call_args[1]
+
+    @patch("fpl_lib.clients.s3.boto3")
+    def test_put_json_stores_cache_control_when_given(self, mock_boto3: MagicMock) -> None:
+        mock_client = MagicMock()
+        mock_boto3.client.return_value = mock_client
+
+        S3Client().put_json(
+            "my-bucket", "public/api/v1/x.json", {"key": "value"}, cache_control="no-cache"
+        )
+
+        assert mock_client.put_object.call_args[1]["CacheControl"] == "no-cache"
+
+    @patch("fpl_lib.clients.s3.boto3")
     def test_read_json(self, mock_boto3: MagicMock) -> None:
         mock_client = MagicMock()
         mock_boto3.client.return_value = mock_client
