@@ -200,7 +200,7 @@ module "lambda_sync_embeddings" {
   source             = "../../modules/lambda"
   name               = "sync-embeddings"
   environment        = var.environment
-  image_uri          = "${module.ecr_agent.repository_url}:latest"
+  image_uri          = "${module.ecr_agent_sync.repository_url}:latest"
   execution_role_arn = module.lambda_role.role_arn
   command            = ["fpl_agent.handlers.sync_handler.lambda_handler"]
   # 120 s matches the SyncEmbeddings state timeout in the Step Functions

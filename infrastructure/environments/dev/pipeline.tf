@@ -20,7 +20,10 @@ module "pipeline" {
     lambda_arn_merge_enrichments      = module.lambda_merge_enrichments.function_arn
     lambda_arn_curate_data            = module.lambda_curate_data.function_arn
     lambda_arn_sync_embeddings        = module.lambda_sync_embeddings.function_arn
+    sns_topic_arn_pipeline_alerts     = aws_sns_topic.pipeline_alerts.arn
   })
+
+  sns_topic_arns = [aws_sns_topic.pipeline_alerts.arn]
 
   lambda_arns = [
     module.lambda_resolve_gameweek.function_arn,

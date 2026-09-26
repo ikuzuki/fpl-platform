@@ -16,7 +16,27 @@ COPY services/agent/pyproject.toml services/agent/
 COPY services/agent/src/ services/agent/src/
 RUN pip install --no-cache-dir ./services/agent
 
-# === Runtime Stage ===
+# === Sync Stage (build with --target sync) ===
+# Handler-style image for the embedding-sync Lambda, which Step Functions
+# invokes directly. No Lambda Web Adapter: it would claim the runtime API and
+# wait for a web server that never starts. The embedding model is baked in
+# because the Lambda filesystem is read-only outside /tmp.
+FROM python:3.11-slim-bookworm AS sync
+
+WORKDIR /app
+
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /app/services/agent/src /app/src
+RUN pip install --no-cache-dir awslambdaric
+
+ENV HF_HOME=/opt/hf-cache
+RUN python -c "from fpl_agent.embeddings.embedder import PlayerEmbedder; PlayerEmbedder().embed_text('warm')"
+ENV HF_HUB_OFFLINE=1
+
+ENTRYPOINT ["python", "-m", "awslambdaric"]
+CMD ["fpl_agent.handlers.sync_handler.lambda_handler"]
+
+# === Runtime Stage (API, default target — keep last) ===
 FROM python:3.11-slim-bookworm
 
 WORKDIR /app

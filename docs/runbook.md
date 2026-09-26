@@ -124,6 +124,16 @@ upserts into Neon pgvector. Failure here does **not** fail the pipeline — the
 state machine routes to `PipelineSucceededWithWarning` and the agent continues
 serving the previous gameweek's embeddings until the next run.
 
+The Lambda runs the `sync` target of `services/agent/Dockerfile`, pushed to
+its own ECR repo (`fpl-agent-sync-dev`). It cannot share the API image: that
+image runs uvicorn behind Lambda Web Adapter and has no handler entrypoint, so
+every invocation dies with `Runtime.InvalidEntrypoint`. A failed sync publishes
+to the pipeline alerts topic with the subject "embedding sync failed", because
+the execution itself still ends `SUCCEEDED`.
+
+Each sync deletes rows for players outside the synced gameweek's set, so the
+table always matches one gameweek. Check `players_pruned` in the response.
+
 ### Manually trigger a sync
 
 Invoke the Lambda directly with a `(season, gameweek)` payload:
