@@ -6,7 +6,7 @@ import pyarrow as pa
 import pytest
 
 from fpl_agent.embeddings.embedder import PlayerEmbedder
-from fpl_agent.embeddings.sync_embeddings import sync_embeddings
+from fpl_agent.embeddings.sync_embeddings import PRUNE_QUERY, UPSERT_QUERY, sync_embeddings
 from fpl_lib.clients.neon import NeonClient
 from fpl_lib.clients.s3 import S3Client
 
@@ -76,7 +76,11 @@ def mock_s3_client() -> MagicMock:
 @pytest.fixture
 def mock_neon_client() -> AsyncMock:
     client = AsyncMock(spec=NeonClient)
-    client.execute.return_value = "INSERT 0 1"
+
+    async def _execute(query: str, *args: object) -> str:
+        return "DELETE 2" if query == PRUNE_QUERY else "INSERT 0 1"
+
+    client.execute.side_effect = _execute
     return client
 
 
@@ -127,7 +131,28 @@ async def test_sync_upserts_correct_count(
         season="2025-26",
         gameweek=10,
     )
-    assert mock_neon_client.execute.call_count == 3
+    upserts = [c for c in mock_neon_client.execute.call_args_list if c.args[0] == UPSERT_QUERY]
+    assert len(upserts) == 3
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_sync_prunes_players_outside_synced_set(
+    mock_s3_client: MagicMock,
+    mock_neon_client: AsyncMock,
+    mock_embedder: MagicMock,
+) -> None:
+    result = await sync_embeddings(
+        s3_client=mock_s3_client,
+        neon_client=mock_neon_client,
+        embedder=mock_embedder,
+        bucket="test-bucket",
+        season="2026-27",
+        gameweek=5,
+    )
+    last = mock_neon_client.execute.call_args_list[-1]
+    assert last.args == (PRUNE_QUERY, [1, 2, 3])
+    assert result["players_pruned"] == 2
 
 
 @pytest.mark.unit

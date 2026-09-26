@@ -41,3 +41,9 @@ variable "log_level" {
     error_message = "Must be OFF, ALL, ERROR, or FATAL."
   }
 }
+
+variable "sns_topic_arns" {
+  description = "List of SNS topic ARNs the state machine can publish to"
+  type        = list(string)
+  default     = []
+}

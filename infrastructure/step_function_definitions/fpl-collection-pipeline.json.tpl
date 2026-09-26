@@ -412,7 +412,7 @@
 
     "SyncEmbeddings": {
       "Type": "Task",
-      "Comment": "Refresh Neon pgvector embeddings from curated data. Failure is non-fatal — the pipeline still succeeds (with warning) because the agent will fall back to the previous embeddings.",
+      "Comment": "Refresh Neon pgvector embeddings from curated data. Failure is non-fatal — the pipeline alerts, then succeeds with warning, and the agent serves the previous embeddings.",
       "Resource": "${lambda_arn_sync_embeddings}",
       "Parameters": {
         "season.$": "$.season",
@@ -432,10 +432,30 @@
         {
           "ErrorEquals": ["States.ALL"],
           "ResultPath": "$.embedding_error",
-          "Next": "PipelineSucceededWithWarning"
+          "Next": "NotifyEmbeddingSyncFailed"
         }
       ],
       "Next": "PipelineSucceeded"
+    },
+
+    "NotifyEmbeddingSyncFailed": {
+      "Type": "Task",
+      "Comment": "The execution still ends SUCCEEDED, so the status-change email cannot flag this path.",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "${sns_topic_arn_pipeline_alerts}",
+        "Subject": "FPL pipeline: embedding sync failed",
+        "Message.$": "States.Format('Embedding sync failed for {} GW{}. The agent is serving stale embeddings. Error: {}. Cause: {}', $.season, $.gameweek, $.embedding_error.Error, $.embedding_error.Cause)"
+      },
+      "ResultPath": null,
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": null,
+          "Next": "PipelineSucceededWithWarning"
+        }
+      ],
+      "Next": "PipelineSucceededWithWarning"
     },
 
     "PipelineSucceeded": {

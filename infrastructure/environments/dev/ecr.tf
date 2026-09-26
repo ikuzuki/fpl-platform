@@ -24,3 +24,9 @@ module "ecr_agent" {
   name        = "agent"
   environment = var.environment
 }
+
+module "ecr_agent_sync" {
+  source      = "../../modules/ecr"
+  name        = "agent-sync"
+  environment = var.environment
+}

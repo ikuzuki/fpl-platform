@@ -1,6 +1,9 @@
 """Sync curated player data + enrichments into Neon pgvector.
 
-Reads from S3 curated layer, generates embeddings, upserts into Neon.
+Reads from S3 curated layer, generates embeddings, upserts into Neon, then
+deletes rows for players outside this gameweek's set. The table is keyed on
+``player_id`` alone and the agent's queries do not filter by season, so rows
+left over from an earlier season would otherwise answer alongside current ones.
 Designed to run after each pipeline execution (triggered by Step Functions).
 """
 
@@ -41,6 +44,8 @@ ON CONFLICT (player_id) DO UPDATE SET
     updated_at = NOW()
 """
 
+PRUNE_QUERY = "DELETE FROM player_embeddings WHERE NOT (player_id = ANY($1::int[]))"
+
 
 async def sync_embeddings(
     s3_client: S3Client,
@@ -61,7 +66,7 @@ async def sync_embeddings(
         gameweek: Gameweek number.
 
     Returns:
-        Dict with players_synced, embedding_dim, and duration_seconds.
+        Dict with players_synced, players_pruned, embedding_dim, and duration_seconds.
     """
     start = time.time()
 
@@ -76,6 +81,7 @@ async def sync_embeddings(
         logger.warning("No players found in curated data for %s GW%d", season, gameweek)
         return {
             "players_synced": 0,
+            "players_pruned": 0,
             "embedding_dim": PlayerEmbedder.EMBEDDING_DIM,
             "duration_seconds": 0.0,
         }
@@ -111,11 +117,16 @@ async def sync_embeddings(
         )
         synced += 1
 
+    player_ids = [int(p.get("player_id", 0)) for p in players]
+    status = await neon_client.execute(PRUNE_QUERY, player_ids)
+    pruned = int(status.split()[-1])
+
     duration = round(time.time() - start, 2)
-    logger.info("Synced %d players in %.2fs", synced, duration)
+    logger.info("Synced %d players, pruned %d, in %.2fs", synced, pruned, duration)
 
     return {
         "players_synced": synced,
+        "players_pruned": pruned,
         "embedding_dim": PlayerEmbedder.EMBEDDING_DIM,
         "duration_seconds": duration,
     }

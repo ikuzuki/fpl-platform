@@ -49,6 +49,23 @@ resource "aws_iam_role_policy" "step_function_lambda" {
   })
 }
 
+resource "aws_iam_role_policy" "step_function_sns" {
+  count = length(var.sns_topic_arns) > 0 ? 1 : 0
+  name  = "${var.project}-${var.environment}-${var.name}-sns-publish"
+  role  = aws_iam_role.step_function.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["sns:Publish"]
+        Resource = var.sns_topic_arns
+      }
+    ]
+  })
+}
+
 resource "aws_iam_role_policy" "step_function_logs" {
   name = "${var.project}-${var.environment}-${var.name}-logs"
   role = aws_iam_role.step_function.id

@@ -63,12 +63,18 @@ jobs:
           terraform apply -auto-approve
 
   build-and-deploy:
-    needs: detect-changes
+    # Waits on terraform-apply so a newly declared ECR repo exists before the push.
+    needs: [detect-changes, terraform-apply]
     if: |
-      needs.detect-changes.outputs.data == 'true' ||
-      needs.detect-changes.outputs.enrich == 'true' ||
-      needs.detect-changes.outputs.curate == 'true' ||
-      needs.detect-changes.outputs.agent == 'true'
+      !cancelled() &&
+      needs.detect-changes.result == 'success' &&
+      needs.terraform-apply.result != 'failure' &&
+      (
+        needs.detect-changes.outputs.data == 'true' ||
+        needs.detect-changes.outputs.enrich == 'true' ||
+        needs.detect-changes.outputs.curate == 'true' ||
+        needs.detect-changes.outputs.agent == 'true'
+      )
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -85,6 +91,10 @@ jobs:
             changed: ${{ needs.detect-changes.outputs.curate }}
           - name: agent
             changed: ${{ needs.detect-changes.outputs.agent }}
+          - name: agent-sync
+            changed: ${{ needs.detect-changes.outputs.agent }}
+            dockerfile: services/agent/Dockerfile
+            target: sync
     steps:
       - uses: actions/checkout@v4
         if: matrix.changed == 'true'
@@ -109,9 +119,10 @@ jobs:
         run: |
           docker build \
             --build-arg SERVICE=${{ matrix.name }} \
+            ${{ matrix.target && format('--target {0}', matrix.target) || '' }} \
             -t $ECR_REGISTRY/fpl-${{ matrix.name }}-dev:$IMAGE_TAG \
             -t $ECR_REGISTRY/fpl-${{ matrix.name }}-dev:latest \
-            -f services/${{ matrix.name }}/Dockerfile .
+            -f ${{ matrix.dockerfile || format('services/{0}/Dockerfile', matrix.name) }} .
           docker push $ECR_REGISTRY/fpl-${{ matrix.name }}-dev:$IMAGE_TAG
           docker push $ECR_REGISTRY/fpl-${{ matrix.name }}-dev:latest
 
