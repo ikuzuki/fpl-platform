@@ -53,7 +53,7 @@ graph TB
     GRAPH ==SSE frames==> FAST ==> CF_AGENT ==> CLIENT
 ```
 
-The double-line return path is the SSE stream: the same HTTP response that started at the browser carries `step` and `result` frames back through every layer without buffering.
+The double-line return path is the SSE stream: the same HTTP response that started at the browser carries `step`, `report_delta` (the report's analysis text as it is written) and `result` frames back through every layer without buffering.
 
 For the full annotated diagram see [frontend-backend-wiring.drawio](frontend-backend-wiring.drawio).
 

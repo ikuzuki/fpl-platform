@@ -135,6 +135,25 @@ describe("streamChat", () => {
     expect(events.map((e) => e.type)).toEqual(["step", "result"]);
   });
 
+  it("yields report_delta events with their text", async () => {
+    const frames = [
+      "event: report_delta\r\ndata: {\"text\":\"Salah is \"}\r\n\r\n",
+      "event: report_delta\r\ndata: {\"text\":\"in form.\"}\r\n\r\n",
+    ];
+    vi.spyOn(window, "fetch").mockResolvedValue(
+      new Response(sseStreamFromFrames(frames), { status: 200 }),
+    );
+
+    const events: AgentEvent[] = [];
+    for await (const e of streamChat({ question: "q" })) {
+      events.push(e);
+    }
+    expect(events).toEqual([
+      { type: "report_delta", text: "Salah is " },
+      { type: "report_delta", text: "in form." },
+    ]);
+  });
+
   it("flushes a trailing frame that closes without a blank line", async () => {
     // Some proxies cut the connection the moment the server yields the last
     // event, dropping the final `\n\n`. Without a trailing-buffer flush the

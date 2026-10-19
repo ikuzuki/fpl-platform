@@ -90,22 +90,28 @@ def _mock_graph_for_happy_path() -> MagicMock:
         "error": None,
     }
 
-    async def fake_astream(_input, stream_mode: str = "updates"):
+    async def fake_astream(_input, stream_mode: Any = "updates"):
         # Emit one update per node, like LangGraph would.
-        yield {
-            "planner": {
-                "llm_usage": [final_state["llm_usage"][0]],
-                "tool_calls_made": ["query_player"],
-            }
-        }
-        yield {"tool_executor": {"gathered_data": {}}}
-        yield {"reflector": {"should_continue": False, "iteration_count": 1}}
-        yield {
-            "recommender": {
-                "final_response": final_state["final_response"],
-                "llm_usage": [final_state["llm_usage"][1]],
-            }
-        }
+        yield (
+            "updates",
+            {
+                "planner": {
+                    "llm_usage": [final_state["llm_usage"][0]],
+                    "tool_calls_made": ["query_player"],
+                }
+            },
+        )
+        yield "updates", {"tool_executor": {"gathered_data": {}}}
+        yield "updates", {"reflector": {"should_continue": False, "iteration_count": 1}}
+        yield (
+            "updates",
+            {
+                "recommender": {
+                    "final_response": final_state["final_response"],
+                    "llm_usage": [final_state["llm_usage"][1]],
+                }
+            },
+        )
 
     graph = MagicMock()
     graph.ainvoke = AsyncMock(return_value=final_state)
@@ -244,8 +250,8 @@ def test_rate_limit_returns_429_with_retry_after(fake_budget: _FakeBudget) -> No
 def test_chat_stream_error_event_on_graph_failure(fake_budget: _FakeBudget) -> None:
     """If the graph raises mid-stream, SSE should emit an ``error`` event."""
 
-    async def failing_astream(_input, stream_mode: str = "updates"):
-        yield {"planner": {"llm_usage": []}}
+    async def failing_astream(_input, stream_mode: Any = "updates"):
+        yield "updates", {"planner": {"llm_usage": []}}
         raise RuntimeError("boom")
 
     graph = MagicMock()
@@ -320,15 +326,16 @@ def test_chat_request_rejects_malformed_conversation_id(client: TestClient) -> N
 
 
 def test_latency_ms_offsets_from_request_start() -> None:
-    assert _latency_ms(10.0, 10.25, 12.5, 14.0) == {
+    assert _latency_ms(10.0, 10.25, 12.5, 12.75, 14.0) == {
         "time_to_first_event_ms": 250,
         "time_to_first_report_token_ms": 2500,
+        "time_to_first_report_text_ms": 2750,
         "total_ms": 4000,
     }
 
 
 def test_latency_ms_leaves_missing_stamps_as_none() -> None:
-    latency = _latency_ms(10.0, None, None, 10.5)
+    latency = _latency_ms(10.0, None, None, None, 10.5)
     assert latency["time_to_first_event_ms"] is None
     assert latency["time_to_first_report_token_ms"] is None
     assert latency["total_ms"] == 500
@@ -339,22 +346,27 @@ def test_chat_stream_logs_latency_from_request_start(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """First event, first report token and total are measured from the dependency stamp."""
+    """Report text is relayed, and every latency is measured from the dependency stamp."""
 
-    async def timed_astream(_input, stream_mode: str = "updates"):
-        yield {"planner": {"llm_usage": []}}
-        yield {
-            "recommender": {
-                "final_response": _scout_report_fixture(),
-                "llm_usage": [],
-                "recommender_first_token_at": 103.0,
-            }
-        }
+    async def timed_astream(_input, stream_mode: Any = "updates"):
+        yield "updates", {"planner": {"llm_usage": []}}
+        yield "custom", {"report_delta": "Salah is "}
+        yield "custom", {"report_delta": "in form."}
+        yield (
+            "updates",
+            {
+                "recommender": {
+                    "final_response": _scout_report_fixture(),
+                    "llm_usage": [],
+                    "recommender_first_token_at": 103.0,
+                }
+            },
+        )
 
     graph = MagicMock()
     graph.astream = timed_astream
-    # perf_counter in api.py: first event, then finish.
-    clock = iter([101.0, 105.5])
+    # perf_counter in api.py: first event, first report text, then finish.
+    clock = iter([101.0, 104.0, 105.5])
     monkeypatch.setattr("fpl_agent.api.time", SimpleNamespace(perf_counter=lambda: next(clock)))
 
     app.dependency_overrides[get_graph] = lambda: graph
@@ -367,9 +379,17 @@ def test_chat_stream_logs_latency_from_request_start(
             TestClient(app) as tc,
             tc.stream("POST", "/chat", json={"question": "hi"}) as resp,
         ):
-            list(resp.iter_lines())
+            body = "\n".join(resp.iter_lines())
     finally:
         app.dependency_overrides.clear()
+
+    deltas = [
+        json.loads(line.removeprefix("data:").strip())["text"]
+        for line in body.split("\n")
+        if line.startswith("data:") and '"text"' in line
+    ]
+    assert "".join(deltas) == "Salah is in form."
+    assert body.index("event: report_delta") < body.index("event: result")
 
     lines = [r.getMessage() for r in caplog.records if r.getMessage().startswith("chat_latency")]
     assert len(lines) == 1
@@ -377,6 +397,7 @@ def test_chat_stream_logs_latency_from_request_start(
         "outcome": "result",
         "time_to_first_event_ms": 1000,
         "time_to_first_report_token_ms": 3000,
+        "time_to_first_report_text_ms": 4000,
         "total_ms": 5500,
     }
 

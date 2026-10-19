@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Agent + dashboard: the report's analysis streams to the browser as it is written.** The recommender node parses the model's partial JSON as it arrives (`jiter`) and emits each new piece of `analysis` through LangGraph's custom stream mode; `/chat` relays it as `report_delta` SSE events and the chat panel renders a draft until the full report card replaces it. The report schema sent to the model no longer includes `question` (the node fills it in), so `analysis` is the first thing written; the recommender prompt moves to `prompts/v3/` for that one-line change. New `time_to_first_report_text_ms` metric in the `chat_latency` log line, the Langfuse scores and `latency_report.py`. In five local runs the analysis appeared within 0.6 s of the model's first token and a median 4.7 s before the full report.
+
+### Fixed
+- **Agent: reports on Sonnet 5.5 showed `£` instead of `£`.** Its structured output double-escapes some non-ASCII characters (6 of 36 eval cases); the recommender now decodes literal `\uXXXX` sequences in report strings and in the streamed draft.
+
 ### Changed
 - **Agent: Haiku 5.5 for the planner and reflector, Sonnet 5.5 for the recommender.** Each node's model can be overridden by env var (`AGENT_PLANNER_MODEL`, `AGENT_REFLECTOR_MODEL`, `AGENT_RECOMMENDER_MODEL`). Sonnet 5.5 rejects a forced `tool_choice`, and with a strict tool schema it returned the nested `comparison` as a truncated JSON string, so the recommender asks it for the report through structured outputs (`output_config.format`) with thinking off (`between_tools`); models that allow it keep the forced tool call. Budget rates added for both models. Compared over five full eval runs: 43% cheaper per run ($0.96 against $1.70), median local request 13.5 s against 22.4 s, judge score held; hard-check pass rates are within run-to-run noise. New-model failures and the comparison in [`docs/evals/baseline.md`](docs/evals/baseline.md#model-comparison--haiku-55-and-sonnet-55) and the ADR-0009 revision.
 

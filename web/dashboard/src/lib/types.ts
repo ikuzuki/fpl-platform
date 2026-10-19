@@ -241,6 +241,7 @@ export interface AgentResponse {
 // covers every case the backend emits (see services/agent/src/fpl_agent/api.py).
 export type AgentEvent =
   | { type: "step"; node: string }
+  | { type: "report_delta"; text: string }
   | { type: "result"; payload: AgentResponse }
   | { type: "error"; message: string };
 

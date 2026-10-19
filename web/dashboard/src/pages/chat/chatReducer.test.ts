@@ -40,6 +40,19 @@ describe("chatReducer", () => {
     expect(next.pendingId).toBe("a1");
   });
 
+  it("REPORT_DELTA accumulates the draft on the in-flight assistant message", () => {
+    let state = chatReducer(initialChatState, {
+      type: "USER_SENT",
+      userId: "u1",
+      assistantId: "a1",
+      text: "q",
+    });
+    state = chatReducer(state, { type: "REPORT_DELTA", text: "Salah is " });
+    state = chatReducer(state, { type: "REPORT_DELTA", text: "in form." });
+
+    expect(state.messages[1]).toMatchObject({ draft: "Salah is in form." });
+  });
+
   it("STEP appends node names to the in-flight assistant message only", () => {
     let state = chatReducer(initialChatState, {
       type: "USER_SENT",
