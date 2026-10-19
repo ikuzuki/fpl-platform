@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -98,6 +99,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     Langfuse is best-effort by design — ``init_langfuse`` swallows its own
     failures so tracing outages never block the request path.
     """
+    # uvicorn configures only its own loggers; without this the app's INFO
+    # lines (``llm_usage``, ``chat_latency``) never reach CloudWatch.
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     resolve_secret_to_env(ENVIRONMENT, "anthropic-api-key", "ANTHROPIC_API_KEY")
     try:
         resolve_secret_to_env(ENVIRONMENT, "neon-database-url", NEON_DATABASE_URL_ENV)
@@ -410,6 +414,49 @@ def _emit_quality_scores(final_state: dict[str, Any]) -> None:
         logger.debug("failed to emit quality scores to Langfuse", exc_info=True)
 
 
+def request_started_at() -> float:
+    """Dependency stamping the request start.
+
+    Declared first on ``/chat`` so FastAPI resolves it before the budget and
+    rate-limit checks, which then count towards the measured latency.
+    """
+    return time.perf_counter()
+
+
+def _latency_ms(
+    started_at: float,
+    first_event_at: float | None,
+    first_token_at: float | None,
+    finished_at: float,
+) -> dict[str, int | None]:
+    """Turn ``perf_counter`` stamps into millisecond offsets from request start."""
+
+    def offset(at: float | None) -> int | None:
+        return None if at is None else round((at - started_at) * 1000)
+
+    return {
+        "time_to_first_event_ms": offset(first_event_at),
+        "time_to_first_report_token_ms": offset(first_token_at),
+        "total_ms": offset(finished_at),
+    }
+
+
+def _emit_latency(latency: dict[str, int | None], outcome: str) -> None:
+    """Log the chat latencies as one JSON line and score them on the Langfuse trace.
+
+    The log line is what production reads today (Langfuse tracing is off on the
+    deployed Lambda); the scores light up wherever tracing is on.
+    """
+    logger.info("chat_latency %s", json.dumps({"outcome": outcome, **latency}))
+    try:
+        langfuse = Langfuse()
+        for name, value in latency.items():
+            if value is not None:
+                langfuse.score_current_trace(name=name, value=float(value))
+    except Exception:  # noqa: BLE001
+        logger.debug("failed to emit latency scores to Langfuse", exc_info=True)
+
+
 def _trace_tags() -> list[str]:
     """Tags applied to every agent trace. Kept here so changes are one edit."""
     return ["agent", ENVIRONMENT]
@@ -462,9 +509,9 @@ async def chat_sync(
 
 
 @app.post("/chat")
-@observe(name="agent_chat_request")
 async def chat_stream(
     req: ChatRequest,
+    started_at: float = Depends(request_started_at),
     budget: BudgetTracker = Depends(check_budget),
     _rl: None = Depends(check_rate_limit),
     graph: Any = Depends(get_graph),
@@ -479,10 +526,12 @@ async def chat_stream(
     1:1 onto an SSE step event without needing to re-derive which node
     just ran.
 
-    The ``propagate_attributes`` context must live inside the generator —
-    not around ``EventSourceResponse(...)`` — because the generator runs
-    async after the handler returns, and contextvars don't propagate
-    across the boundary unless they're entered in the generator frame.
+    The ``agent_chat_request`` span and the ``propagate_attributes`` context
+    must live inside the generator — not on the handler or around
+    ``EventSourceResponse(...)`` — because the generator runs after the
+    handler returns. A span opened on the handler closes before any node
+    runs, leaving each node as its own root trace and the trace scores with
+    no active span to attach to.
 
     Note: we do not explicitly flush Langfuse here. ``flush()`` on Langfuse
     4.x unconditionally blocks on ``_score_ingestion_queue.join()`` with no
@@ -495,11 +544,15 @@ async def chat_stream(
 
     async def event_generator() -> AsyncIterator[dict[str, str]]:
         final_state: dict[str, Any] = dict(initial_state(req.question, req.squad))
-        with propagate_attributes(
-            session_id=x_session_id or "anon",
-            user_id="anon",
-            tags=_trace_tags(),
-            metadata=_chat_trace_metadata(req, "sse"),
+        first_event_at: float | None = None
+        with (
+            Langfuse().start_as_current_observation(name="agent_chat_request"),
+            propagate_attributes(
+                session_id=x_session_id or "anon",
+                user_id="anon",
+                tags=_trace_tags(),
+                metadata=_chat_trace_metadata(req, "sse"),
+            ),
         ):
             try:
                 async for update in graph.astream(
@@ -512,9 +565,20 @@ async def chat_stream(
                         # the same work LangGraph does internally — doing it
                         # here avoids a second ``ainvoke`` call.
                         _merge_partial(final_state, partial)
+                        if first_event_at is None:
+                            first_event_at = time.perf_counter()
                         yield _sse("step", {"node": node_name})
             except Exception as exc:  # noqa: BLE001
                 logger.exception("agent stream failed")
+                _emit_latency(
+                    _latency_ms(
+                        started_at,
+                        first_event_at,
+                        final_state.get("recommender_first_token_at"),
+                        time.perf_counter(),
+                    ),
+                    "error",
+                )
                 yield _sse("error", {"message": str(exc)})
                 return
 
@@ -524,7 +588,17 @@ async def chat_stream(
             except Exception:  # noqa: BLE001 — budget write failures must not kill the response
                 logger.exception("failed to record usage after graph run")
 
-            yield _sse("result", _agent_response(final_state).model_dump(mode="json"))
+            result = _agent_response(final_state).model_dump(mode="json")
+            _emit_latency(
+                _latency_ms(
+                    started_at,
+                    first_event_at,
+                    final_state.get("recommender_first_token_at"),
+                    time.perf_counter(),
+                ),
+                "result",
+            )
+            yield _sse("result", result)
 
     return EventSourceResponse(event_generator())
 

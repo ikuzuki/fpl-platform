@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -40,10 +40,33 @@ def _tool_use_response(tool_name: str, input_payload: dict[str, Any]) -> MagicMo
     return response
 
 
+def _mock_stream(response: MagicMock) -> MagicMock:
+    """Stand-in for ``client.messages.stream``: one delta event, then ``response``."""
+
+    class _Stream:
+        async def __aenter__(self) -> _Stream:
+            return self
+
+        async def __aexit__(self, *exc: object) -> None:
+            return None
+
+        def __aiter__(self) -> Any:
+            async def events() -> Any:
+                yield MagicMock(type="content_block_delta")
+
+            return events()
+
+        async def get_final_message(self) -> MagicMock:
+            return response
+
+    return MagicMock(side_effect=lambda **_: _Stream())
+
+
 def _mock_client(response: MagicMock) -> MagicMock:
     client = MagicMock()
     client.messages = MagicMock()
     client.messages.create = AsyncMock(return_value=response)
+    client.messages.stream = _mock_stream(response)
     return client
 
 
@@ -278,6 +301,23 @@ async def test_recommender_produces_valid_scout_report() -> None:
     report = update["final_response"]
     assert report.question == "Is Salah worth it?"
     assert report.players[0].player_name == "Salah"
+
+
+@pytest.mark.asyncio
+async def test_recommender_records_first_token_time() -> None:
+    response = _tool_use_response("record_scout_report", _valid_scout_report_payload())
+    client = _mock_client(response)
+    clock = iter([10.0, 10.75])
+
+    with (
+        patch.object(nodes.time, "perf_counter", side_effect=lambda: next(clock)),
+        patch.object(nodes, "record_llm_usage") as record,
+    ):
+        update = await recommender_node(initial_state("Is Salah worth it?"), client=client)
+
+    assert update["recommender_first_token_at"] == 10.75
+    assert record.call_args.kwargs["metadata"]["time_to_first_token_ms"] == 750
+    client.messages.create.assert_not_awaited()
 
 
 @pytest.mark.asyncio

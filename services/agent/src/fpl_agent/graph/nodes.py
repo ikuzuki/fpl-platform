@@ -26,6 +26,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from functools import lru_cache
 from importlib.resources import files
 from typing import Any
@@ -438,18 +439,34 @@ async def recommender_node(
         user_squad_block=_render_squad_for_recommender(state.get("user_squad")),
     )
 
-    response = await client.messages.create(
+    # Streamed only to time the first token; the report is still read from the
+    # final message, so callers see the same response as a non-streamed call.
+    call_started_at = time.perf_counter()
+    first_token_at: float | None = None
+    async with client.messages.stream(
         model=RECOMMENDER_MODEL,
         max_tokens=RECOMMENDER_MAX_TOKENS,
         tools=[_SCOUT_REPORT_TOOL],
         tool_choice={"type": "tool", "name": "record_scout_report"},
         messages=[{"role": "user", "content": prompt}],
-    )
+    ) as stream:
+        async for event in stream:
+            if first_token_at is None and event.type == "content_block_delta":
+                first_token_at = time.perf_counter()
+        response = await stream.get_final_message()
+
     usage = _record_usage(
         "recommender",
         RECOMMENDER_MODEL,
         response,
-        extra_metadata={"iteration": state.get("iteration_count", 0)},
+        extra_metadata={
+            "iteration": state.get("iteration_count", 0),
+            "time_to_first_token_ms": (
+                round((first_token_at - call_started_at) * 1000)
+                if first_token_at is not None
+                else None
+            ),
+        },
     )
 
     try:
@@ -459,7 +476,11 @@ async def recommender_node(
         logger.exception("recommender produced an invalid ScoutReport")
         return {"error": f"recommender failed: {exc}", "llm_usage": [usage]}
 
-    return {"final_response": report, "llm_usage": [usage]}
+    return {
+        "final_response": report,
+        "llm_usage": [usage],
+        "recommender_first_token_at": first_token_at,
+    }
 
 
 # ----------------------------------------------------------------------------
