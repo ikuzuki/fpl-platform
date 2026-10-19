@@ -27,6 +27,7 @@ overwriting the committed parquet.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -34,6 +35,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from fpl_agent.evaluation.eval_cases import SummaryInjection
 from fpl_agent.models.responses import SquadPick, UserSquad
 
 logger = logging.getLogger(__name__)
@@ -214,6 +216,22 @@ class PlayerFixture:
     def player_count(self) -> int:
         """Number of rows in the snapshot."""
         return len(self.df)
+
+    def with_summary_injections(self, injections: Sequence[SummaryInjection]) -> PlayerFixture:
+        """Return a copy with each injection's text appended to the named player's summary.
+
+        Raises:
+            ValueError: if an injection names a ``web_name`` not in the fixture.
+        """
+        df = self.df.copy()
+        for injection in injections:
+            mask = df["web_name"] == injection.web_name
+            if not mask.any():
+                raise ValueError(
+                    f"summary injection target {injection.web_name!r} not found in fixture."
+                )
+            df.loc[mask, "summary"] = df.loc[mask, "summary"].astype(str) + " " + injection.text
+        return PlayerFixture(df=df, embeddings=self.embeddings)
 
 
 def _row(
