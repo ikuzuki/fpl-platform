@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Docs: production latency after the model upgrade and report streaming.** Ten requests through CloudFront (CloudWatch): time until report text is on screen 25.6 s → 6.8 s at p50, full report 25.6 s → 11.3 s. Recorded in `docs/architecture/agent-architecture.md`. Cold starts still overran Lambda's 10 s init limit twice in the same run.
+
+### Added
 - **Agent + dashboard: the report's analysis streams to the browser as it is written.** The recommender node parses the model's partial JSON as it arrives (`jiter`) and emits each new piece of `analysis` through LangGraph's custom stream mode; `/chat` relays it as `report_delta` SSE events and the chat panel renders a draft until the full report card replaces it. The report schema sent to the model no longer includes `question` (the node fills it in), so `analysis` is the first thing written; the recommender prompt moves to `prompts/v3/` for that one-line change. New `time_to_first_report_text_ms` metric in the `chat_latency` log line, the Langfuse scores and `latency_report.py`. In five local runs the analysis appeared within 0.6 s of the model's first token and a median 4.7 s before the full report.
 
 ### Fixed

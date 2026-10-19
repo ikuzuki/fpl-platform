@@ -189,6 +189,17 @@ Every streamed `/chat` request records four latencies, all in milliseconds from 
 
 Production numbers from ten requests through CloudFront on Haiku 4.5 + Sonnet 4.6, before report streaming (CloudWatch, n=10), were close to the local ones: p50/p95 of 1.2 s / 2.0 s to the first event, 7.0 s / 10.0 s to the first report token, and 25.6 s / 33.2 s in total.
 
+The same ten questions after the move to Haiku 5.5 + Sonnet 5.5 and report streaming (CloudWatch, n=10):
+
+| Metric | Before, p50 / p95 | After, p50 / p95 |
+|---|---|---|
+| First event | 1.2 s / 2.0 s | 1.0 s / 2.2 s |
+| First report token | 7.0 s / 10.0 s | 6.4 s / 18.1 s |
+| First report text on screen | 25.6 s / 33.2 s (the full report) | 6.8 s / 18.2 s |
+| Full report | 25.6 s / 33.2 s | 11.3 s / 25.4 s |
+
+The wait before anything of the report is visible fell by about three quarters at the median, from both changes together: the faster model roughly halved generation time, and streaming puts the analysis on screen as it is written. With ten requests the p95 is set by the slowest one or two: client-side, `Should I buy Salah?` took 23.7 s to its first text.
+
 The clock starts when FastAPI handles the request, so a cold start is invisible to all three metrics. In that run the first two requests hit cold containers whose init overran Lambda's 10 s init limit (`INIT_REPORT ... Status: timeout`) and was retried; the first request returned 504 from CloudFront at 30 s while its own `chat_latency` line recorded a 19 s run. Cold starts have to be read from the `INIT_REPORT` lines or measured from the client.
 
 Each request writes the three values twice: as one `chat_latency {json}` INFO log line, and as numeric scores of the same names on the Langfuse trace. Langfuse tracing is switched off on the deployed Lambda (`LANGFUSE_TRACING_ENABLED = "false"`, see ADR-0005), so in production the log line is the source. `python services/agent/scripts/latency_report.py --hours 24` prints p50/p95 from CloudWatch; `--source langfuse` reads the scores instead. `/chat/sync` is not measured.
