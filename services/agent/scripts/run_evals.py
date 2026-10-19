@@ -179,7 +179,8 @@ def render_summary(summary: EvalSummary, console: Console) -> None:
     )
     console.print(
         f"[bold]Hard-check pass rate:[/bold] {summary.hard_check_passed}/{summary.total} "
-        f"({pass_pct:.1f}%) · [bold]Mean judge:[/bold] {judge_str}"
+        f"({pass_pct:.1f}%) · [bold]Mean judge:[/bold] {judge_str} · "
+        f"[bold]Agent cost:[/bold] ${summary.total_cost_usd:.2f}"
     )
 
     # Per-case table - only show essential columns to keep it scannable.

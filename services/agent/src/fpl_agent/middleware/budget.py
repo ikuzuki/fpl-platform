@@ -39,6 +39,9 @@ logger = logging.getLogger(__name__)
 _MODEL_RATES: dict[str, tuple[float, float]] = {
     "claude-haiku-4-5": (1.0, 5.0),
     "claude-sonnet-4-6": (3.0, 15.0),
+    # Haiku 5.5's rate for prompts up to 100K tokens; agent prompts stay far below.
+    "claude-haiku-5-5": (0.10, 0.50),
+    "claude-sonnet-5-5": (2.0, 10.0),
 }
 _FALLBACK_RATE = (3.0, 15.0)  # assume Sonnet rates for unknown models — cautious
 

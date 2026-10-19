@@ -31,12 +31,13 @@ from functools import lru_cache
 from importlib.resources import files
 from typing import Any
 
-from anthropic import AsyncAnthropic
+from anthropic import AsyncAnthropic, transform_schema
 from pydantic import TypeAdapter, ValidationError
 
 from fpl_agent.conversation_store import render_history
 from fpl_agent.graph.config import (
     MAX_ITERATIONS,
+    NO_FORCED_TOOL_CHOICE,
     PLANNER_MAX_TOKENS,
     PLANNER_MODEL,
     RECOMMENDER_MAX_TOKENS,
@@ -120,6 +121,44 @@ def _extract_tool_input(response: Any, expected_name: str) -> dict[str, Any]:
         if getattr(block, "type", None) == "tool_use" and block.name == expected_name:
             return dict(block.input)
     raise ToolError(f"Anthropic response did not contain a '{expected_name}' tool_use block")
+
+
+def _recommender_call_kwargs(model: str) -> dict[str, Any]:
+    """Tool and thinking settings for the recommender call on ``model``."""
+    if model in NO_FORCED_TOOL_CHOICE:
+        strict_tool = {
+            **_SCOUT_REPORT_TOOL,
+            "input_schema": transform_schema(_SCOUT_REPORT_TOOL["input_schema"]),
+            "strict": True,
+        }
+        # ``between_tools`` is Sonnet 5.5's thinking-off setting, matching the
+        # earlier models this call ran on without thinking.
+        return {
+            "tools": [strict_tool],
+            "tool_choice": {"type": "auto"},
+            "thinking": {"type": "between_tools"},
+        }
+    return {
+        "tools": [_SCOUT_REPORT_TOOL],
+        "tool_choice": {"type": "tool", "name": "record_scout_report"},
+    }
+
+
+def _decode_stringified_fields(raw: dict[str, Any]) -> dict[str, Any]:
+    """Decode ``players`` / ``comparison`` when the model sent them as JSON strings.
+
+    Seen from Claude Sonnet 5.5 despite a strict schema; decoding keeps the
+    report rather than failing the request.
+    """
+    for key in ("players", "comparison"):
+        value = raw.get(key)
+        if isinstance(value, str):
+            try:
+                raw[key] = json.loads(value)
+            except json.JSONDecodeError:
+                continue
+            logger.warning("recommender sent %s as a JSON string; decoded it", key)
+    return raw
 
 
 def _record_usage(
@@ -450,12 +489,15 @@ async def recommender_node(
     async with client.messages.stream(
         model=RECOMMENDER_MODEL,
         max_tokens=RECOMMENDER_MAX_TOKENS,
-        tools=[_SCOUT_REPORT_TOOL],
-        tool_choice={"type": "tool", "name": "record_scout_report"},
         messages=[{"role": "user", "content": prompt}],
+        **_recommender_call_kwargs(RECOMMENDER_MODEL),
     ) as stream:
         async for event in stream:
-            if first_token_at is None and event.type == "content_block_delta":
+            if (
+                first_token_at is None
+                and event.type == "content_block_delta"
+                and event.delta.type == "input_json_delta"
+            ):
                 first_token_at = time.perf_counter()
         response = await stream.get_final_message()
 
@@ -474,7 +516,7 @@ async def recommender_node(
     )
 
     try:
-        raw = _extract_tool_input(response, "record_scout_report")
+        raw = _decode_stringified_fields(_extract_tool_input(response, "record_scout_report"))
         report = ScoutReport.model_validate(raw)
     except (ValidationError, ToolError) as exc:
         logger.exception("recommender produced an invalid ScoutReport")

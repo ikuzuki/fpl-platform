@@ -727,6 +727,61 @@ def test_judge_question_lists_prior_turns_before_the_graded_one() -> None:
 
 
 @pytest.mark.asyncio
+async def test_evaluator_fails_a_run_that_ended_in_error_even_if_checks_pass(
+    synthetic_fixture: PlayerFixture,
+) -> None:
+    case = get_case_by_id("vague-best-player")
+    graph = AsyncMock()
+    graph.ainvoke = AsyncMock(
+        return_value={
+            "final_response": _saka_report(caveats=["Error."]),
+            "tool_calls_made": ["query_players_by_criteria"],
+            "iteration_count": 2,
+            "error": "planner failed: invalid plan",
+        }
+    )
+
+    result = await AgentEvaluator(graph=graph, fixture=synthetic_fixture).run_case(case)
+
+    failed = [hc.check_name for hc in result.hard_checks if not hc.passed]
+    assert failed == ["no_run_error"]
+    assert not result.passed
+
+
+@pytest.mark.asyncio
+async def test_evaluator_records_agent_cost_including_prior_turns(
+    synthetic_fixture: PlayerFixture,
+) -> None:
+    usage = [
+        {
+            "node": "recommender",
+            "model": "claude-sonnet-4-6",
+            "input_tokens": 1_000_000,
+            "output_tokens": 0,
+        }
+    ]
+    graph = AsyncMock()
+    graph.ainvoke = AsyncMock(
+        side_effect=[
+            {"final_response": _saka_report(), "error": None, "llm_usage": usage},
+            {
+                "final_response": _saka_report(),
+                "error": None,
+                "llm_usage": usage,
+                "tool_calls_made": [],
+            },
+        ]
+    )
+
+    summary = await AgentEvaluator(graph=graph, fixture=synthetic_fixture).run_all(
+        [get_case_by_id("multiturn-pronoun-fixtures")]
+    )
+
+    assert summary.results[0].cost_usd == 6.0
+    assert summary.total_cost_usd == 6.0
+
+
+@pytest.mark.asyncio
 async def test_evaluator_requires_graph_factory_for_summary_injection_cases(
     synthetic_fixture: PlayerFixture,
 ) -> None:

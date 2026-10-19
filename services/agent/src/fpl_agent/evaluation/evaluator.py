@@ -23,6 +23,7 @@ Hard checks run synchronously against the agent's :class:`ScoutReport`:
   except the echoed ``question``. Case-insensitive substring.
 * ``must_not_recommend`` — none of the names appear in ``recommendation``,
   ``players[]`` or ``comparison``. Word-boundary match.
+* ``no_run_error`` — the run did not end with ``state["error"]`` set.
 
 Cases with ``summary_injections`` run against a graph built over a patched
 copy of the fixture, via the ``graph_factory`` the caller supplies.
@@ -43,6 +44,7 @@ import logging
 import re
 import time
 from collections.abc import Awaitable, Callable, Iterator, Sequence
+from typing import Any
 
 from langgraph.graph.state import CompiledStateGraph
 
@@ -56,6 +58,7 @@ from fpl_agent.evaluation.models import (
     HardCheckResult,
     JudgeVerdict,
 )
+from fpl_agent.middleware.budget import cost_usd
 from fpl_agent.models.conversation import Turn
 from fpl_agent.models.responses import ScoutReport, UserSquad
 from fpl_agent.models.state import initial_state
@@ -159,6 +162,20 @@ def _check_must_not_recommend(case: EvalCase, report: ScoutReport) -> HardCheckR
         reason=f"None of {len(case.must_not_recommend)} forbidden player(s) recommended.",
         details={"forbidden": list(case.must_not_recommend)},
     )
+
+
+def _check_no_run_error(error: str | None) -> HardCheckResult:
+    if error:
+        return HardCheckResult(
+            check_name="no_run_error",
+            passed=False,
+            reason=f"Run ended with an error: {error}",
+        )
+    return HardCheckResult(check_name="no_run_error", passed=True, reason="Run completed.")
+
+
+def _usage_cost(usage: list[dict[str, Any]]) -> float:
+    return sum(cost_usd(u["input_tokens"], u["output_tokens"], u["model"]) for u in usage)
 
 
 def _check_expected_tools(case: EvalCase, tool_calls_made: list[str]) -> HardCheckResult:
@@ -358,8 +375,12 @@ class AgentEvaluator:
         case: EvalCase,
         report: ScoutReport,
         tool_calls_made: list[str],
+        error: str | None = None,
     ) -> list[HardCheckResult]:
         """Run every hard check on a single agent response.
+
+        ``error`` is the graph's ``state["error"]``; a run that ended in an
+        error fails regardless of what the error report happens to contain.
 
         Returns a list of :class:`HardCheckResult` in deterministic order so
         downstream summary rendering is stable.
@@ -373,6 +394,7 @@ class AgentEvaluator:
             _check_min_caveats(case, report),
             _check_must_not_contain(case, report),
             _check_must_not_recommend(case, report),
+            _check_no_run_error(error),
         ]
 
     # -- Single case ---------------------------------------------------------
@@ -402,8 +424,10 @@ class AgentEvaluator:
             # Earlier turns run for real so the graded turn sees the agent's own
             # answers, remembered the same way the API remembers them.
             history: list[Turn] = []
+            usage: list[dict[str, Any]] = []
             for prior in case.prior_turns:
                 prior_state = await graph.ainvoke(initial_state(prior, squad, history))
+                usage.extend(prior_state.get("llm_usage") or [])
                 prior_report = prior_state.get("final_response")
                 if prior_state.get("error") or not isinstance(prior_report, ScoutReport):
                     raise RuntimeError(
@@ -411,6 +435,7 @@ class AgentEvaluator:
                     )
                 history = append_turn(history, Turn.from_report(prior, prior_report))
             state = await graph.ainvoke(initial_state(case.question, squad, history))
+            usage.extend(state.get("llm_usage") or [])
         except Exception as exc:  # noqa: BLE001 — capture and continue
             elapsed = time.perf_counter() - start
             logger.exception("Case %s raised during graph invocation", case.id)
@@ -458,9 +483,10 @@ class AgentEvaluator:
                 iterations_used=iterations_used,
                 error=state_error,
                 duration_seconds=elapsed,
+                cost_usd=round(_usage_cost(usage), 6),
             )
 
-        hard_checks = self.check_hard(case, report, tool_calls_made)
+        hard_checks = self.check_hard(case, report, tool_calls_made, state_error)
         passed = all(hc.passed for hc in hard_checks)
 
         verdict: JudgeVerdict | None = None
@@ -491,6 +517,7 @@ class AgentEvaluator:
             iterations_used=iterations_used,
             error=state_error,
             duration_seconds=elapsed,
+            cost_usd=round(_usage_cost(usage), 6),
         )
 
     # -- All cases -----------------------------------------------------------
@@ -555,6 +582,7 @@ class AgentEvaluator:
             by_difficulty=by_difficulty,
             snapshot_version=self._snapshot_version,
             eval_cases_version=EVAL_CASES_VERSION,
+            total_cost_usd=round(sum(r.cost_usd for r in results), 4),
         )
 
 
