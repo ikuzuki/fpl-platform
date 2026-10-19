@@ -166,6 +166,22 @@ Each LLM node logs `input_tokens` + `output_tokens` at INFO level for CloudWatch
 
 Runtime Langfuse client init (env vars, session IDs, cost attribution) lands in PR #93. PR #91 only placed the decorators.
 
+On the streamed `POST /chat` path the `agent_chat_request` span is opened inside the SSE generator, not by a decorator on the handler. The handler returns the `EventSourceResponse` before the graph runs, so a span opened there would close first, leaving every node as its own root trace and the trace scores with nothing to attach to.
+
+### Chat latency
+
+Every streamed `/chat` request records three latencies, all in milliseconds from the moment FastAPI starts resolving the request (before the budget and rate-limit checks):
+
+| Metric | What the user sees at that moment |
+|---|---|
+| `time_to_first_event_ms` | The first step pill ticks. The first SSE event is sent when the planner finishes, so this is mostly one Haiku call plus the budget check. |
+| `time_to_first_report_token_ms` | Nothing yet. The recommender (Sonnet) has started writing the report, but the report is a forced tool call whose JSON is not streamed to the browser, so the user is still watching the pills. This is the model's first token, measured by streaming the recommender call internally. |
+| `total_ms` | The report appears. Measured when the `result` event is handed to the stream, after the budget write. |
+
+The gap between the last two is the recommender generating the whole report, and it is most of the wait: in six local runs against dev Neon and the live Anthropic API (laptop, warm process, no Lambda or CloudFront), p50/p95 were 1.1 s / 2.2 s to the first event, 7.0 s / 9.6 s to the first report token, and 23.7 s / 33.9 s in total. Streaming the report's text to the browser as it is written would be the change that moves perceived latency; it is not built. The recommender's own time to first token (from its call starting) is also attached to its generation span as `time_to_first_token_ms`.
+
+Each request writes the three values twice: as one `chat_latency {json}` INFO log line, and as numeric scores of the same names on the Langfuse trace. Langfuse tracing is switched off on the deployed Lambda (`LANGFUSE_TRACING_ENABLED = "false"`, see ADR-0005), so in production the log line is the source. `python services/agent/scripts/latency_report.py --hours 24` prints p50/p95 from CloudWatch; `--source langfuse` reads the scores instead. `/chat/sync` is not measured.
+
 ## Failure Handling
 
 | Failure | Handling |

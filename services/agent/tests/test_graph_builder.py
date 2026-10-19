@@ -24,6 +24,28 @@ def _tool_use_response(tool_name: str, input_payload: dict[str, Any]) -> MagicMo
     return response
 
 
+def _mock_stream(response: MagicMock) -> MagicMock:
+    """Stand-in for ``client.messages.stream``: one delta event, then ``response``."""
+
+    class _Stream:
+        async def __aenter__(self) -> _Stream:
+            return self
+
+        async def __aexit__(self, *exc: object) -> None:
+            return None
+
+        def __aiter__(self) -> Any:
+            async def events() -> Any:
+                yield MagicMock(type="content_block_delta")
+
+            return events()
+
+        async def get_final_message(self) -> MagicMock:
+            return response
+
+    return MagicMock(side_effect=lambda **_: _Stream())
+
+
 def _valid_report() -> dict[str, Any]:
     return {
         "question": "Is Salah worth it?",
@@ -73,9 +95,8 @@ async def test_graph_invoke_end_to_end_with_mocks() -> None:
 
     client = MagicMock()
     client.messages = MagicMock()
-    client.messages.create = AsyncMock(
-        side_effect=[planner_response, reflector_response, recommender_response]
-    )
+    client.messages.create = AsyncMock(side_effect=[planner_response, reflector_response])
+    client.messages.stream = _mock_stream(recommender_response)
 
     async def fake_query_player(**_: Any) -> dict[str, Any]:
         return {"web_name": "Salah", "total_points": 180}
@@ -88,8 +109,10 @@ async def test_graph_invoke_end_to_end_with_mocks() -> None:
     assert final_state["final_response"].recommendation == "Keep Salah."
     assert final_state["gathered_data"]["query_player(name=Salah)"]["web_name"] == "Salah"
     assert "query_player" in final_state["tool_calls_made"]
-    # 3 LLM calls: planner, reflector, recommender
-    assert client.messages.create.await_count == 3
+    # planner + reflector via create, recommender via stream
+    assert client.messages.create.await_count == 2
+    assert client.messages.stream.call_count == 1
+    assert final_state["recommender_first_token_at"] is not None
 
 
 @pytest.mark.asyncio
@@ -116,8 +139,9 @@ async def test_graph_loops_when_reflector_says_continue() -> None:
     client = MagicMock()
     client.messages = MagicMock()
     client.messages.create = AsyncMock(
-        side_effect=[plan_call_1, reflect_continue, plan_call_2, reflect_done, recommend]
+        side_effect=[plan_call_1, reflect_continue, plan_call_2, reflect_done]
     )
+    client.messages.stream = _mock_stream(recommend)
 
     async def fake_query_player(**_: Any) -> dict[str, Any]:
         return {"web_name": "Salah"}
@@ -136,5 +160,6 @@ async def test_graph_loops_when_reflector_says_continue() -> None:
         "get_fixture_outlook(player_name=Salah)",
     }
     assert final_state["tool_calls_made"] == ["query_player", "get_fixture_outlook"]
-    # 5 LLM calls: planner x2, reflector x2, recommender x1
-    assert client.messages.create.await_count == 5
+    # planner x2 + reflector x2 via create, recommender x1 via stream
+    assert client.messages.create.await_count == 4
+    assert client.messages.stream.call_count == 1

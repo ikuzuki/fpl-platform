@@ -9,6 +9,8 @@ Neon / DynamoDB / Anthropic calls.
 from __future__ import annotations
 
 import json
+import logging
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -17,12 +19,14 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from fpl_agent.api import (
+    _latency_ms,
     app,
     check_budget,
     check_rate_limit,
     get_budget,
     get_graph,
     get_neon,
+    request_started_at,
 )
 from fpl_agent.models.responses import ScoutReport, SquadPick, UserSquad
 
@@ -260,6 +264,68 @@ def test_chat_stream_error_event_on_graph_failure(fake_budget: _FakeBudget) -> N
 
     assert "event: error" in events
     assert "boom" in events
+
+
+def test_latency_ms_offsets_from_request_start() -> None:
+    assert _latency_ms(10.0, 10.25, 12.5, 14.0) == {
+        "time_to_first_event_ms": 250,
+        "time_to_first_report_token_ms": 2500,
+        "total_ms": 4000,
+    }
+
+
+def test_latency_ms_leaves_missing_stamps_as_none() -> None:
+    latency = _latency_ms(10.0, None, None, 10.5)
+    assert latency["time_to_first_event_ms"] is None
+    assert latency["time_to_first_report_token_ms"] is None
+    assert latency["total_ms"] == 500
+
+
+def test_chat_stream_logs_latency_from_request_start(
+    fake_budget: _FakeBudget,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """First event, first report token and total are measured from the dependency stamp."""
+
+    async def timed_astream(_input, stream_mode: str = "updates"):
+        yield {"planner": {"llm_usage": []}}
+        yield {
+            "recommender": {
+                "final_response": _scout_report_fixture(),
+                "llm_usage": [],
+                "recommender_first_token_at": 103.0,
+            }
+        }
+
+    graph = MagicMock()
+    graph.astream = timed_astream
+    # perf_counter in api.py: first event, then finish.
+    clock = iter([101.0, 105.5])
+    monkeypatch.setattr("fpl_agent.api.time", SimpleNamespace(perf_counter=lambda: next(clock)))
+
+    app.dependency_overrides[get_graph] = lambda: graph
+    app.dependency_overrides[check_budget] = lambda: fake_budget
+    app.dependency_overrides[check_rate_limit] = lambda: None
+    app.dependency_overrides[request_started_at] = lambda: 100.0
+    try:
+        with (
+            caplog.at_level(logging.INFO, logger="fpl_agent.api"),
+            TestClient(app) as tc,
+            tc.stream("POST", "/chat", json={"question": "hi"}) as resp,
+        ):
+            list(resp.iter_lines())
+    finally:
+        app.dependency_overrides.clear()
+
+    lines = [r.getMessage() for r in caplog.records if r.getMessage().startswith("chat_latency")]
+    assert len(lines) == 1
+    assert json.loads(lines[0].removeprefix("chat_latency ")) == {
+        "outcome": "result",
+        "time_to_first_event_ms": 1000,
+        "time_to_first_report_token_ms": 3000,
+        "total_ms": 5500,
+    }
 
 
 def test_budget_endpoint_returns_snapshot(client: TestClient) -> None:

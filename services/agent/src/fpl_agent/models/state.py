@@ -77,6 +77,9 @@ class AgentState(TypedDict, total=False):
     should_continue: bool
     final_response: Any  # ScoutReport; typed ``Any`` to avoid a circular import
     error: str | None
+    # ``time.perf_counter()`` value when the recommender's first token arrived;
+    # the API turns it into a latency relative to request start.
+    recommender_first_token_at: float | None
 
 
 def initial_state(question: str, squad: UserSquad | None = None) -> AgentState:
@@ -102,4 +105,5 @@ def initial_state(question: str, squad: UserSquad | None = None) -> AgentState:
         "should_continue": False,
         "final_response": None,
         "error": None,
+        "recommender_first_token_at": None,
     }
