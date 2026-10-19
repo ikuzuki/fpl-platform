@@ -58,7 +58,7 @@ from fpl_lib.observability import (
     observe,
     propagate_attributes,
 )
-from fpl_lib.secrets import resolve_secret_to_env
+from fpl_lib.secrets import resolve_secrets_to_env
 from fpl_lib.utils.date_utils import current_season
 
 logger = logging.getLogger(__name__)
@@ -109,21 +109,35 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # uvicorn configures only its own loggers; without this the app's INFO
     # lines (``llm_usage``, ``chat_latency``) never reach CloudWatch.
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
-    resolve_secret_to_env(ENVIRONMENT, "anthropic-api-key", "ANTHROPIC_API_KEY")
+    # One batched SSM round trip for all three parameters. A failed call is
+    # fatal only while the Anthropic key is still unset.
     try:
-        resolve_secret_to_env(ENVIRONMENT, "neon-database-url", NEON_DATABASE_URL_ENV)
+        missing = resolve_secrets_to_env(
+            ENVIRONMENT,
+            {
+                "anthropic-api-key": "ANTHROPIC_API_KEY",
+                "neon-database-url": NEON_DATABASE_URL_ENV,
+                "cloudfront-agent-secret": CLOUDFRONT_SECRET_ENV,
+            },
+        )
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Neon secret fetch failed, chat/team will return 503: %s", exc)
+        if not os.environ.get("ANTHROPIC_API_KEY"):
+            raise
+        logger.warning("SSM fetch failed, Neon and CloudFront secret unavailable: %s", exc)
+        missing = [
+            var for var in (NEON_DATABASE_URL_ENV, CLOUDFRONT_SECRET_ENV) if not os.environ.get(var)
+        ]
+    if "ANTHROPIC_API_KEY" in missing:
+        raise RuntimeError("SSM parameter anthropic-api-key not found")
+    if NEON_DATABASE_URL_ENV in missing:
+        logger.warning("Neon parameter unavailable, chat/team will return 503")
     # CloudFront-injected shared-secret header — ADR-0010 revision. Missing
     # secret is tolerated for local dev / tests; production deployments set
     # it via Terraform. The middleware no-ops when the env var is unset.
-    try:
-        resolve_secret_to_env(ENVIRONMENT, "cloudfront-agent-secret", CLOUDFRONT_SECRET_ENV)
-    except Exception as exc:  # noqa: BLE001
+    if CLOUDFRONT_SECRET_ENV in missing:
         logger.warning(
-            "CloudFront shared-secret fetch failed — agent Function URL is publicly "
-            "reachable without the header check: %s",
-            exc,
+            "CloudFront shared-secret parameter unavailable — agent Function URL is publicly "
+            "reachable without the header check"
         )
     init_langfuse(environment=ENVIRONMENT)
 

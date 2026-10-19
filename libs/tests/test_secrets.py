@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from fpl_lib.secrets import resolve_secret_to_env
+from fpl_lib.secrets import resolve_secret_to_env, resolve_secrets_to_env
 
 
 @pytest.fixture(autouse=True)
@@ -94,3 +94,39 @@ def test_decrypts_securestring_parameters() -> None:
 
     _, kwargs = mock_client.get_parameter.call_args
     assert kwargs["WithDecryption"] is True
+
+
+@pytest.mark.unit
+def test_batch_fetches_pending_parameters_in_one_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Vars already set are skipped; the rest go in one ``GetParameters`` call."""
+    monkeypatch.setenv("SET_ALREADY", "local")
+    monkeypatch.delenv("BATCH_A", raising=False)
+    monkeypatch.delenv("BATCH_B", raising=False)
+    mock_client = MagicMock()
+    mock_client.get_parameters.return_value = {
+        "Parameters": [{"Name": "/fpl-platform/dev/a", "Value": "va"}],
+        "InvalidParameters": ["/fpl-platform/dev/b"],
+    }
+
+    with patch("fpl_lib.secrets.boto3.client", return_value=mock_client):
+        missing = resolve_secrets_to_env(
+            "dev", {"a": "BATCH_A", "b": "BATCH_B", "c": "SET_ALREADY"}
+        )
+
+    mock_client.get_parameters.assert_called_once_with(
+        Names=["/fpl-platform/dev/a", "/fpl-platform/dev/b"], WithDecryption=True
+    )
+    assert os.environ["BATCH_A"] == "va"
+    assert os.environ["SET_ALREADY"] == "local"
+    assert missing == ["BATCH_B"]
+
+
+@pytest.mark.unit
+def test_batch_is_noop_when_all_vars_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MY_SECRET", "local")
+
+    with patch("fpl_lib.secrets.boto3.client") as mock_ctor:
+        missing = resolve_secrets_to_env("dev", {"anthropic-api-key": "MY_SECRET"})
+
+    assert missing == []
+    mock_ctor.assert_not_called()

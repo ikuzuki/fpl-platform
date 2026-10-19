@@ -16,13 +16,18 @@ dependencies = [
     "uvicorn[standard]>=0.30.0",
     "sse-starlette>=2.0.0",
     "jiter>=0.5.0",
-    "sentence-transformers>=2.0.0",
     "asyncpg>=0.29.0",
     "pgvector>=0.2.0",
 ]
 
 [project.optional-dependencies]
+# Only the embedding-sync Lambda loads the model; keeping it out of the base
+# install keeps torch out of the serving image.
+sync = [
+    "sentence-transformers>=2.0.0",
+]
 dev = [
+    "sentence-transformers>=2.0.0",
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     "pytest-mock>=3.10.0",

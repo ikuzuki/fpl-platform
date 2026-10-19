@@ -76,6 +76,16 @@ class TestInitLangfuse:
         assert "LANGFUSE_PUBLIC_KEY" not in os.environ
 
     @pytest.mark.unit
+    def test_skips_ssm_when_tracing_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("LANGFUSE_TRACING_ENABLED", "false")
+
+        with patch("fpl_lib.secrets.boto3.client") as mock_boto:
+            result = init_langfuse(environment="dev")
+
+        assert result is False
+        mock_boto.assert_not_called()
+
+    @pytest.mark.unit
     def test_respects_secret_prefix_and_environment(self) -> None:
         mock_client = MagicMock()
         mock_client.get_parameter.return_value = {"Parameter": {"Value": "x"}}

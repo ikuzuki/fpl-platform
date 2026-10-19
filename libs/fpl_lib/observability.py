@@ -90,8 +90,11 @@ def init_langfuse(
     exception propagate the way required-secret callers do.
 
     Idempotent: a second call with the env vars already set is a cheap
-    string check. Safe to call on every Lambda invocation.
+    string check. Safe to call on every Lambda invocation. Returns ``False``
+    without contacting AWS when tracing is disabled.
     """
+    if not _tracing_enabled():
+        return False
     try:
         resolve_secret_to_env(
             environment,

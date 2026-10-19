@@ -16,6 +16,12 @@ COPY services/agent/pyproject.toml services/agent/
 COPY services/agent/src/ services/agent/src/
 RUN pip install --no-cache-dir ./services/agent
 
+# === Sync Build Stage ===
+# sentence-transformers (and torch) only go into the sync image.
+FROM builder AS sync-builder
+
+RUN pip install --no-cache-dir "./services/agent[sync]"
+
 # === Sync Stage (build with --target sync) ===
 # Handler-style image for the embedding-sync Lambda, which Step Functions
 # invokes directly. No Lambda Web Adapter: it would claim the runtime API and
@@ -25,8 +31,8 @@ FROM python:3.11-slim-bookworm AS sync
 
 WORKDIR /app
 
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /app/services/agent/src /app/src
+COPY --from=sync-builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=sync-builder /app/services/agent/src /app/src
 RUN pip install --no-cache-dir awslambdaric
 
 ENV HF_HOME=/opt/hf-cache
