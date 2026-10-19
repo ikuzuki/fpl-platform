@@ -79,6 +79,8 @@ export function ChatPanel({ squad, compact = false }: ChatPanelProps) {
       for await (const event of stream) {
         if (event.type === "step") {
           dispatch({ type: "STEP", node: event.node });
+        } else if (event.type === "report_delta") {
+          dispatch({ type: "REPORT_DELTA", text: event.text });
         } else if (event.type === "result") {
           settled = true;
           dispatch({ type: "RESULT", payload: event.payload });
@@ -330,6 +332,11 @@ function MessageView({
               )}
             </div>
           </CardContent>
+        </Card>
+      )}
+      {!message.response && message.status === "streaming" && message.draft && (
+        <Card>
+          <CardContent className="py-3 text-sm leading-relaxed">{message.draft}</CardContent>
         </Card>
       )}
       {message.response && (

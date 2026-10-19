@@ -54,7 +54,8 @@ def _mock_stream(response: MagicMock) -> MagicMock:
         def __aiter__(self) -> Any:
             async def events() -> Any:
                 yield MagicMock(
-                    type="content_block_delta", delta=MagicMock(type="input_json_delta")
+                    type="content_block_delta",
+                    delta=MagicMock(type="input_json_delta", partial_json=""),
                 )
 
             return events()
@@ -334,6 +335,36 @@ async def test_recommender_reads_a_structured_output_text_report() -> None:
     update = await recommender_node(initial_state("Is Salah worth it?"), client=client)
 
     assert update["final_response"].players[0].player_name == "Salah"
+
+
+def test_analysis_streamer_emits_only_new_analysis_text() -> None:
+    sent: list[str] = []
+    streamer = nodes._AnalysisStreamer(lambda payload: sent.append(payload["report_delta"]))
+
+    for chunk in ['{"analy', 'sis": "Salah ', "has 180", ' points.", "players": [', "{}]}"]:
+        streamer.feed(chunk)
+
+    assert "".join(sent) == "Salah has 180 points."
+    assert sent[0] == "Salah "
+
+
+def test_unescape_unicode_fixes_double_escaped_characters_in_nested_strings() -> None:
+    report = {"analysis": r"Saka costs £9.8m", "players": [{"verdict": r"£10m"}]}
+
+    assert nodes._unescape_unicode(report) == {
+        "analysis": "Saka costs £9.8m",
+        "players": [{"verdict": "£10m"}],
+    }
+
+
+def test_analysis_streamer_holds_back_an_escape_split_across_chunks() -> None:
+    sent: list[str] = []
+    streamer = nodes._AnalysisStreamer(lambda payload: sent.append(payload["report_delta"]))
+
+    for chunk in ['{"analysis": "Costs ', "\\\\u00", 'a39.8m."}']:
+        streamer.feed(chunk)
+
+    assert "".join(sent) == "Costs £9.8m."
 
 
 def test_recommender_forces_the_tool_on_models_that_allow_it() -> None:

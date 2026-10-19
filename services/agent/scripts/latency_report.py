@@ -1,7 +1,6 @@
 """p50 / p95 of the ``/chat`` latency metrics over a recent window.
 
-Two sources, same three metrics (``time_to_first_event_ms``,
-``time_to_first_report_token_ms``, ``total_ms``):
+Two sources, same metrics (:data:`METRICS`):
 
 * ``cloudwatch`` (default) — the ``chat_latency`` JSON log line the agent
   Lambda writes on every streamed request. Works while Langfuse tracing is
@@ -30,7 +29,12 @@ import httpx
 
 from fpl_lib.observability import init_langfuse
 
-METRICS = ("time_to_first_event_ms", "time_to_first_report_token_ms", "total_ms")
+METRICS = (
+    "time_to_first_event_ms",
+    "time_to_first_report_token_ms",
+    "time_to_first_report_text_ms",
+    "total_ms",
+)
 _LOG_MARKER = "chat_latency "
 
 

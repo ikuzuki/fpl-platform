@@ -176,17 +176,18 @@ On the streamed `POST /chat` path the `agent_chat_request` span is opened inside
 
 ### Chat latency
 
-Every streamed `/chat` request records three latencies, all in milliseconds from the moment FastAPI starts resolving the request (before the budget and rate-limit checks):
+Every streamed `/chat` request records four latencies, all in milliseconds from the moment FastAPI starts resolving the request (before the budget and rate-limit checks):
 
 | Metric | What the user sees at that moment |
 |---|---|
 | `time_to_first_event_ms` | The first step pill ticks. The first SSE event is sent when the planner finishes, so this is mostly one Haiku call plus the budget check. |
-| `time_to_first_report_token_ms` | Nothing yet. The recommender (Sonnet) has started writing the report, but the report is a forced tool call whose JSON is not streamed to the browser, so the user is still watching the pills. This is the model's first token, measured by streaming the recommender call internally. |
-| `total_ms` | The report appears. Measured when the `result` event is handed to the stream, after the budget write. |
+| `time_to_first_report_token_ms` | Still the pills. The recommender has produced its first output token, measured by streaming the recommender call internally. |
+| `time_to_first_report_text_ms` | The report's analysis starts appearing. The recommender node parses the model's partial JSON as it streams (`jiter`, trailing-strings mode) and emits each new piece of `analysis` through LangGraph's custom stream; the API relays it as `report_delta` SSE events and the dashboard renders it as a draft. |
+| `total_ms` | The full report card replaces the draft. Measured when the `result` event is handed to the stream, after the budget and memory writes. |
 
-The gap between the last two is the recommender generating the whole report, and it is most of the wait: in six local runs against dev Neon and the live Anthropic API (laptop, warm process, no Lambda or CloudFront), p50/p95 were 1.1 s / 2.2 s to the first event, 7.0 s / 9.6 s to the first report token, and 23.7 s / 33.9 s in total. Streaming the report's text to the browser as it is written would be the change that moves perceived latency; it is not built. The recommender's own time to first token (from its call starting) is also attached to its generation span as `time_to_first_token_ms`.
+`analysis` is the first field the model writes: the report schema sent to the model leaves out `question`, which the node fills in, so no output tokens go on echoing the question. In five local runs on Haiku 5.5 + Sonnet 5.5 the analysis text appeared within 0.6 s of the first token, and 3.4–7.9 s before the full report (median 4.7 s, a third of the wait). Before report streaming, on Haiku 4.5 + Sonnet 4.6, the same wait was dominated by generation after the first token: in six local runs p50/p95 were 7.0 s / 9.6 s to the first report token and 23.7 s / 33.9 s in total, with nothing on screen in between. The recommender's own time to first token (from its call starting) is also attached to its generation span as `time_to_first_token_ms`.
 
-Production numbers from ten requests through CloudFront after deploy (CloudWatch, n=10) were close to the local ones: p50/p95 of 1.2 s / 2.0 s to the first event, 7.0 s / 10.0 s to the first report token, and 25.6 s / 33.2 s in total.
+Production numbers from ten requests through CloudFront on Haiku 4.5 + Sonnet 4.6, before report streaming (CloudWatch, n=10), were close to the local ones: p50/p95 of 1.2 s / 2.0 s to the first event, 7.0 s / 10.0 s to the first report token, and 25.6 s / 33.2 s in total.
 
 The clock starts when FastAPI handles the request, so a cold start is invisible to all three metrics. In that run the first two requests hit cold containers whose init overran Lambda's 10 s init limit (`INIT_REPORT ... Status: timeout`) and was retried; the first request returned 504 from CloudFront at 30 s while its own `chat_latency` line recorded a 19 s run. Cold starts have to be read from the `INIT_REPORT` lines or measured from the client.
 

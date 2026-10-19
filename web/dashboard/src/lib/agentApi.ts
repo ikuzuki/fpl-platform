@@ -165,6 +165,9 @@ function parseFrame(frame: string): AgentEvent | null {
     if (eventName === "step") {
       return { type: "step", node: String(parsed.node ?? "") };
     }
+    if (eventName === "report_delta") {
+      return { type: "report_delta", text: String(parsed.text ?? "") };
+    }
     if (eventName === "result") {
       return { type: "result", payload: parsed as AgentResponse };
     }

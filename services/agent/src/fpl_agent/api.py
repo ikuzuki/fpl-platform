@@ -464,6 +464,7 @@ def _latency_ms(
     started_at: float,
     first_event_at: float | None,
     first_token_at: float | None,
+    first_text_at: float | None,
     finished_at: float,
 ) -> dict[str, int | None]:
     """Turn ``perf_counter`` stamps into millisecond offsets from request start."""
@@ -474,6 +475,7 @@ def _latency_ms(
     return {
         "time_to_first_event_ms": offset(first_event_at),
         "time_to_first_report_token_ms": offset(first_token_at),
+        "time_to_first_report_text_ms": offset(first_text_at),
         "total_ms": offset(finished_at),
     }
 
@@ -587,6 +589,7 @@ async def chat_stream(
         history = await _load_history(store, req)
         final_state: dict[str, Any] = dict(initial_state(req.question, req.squad, history))
         first_event_at: float | None = None
+        first_text_at: float | None = None
         with (
             Langfuse().start_as_current_observation(name="agent_chat_request"),
             propagate_attributes(
@@ -597,9 +600,18 @@ async def chat_stream(
             ),
         ):
             try:
-                async for update in graph.astream(
-                    initial_state(req.question, req.squad, history), stream_mode="updates"
+                async for mode, update in graph.astream(
+                    initial_state(req.question, req.squad, history),
+                    stream_mode=["updates", "custom"],
                 ):
+                    if mode == "custom":
+                        # The recommender's report text as it is written.
+                        if first_event_at is None:
+                            first_event_at = time.perf_counter()
+                        if first_text_at is None:
+                            first_text_at = time.perf_counter()
+                        yield _sse("report_delta", {"text": update["report_delta"]})
+                        continue
                     # update is {node_name: partial_dict}; typically one key per tick.
                     for node_name, partial in update.items():
                         # Re-apply the partial to our shadow state so we have
@@ -617,6 +629,7 @@ async def chat_stream(
                         started_at,
                         first_event_at,
                         final_state.get("recommender_first_token_at"),
+                        first_text_at,
                         time.perf_counter(),
                     ),
                     "error",
@@ -637,6 +650,7 @@ async def chat_stream(
                     started_at,
                     first_event_at,
                     final_state.get("recommender_first_token_at"),
+                    first_text_at,
                     time.perf_counter(),
                 ),
                 "result",

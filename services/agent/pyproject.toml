@@ -15,6 +15,7 @@ dependencies = [
     "fastapi>=0.110.0",
     "uvicorn[standard]>=0.30.0",
     "sse-starlette>=2.0.0",
+    "jiter>=0.5.0",
     "sentence-transformers>=2.0.0",
     "asyncpg>=0.29.0",
     "pgvector>=0.2.0",
@@ -47,5 +48,6 @@ where = ["src"]
 fpl_agent = [
     "graph/prompts/v1/*.md",
     "graph/prompts/v2/*.md",
+    "graph/prompts/v3/*.md",
     "evaluation/prompts/v1/*.md",
 ]

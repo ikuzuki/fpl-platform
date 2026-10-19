@@ -16,6 +16,7 @@ export interface AssistantMessage {
   role: "assistant";
   status: AssistantStatus;
   steps: string[]; // node names in order received
+  draft: string; // report analysis streamed so far, replaced by the final report
   response: AgentResponse | null;
   error: string | null;
 }
@@ -37,6 +38,7 @@ export const initialChatState: ChatState = {
 export type ChatAction =
   | { type: "USER_SENT"; userId: string; assistantId: string; text: string }
   | { type: "STEP"; node: string }
+  | { type: "REPORT_DELTA"; text: string }
   | { type: "RESULT"; payload: AgentResponse }
   | { type: "ERROR"; message: string }
   | { type: "RESET" };
@@ -54,6 +56,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         role: "assistant",
         status: "streaming",
         steps: [],
+        draft: "",
         response: null,
         error: null,
       };
@@ -68,6 +71,15 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         messages: state.messages.map((m) =>
           m.id === state.pendingId && m.role === "assistant"
             ? { ...m, steps: [...m.steps, action.node] }
+            : m,
+        ),
+      };
+    case "REPORT_DELTA":
+      return {
+        ...state,
+        messages: state.messages.map((m) =>
+          m.id === state.pendingId && m.role === "assistant"
+            ? { ...m, draft: m.draft + action.text }
             : m,
         ),
       };

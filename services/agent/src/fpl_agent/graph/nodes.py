@@ -26,12 +26,16 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
+from collections.abc import Callable
 from functools import lru_cache
 from importlib.resources import files
 from typing import Any
 
+import jiter
 from anthropic import AsyncAnthropic, transform_schema
+from langgraph.config import get_stream_writer
 from pydantic import TypeAdapter, ValidationError
 
 from fpl_agent.conversation_store import render_history
@@ -67,7 +71,7 @@ def _load_prompt(name: str) -> str:
 
     Cached because prompts don't change between calls within a Lambda's life.
     """
-    return (files("fpl_agent.graph.prompts.v2") / f"{name}.md").read_text(encoding="utf-8")
+    return (files("fpl_agent.graph.prompts.v3") / f"{name}.md").read_text(encoding="utf-8")
 
 
 # ----------------------------------------------------------------------------
@@ -99,10 +103,25 @@ _REFLECTION_TOOL = {
     "input_schema": ReflectionResult.model_json_schema(),
 }
 
+
+def _report_draft_schema() -> dict[str, Any]:
+    """``ScoutReport``'s schema without ``question``, which the node fills in.
+
+    Echoing the question would make the model spend its first output tokens
+    repeating it before any analysis reaches the user.
+    """
+    schema = ScoutReport.model_json_schema()
+    del schema["properties"]["question"]
+    schema["required"] = [f for f in schema["required"] if f != "question"]
+    return schema
+
+
+_REPORT_DRAFT_SCHEMA = _report_draft_schema()
+
 _SCOUT_REPORT_TOOL = {
     "name": "record_scout_report",
     "description": "Record the final scout report answering the user's question.",
-    "input_schema": ScoutReport.model_json_schema(),
+    "input_schema": _REPORT_DRAFT_SCHEMA,
 }
 
 
@@ -134,7 +153,7 @@ def _recommender_call_kwargs(model: str) -> dict[str, Any]:
             "output_config": {
                 "format": {
                     "type": "json_schema",
-                    "schema": transform_schema(ScoutReport.model_json_schema()),
+                    "schema": transform_schema(_REPORT_DRAFT_SCHEMA),
                 }
             },
             "thinking": {"type": "between_tools"},
@@ -143,6 +162,61 @@ def _recommender_call_kwargs(model: str) -> dict[str, Any]:
         "tools": [_SCOUT_REPORT_TOOL],
         "tool_choice": {"type": "tool", "name": "record_scout_report"},
     }
+
+
+def _stream_writer() -> Callable[[Any], None]:
+    """LangGraph's custom-stream writer, or a no-op when called outside a graph run."""
+    try:
+        return get_stream_writer()
+    except RuntimeError:
+        return lambda _: None
+
+
+class _AnalysisStreamer:
+    """Emit the report's ``analysis`` text as it arrives in the model's partial JSON.
+
+    Each new piece goes to the LangGraph stream writer as
+    ``{"report_delta": text}``; the API relays it to the browser.
+    """
+
+    def __init__(self, write: Callable[[Any], None]) -> None:
+        self._write = write
+        self._buffer = ""
+        self._sent = 0
+
+    def feed(self, chunk: str) -> None:
+        self._buffer += chunk
+        try:
+            partial = jiter.from_json(self._buffer.encode(), partial_mode="trailing-strings")
+        except ValueError:
+            return
+        text = partial.get("analysis") if isinstance(partial, dict) else None
+        if not isinstance(text, str):
+            return
+        # Hold back a trailing escape that isn't complete yet.
+        text = _PARTIAL_ESCAPE.sub("", _unescape_unicode(text))
+        if len(text) > self._sent:
+            self._write({"report_delta": text[self._sent :]})
+            self._sent = len(text)
+
+
+_UNICODE_ESCAPE = re.compile(r"\\u([0-9a-fA-F]{4})")
+_PARTIAL_ESCAPE = re.compile(r"\\(u[0-9a-fA-F]{0,3})?$")
+
+
+def _unescape_unicode(value: Any) -> Any:
+    r"""Turn literal ``\uXXXX`` sequences in strings back into characters.
+
+    Sonnet 5.5's structured output sometimes double-escapes non-ASCII
+    characters, so a parsed report reads ``£9.5m`` instead of ``£9.5m``.
+    """
+    if isinstance(value, str):
+        return _UNICODE_ESCAPE.sub(lambda m: chr(int(m.group(1), 16)), value)
+    if isinstance(value, dict):
+        return {k: _unescape_unicode(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_unescape_unicode(v) for v in value]
+    return value
 
 
 def _scout_report_input(response: Any) -> dict[str, Any]:
@@ -485,6 +559,7 @@ async def recommender_node(
     # final message, so callers see the same response as a non-streamed call.
     call_started_at = time.perf_counter()
     first_token_at: float | None = None
+    analysis = _AnalysisStreamer(_stream_writer())
     async with client.messages.stream(
         model=RECOMMENDER_MODEL,
         max_tokens=RECOMMENDER_MAX_TOKENS,
@@ -492,12 +567,17 @@ async def recommender_node(
         **_recommender_call_kwargs(RECOMMENDER_MODEL),
     ) as stream:
         async for event in stream:
-            if (
-                first_token_at is None
-                and event.type == "content_block_delta"
-                and event.delta.type in ("input_json_delta", "text_delta")
-            ):
+            if event.type != "content_block_delta":
+                continue
+            if event.delta.type == "input_json_delta":
+                chunk = event.delta.partial_json
+            elif event.delta.type == "text_delta":
+                chunk = event.delta.text
+            else:
+                continue
+            if first_token_at is None:
                 first_token_at = time.perf_counter()
+            analysis.feed(chunk)
         response = await stream.get_final_message()
 
     usage = _record_usage(
@@ -515,7 +595,7 @@ async def recommender_node(
     )
 
     try:
-        raw = _scout_report_input(response)
+        raw = {"question": state["question"], **_unescape_unicode(_scout_report_input(response))}
         report = ScoutReport.model_validate(raw)
     except (ValidationError, ToolError) as exc:
         logger.exception("recommender produced an invalid ScoutReport")

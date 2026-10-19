@@ -154,6 +154,32 @@ describe("ChatPage", () => {
     expect(streamSpy.mock.calls[1][0].question).toBe("Captain pick?");
   });
 
+  it("shows the streamed report text before the final report replaces it", async () => {
+    let finish: () => void = () => {};
+    const done = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    async function* stream(): AsyncGenerator<AgentEvent, void, void> {
+      yield { type: "report_delta", text: "Salah is " };
+      yield { type: "report_delta", text: "in great shape." };
+      await done;
+      yield { type: "result", payload: mockResponse };
+    }
+    vi.spyOn(agentApi, "streamChat").mockReturnValue(stream());
+
+    renderPage();
+    const input = await screen.findByLabelText(/ask the scout agent/i);
+    fireEvent.change(input, { target: { value: "How is Salah?" } });
+    fireEvent.click(screen.getByRole("button", { name: /^send$/i }));
+
+    expect(await screen.findByText("Salah is in great shape.")).toBeInTheDocument();
+    finish();
+    await waitFor(() =>
+      expect(screen.getByText(/salah is in elite form/i)).toBeInTheDocument(),
+    );
+    expect(screen.queryByText("Salah is in great shape.")).not.toBeInTheDocument();
+  });
+
   it("sends one conversation id per chat and a new one after new chat", async () => {
     const streamSpy = vi
       .spyOn(agentApi, "streamChat")
