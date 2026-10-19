@@ -39,6 +39,27 @@ resource "aws_dynamodb_table" "squad_cache" {
   }
 }
 
+# Short-lived conversation memory, one item per chat (conversation_id is a
+# UUID the dashboard regenerates on "New chat"). Items hold the last few
+# turns and expire 30 minutes after the last write; the agent also checks
+# expires_at on read because TTL deletion is lazy. See
+# services/agent/src/fpl_agent/conversation_store.py.
+resource "aws_dynamodb_table" "conversations" {
+  name         = "fpl-agent-conversations-${var.environment}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "conversation_id"
+
+  attribute {
+    name = "conversation_id"
+    type = "S"
+  }
+
+  ttl {
+    attribute_name = "expires_at"
+    enabled        = true
+  }
+}
+
 resource "aws_iam_role_policy" "lambda_agent_dynamo" {
   name = "fpl-${var.environment}-agent-dynamo"
   role = module.lambda_role.role_name
@@ -56,6 +77,7 @@ resource "aws_iam_role_policy" "lambda_agent_dynamo" {
         Resource = [
           aws_dynamodb_table.agent_usage.arn,
           aws_dynamodb_table.squad_cache.arn,
+          aws_dynamodb_table.conversations.arn,
         ]
       }
     ]

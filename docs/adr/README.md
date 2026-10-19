@@ -14,3 +14,4 @@ Decisions that shaped the FPL platform, from infrastructure through to the AI ag
 | [0008](0008-neon-pgvector-for-agent-retrieval.md) | Neon serverless Postgres + pgvector for agent retrieval | AI engineering, data engineering |
 | [0009](0009-scout-report-agent-architecture.md) | 4-node LangGraph agent with tiered models and budget controls | AI engineering, system design |
 | [0011](0011-ssm-parameter-store-over-secrets-manager.md) | SSM Parameter Store SecureString over Secrets Manager for runtime credentials | Cloud architecture, cost engineering |
+| [0012](0012-agent-conversation-memory.md) | Short-lived per-chat conversation memory in DynamoDB with TTL | AI engineering, system design |

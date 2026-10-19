@@ -35,10 +35,16 @@ from fastapi.responses import JSONResponse
 from pgvector.asyncpg import register_vector
 from sse_starlette.sse import EventSourceResponse
 
+from fpl_agent.conversation_store import (
+    ConversationStore,
+    DynamoConversationStore,
+    append_turn,
+)
 from fpl_agent.graph.builder import build_agent_graph
 from fpl_agent.middleware.budget import BudgetTracker
 from fpl_agent.middleware.cloudfront_secret import CloudFrontSecretMiddleware
 from fpl_agent.middleware.rate_limit import RateLimiter
+from fpl_agent.models.conversation import Turn
 from fpl_agent.models.requests import ChatRequest
 from fpl_agent.models.responses import AgentResponse, ScoutReport, UserSquad
 from fpl_agent.models.state import initial_state
@@ -63,6 +69,7 @@ logger = logging.getLogger(__name__)
 ENVIRONMENT = os.environ.get("ENV", "dev")
 BUDGET_TABLE = os.environ.get("AGENT_USAGE_TABLE", f"fpl-agent-usage-{ENVIRONMENT}")
 SQUAD_CACHE_TABLE = os.environ.get("SQUAD_CACHE_TABLE", f"fpl-squad-cache-{ENVIRONMENT}")
+CONVERSATION_TABLE = os.environ.get("CONVERSATION_TABLE", f"fpl-agent-conversations-{ENVIRONMENT}")
 MONTHLY_BUDGET_USD = float(os.environ.get("AGENT_MONTHLY_BUDGET_USD", "5.0"))
 NEON_DATABASE_URL_ENV = "NEON_DATABASE_URL"
 TEAM_FETCHER_FUNCTION_NAME_ENV = "TEAM_FETCHER_FUNCTION_NAME"
@@ -153,6 +160,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # DynamoDB cache sidesteps both the repeat-FPL-hit cost and intermittent
     # Fastly IP blocks on the Lambda egress. One shared client per cold-start.
     app.state.squad_cache = DynamoSquadCache(SQUAD_CACHE_TABLE)
+    app.state.conversations = DynamoConversationStore(CONVERSATION_TABLE)
 
     try:
         yield
@@ -203,6 +211,11 @@ def get_graph(request: Request) -> Any:
             status_code=503, detail="agent not configured (NEON_DATABASE_URL missing)"
         )
     return graph
+
+
+def get_conversation_store(request: Request) -> ConversationStore | None:
+    """Return the shared :class:`ConversationStore`, or ``None`` if not configured."""
+    return getattr(request.app.state, "conversations", None)
 
 
 def get_squad_cache(request: Request) -> SquadCache | None:
@@ -355,8 +368,32 @@ def _agent_response(final_state: dict[str, Any]) -> AgentResponse:
     )
 
 
-async def _run_graph(graph: Any, question: str, squad: UserSquad | None) -> dict[str, Any]:
-    return await graph.ainvoke(initial_state(question, squad))
+async def _run_graph(
+    graph: Any, question: str, squad: UserSquad | None, history: list[Turn]
+) -> dict[str, Any]:
+    return await graph.ainvoke(initial_state(question, squad, history))
+
+
+async def _load_history(store: ConversationStore | None, req: ChatRequest) -> list[Turn]:
+    if store is None or req.conversation_id is None:
+        return []
+    return await store.load(str(req.conversation_id))
+
+
+async def _remember_turn(
+    store: ConversationStore | None,
+    req: ChatRequest,
+    history: list[Turn],
+    final_state: dict[str, Any],
+) -> None:
+    """Append this turn to the conversation. Only successful reports are remembered."""
+    report = final_state.get("final_response")
+    if store is None or req.conversation_id is None or final_state.get("error"):
+        return
+    if not isinstance(report, ScoutReport):
+        return
+    turn = Turn.from_report(req.question, report)
+    await store.save(str(req.conversation_id), append_turn(history, turn))
 
 
 def _chat_trace_metadata(req: ChatRequest, transport: str) -> dict[str, str]:
@@ -479,6 +516,7 @@ async def chat_sync(
     budget: BudgetTracker = Depends(check_budget),
     _rl: None = Depends(check_rate_limit),
     graph: Any = Depends(get_graph),
+    store: ConversationStore | None = Depends(get_conversation_store),
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
 ) -> JSONResponse:
     """Blocking JSON endpoint — runs the agent end-to-end and returns the report."""
@@ -488,14 +526,16 @@ async def chat_sync(
         tags=_trace_tags(),
         metadata=_chat_trace_metadata(req, "sync"),
     ):
+        history = await _load_history(store, req)
         try:
-            final_state = await _run_graph(graph, req.question, req.squad)
+            final_state = await _run_graph(graph, req.question, req.squad, history)
         except Exception as exc:  # noqa: BLE001 — surface any agent failure as 500
             logger.exception("agent run failed")
             raise HTTPException(status_code=500, detail=f"agent_failure: {exc}") from exc
 
         _emit_quality_scores(final_state)
         await budget.record_batch(final_state.get("llm_usage", []))
+        await _remember_turn(store, req, history, final_state)
         response = _agent_response(final_state).model_dump(mode="json")
 
     # NOTE: no explicit langfuse_flush() here. Langfuse 4.x's
@@ -515,6 +555,7 @@ async def chat_stream(
     budget: BudgetTracker = Depends(check_budget),
     _rl: None = Depends(check_rate_limit),
     graph: Any = Depends(get_graph),
+    store: ConversationStore | None = Depends(get_conversation_store),
     x_session_id: str | None = Header(default=None, alias="X-Session-Id"),
 ) -> EventSourceResponse:
     """SSE endpoint.
@@ -543,7 +584,8 @@ async def chat_stream(
     """
 
     async def event_generator() -> AsyncIterator[dict[str, str]]:
-        final_state: dict[str, Any] = dict(initial_state(req.question, req.squad))
+        history = await _load_history(store, req)
+        final_state: dict[str, Any] = dict(initial_state(req.question, req.squad, history))
         first_event_at: float | None = None
         with (
             Langfuse().start_as_current_observation(name="agent_chat_request"),
@@ -556,7 +598,7 @@ async def chat_stream(
         ):
             try:
                 async for update in graph.astream(
-                    initial_state(req.question, req.squad), stream_mode="updates"
+                    initial_state(req.question, req.squad, history), stream_mode="updates"
                 ):
                     # update is {node_name: partial_dict}; typically one key per tick.
                     for node_name, partial in update.items():
@@ -587,6 +629,7 @@ async def chat_stream(
                 await budget.record_batch(final_state.get("llm_usage", []))
             except Exception:  # noqa: BLE001 — budget write failures must not kill the response
                 logger.exception("failed to record usage after graph run")
+            await _remember_turn(store, req, history, final_state)
 
             result = _agent_response(final_state).model_dump(mode="json")
             _emit_latency(

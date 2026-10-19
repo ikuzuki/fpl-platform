@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from uuid import UUID
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from fpl_agent.models.responses import UserSquad
@@ -27,3 +29,8 @@ class ChatRequest(BaseModel):
 
     question: str = Field(min_length=1, max_length=500)
     squad: UserSquad | None = Field(default=None)
+    conversation_id: UUID | None = Field(
+        default=None,
+        description="Per-chat id the dashboard regenerates on 'New chat'. When set, earlier "
+        "turns of the same conversation are loaded as context and this turn is remembered.",
+    )

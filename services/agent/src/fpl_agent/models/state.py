@@ -18,6 +18,7 @@ from typing import Annotated, Any, Literal, TypedDict
 
 from pydantic import BaseModel, Field
 
+from fpl_agent.models.conversation import Turn
 from fpl_agent.models.responses import UserSquad
 
 # Tool names are constrained to the 5 implemented tools. Using ``Literal``
@@ -80,9 +81,15 @@ class AgentState(TypedDict, total=False):
     # ``time.perf_counter()`` value when the recommender's first token arrived;
     # the API turns it into a latency relative to request start.
     recommender_first_token_at: float | None
+    # Earlier turns of this conversation; empty for a new or expired one.
+    history: list[Turn]
 
 
-def initial_state(question: str, squad: UserSquad | None = None) -> AgentState:
+def initial_state(
+    question: str,
+    squad: UserSquad | None = None,
+    history: list[Turn] | None = None,
+) -> AgentState:
     """Build a fresh state with all fields populated to their zero values.
 
     LangGraph tolerates missing keys, but passing a complete dict makes
@@ -93,6 +100,7 @@ def initial_state(question: str, squad: UserSquad | None = None) -> AgentState:
         question: The user's chat question.
         squad: Optional pre-loaded user squad. When provided, the planner sees
             it in the prompt and the executor short-circuits ``fetch_user_squad``.
+        history: Earlier turns of the conversation, oldest first.
     """
     return {
         "question": question,
@@ -106,4 +114,5 @@ def initial_state(question: str, squad: UserSquad | None = None) -> AgentState:
         "final_response": None,
         "error": None,
         "recommender_first_token_at": None,
+        "history": history or [],
     }

@@ -38,6 +38,8 @@ interface ChatPanelProps {
 export function ChatPanel({ squad, compact = false }: ChatPanelProps) {
   const [state, dispatch] = useReducer(chatReducer, initialChatState);
   const [inputValue, setInputValue] = useState("");
+  // Scopes the agent's memory to this chat; "New chat" starts a fresh one.
+  const [conversationId, setConversationId] = useState(() => crypto.randomUUID());
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -71,7 +73,7 @@ export function ChatPanel({ squad, compact = false }: ChatPanelProps) {
     let settled = false;
     try {
       const stream = streamChat(
-        { question: text, squad: squad ?? undefined },
+        { question: text, squad: squad ?? undefined, conversation_id: conversationId },
         controller.signal,
       );
       for await (const event of stream) {
@@ -121,6 +123,7 @@ export function ChatPanel({ squad, compact = false }: ChatPanelProps) {
   function handleNewChat() {
     abortRef.current?.abort();
     dispatch({ type: "RESET" });
+    setConversationId(crypto.randomUUID());
     setInputValue("");
   }
 

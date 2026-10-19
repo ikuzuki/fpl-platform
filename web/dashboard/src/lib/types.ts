@@ -247,4 +247,6 @@ export type AgentEvent =
 export interface ChatRequest {
   question: string;
   squad?: UserSquad;
+  /** Per-chat id; the agent remembers earlier turns of the same conversation. */
+  conversation_id?: string;
 }
