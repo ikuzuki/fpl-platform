@@ -77,3 +77,31 @@ def resolve_secret_to_env(
     parameter_name = f"{secret_prefix}/{environment}/{name}"
     response = client.get_parameter(Name=parameter_name, WithDecryption=True)
     os.environ[target_var] = response["Parameter"]["Value"]
+
+
+def resolve_secrets_to_env(
+    environment: str,
+    targets: dict[str, str],
+    *,
+    region: str = DEFAULT_REGION,
+    secret_prefix: str = DEFAULT_SECRET_PREFIX,
+) -> list[str]:
+    """Batch form of :func:`resolve_secret_to_env`: one ``GetParameters`` call.
+
+    ``targets`` maps parameter leaf name to env var. Vars already set are
+    skipped. Returns the env vars that are still unset because SSM reported
+    their parameter as missing; the caller decides which of those are fatal.
+    Raises on any SSM call failure. ``GetParameters`` accepts at most 10 names.
+    """
+    pending = {
+        f"{secret_prefix}/{environment}/{name}": var
+        for name, var in targets.items()
+        if not os.environ.get(var)
+    }
+    if not pending:
+        return []
+    client = boto3.client("ssm", region_name=region)
+    response = client.get_parameters(Names=list(pending), WithDecryption=True)
+    for parameter in response["Parameters"]:
+        os.environ[pending[parameter["Name"]]] = parameter["Value"]
+    return [pending[name] for name in response.get("InvalidParameters", [])]

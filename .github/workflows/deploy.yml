@@ -165,6 +165,22 @@ jobs:
             fi
           done
 
+      # The first cold start on a freshly pushed image is slow enough to hit
+      # Lambda's 10 s init limit, so take it here rather than on a user request.
+      # Three parallel requests warm more than one sandbox. Best-effort: never
+      # fails the deploy.
+      - name: Warm agent after deploy
+        if: matrix.changed == 'true' && matrix.name == 'agent'
+        run: |
+          aws lambda wait function-updated --function-name fpl-dev-agent --region eu-west-2
+          URL=$(aws lambda get-function-url-config --function-name fpl-dev-agent \
+            --region eu-west-2 --query FunctionUrl --output text)
+          for i in 1 2 3; do
+            curl -s -o /dev/null --max-time 60 \
+              -w "warm-up $i: HTTP %{http_code} in %{time_total}s\n" "${URL}health" &
+          done
+          wait
+
   # ---------------------------------------------------------------------------
   # Dashboard deploy — build React app, upload to S3, invalidate CloudFront
   #
