@@ -14,15 +14,14 @@ import os
 # for the structured planning/reflection decisions; Sonnet is reserved for
 # the one call that has to reason over multiple data sources. Env overrides
 # let the eval suite compare model variants without code changes.
-PLANNER_MODEL = os.environ.get("AGENT_PLANNER_MODEL", "claude-haiku-4-5")
-REFLECTOR_MODEL = os.environ.get("AGENT_REFLECTOR_MODEL", "claude-haiku-4-5")
-RECOMMENDER_MODEL = os.environ.get("AGENT_RECOMMENDER_MODEL", "claude-sonnet-4-6")
+PLANNER_MODEL = os.environ.get("AGENT_PLANNER_MODEL", "claude-haiku-5-5")
+REFLECTOR_MODEL = os.environ.get("AGENT_REFLECTOR_MODEL", "claude-haiku-5-5")
+RECOMMENDER_MODEL = os.environ.get("AGENT_RECOMMENDER_MODEL", "claude-sonnet-5-5")
 
 # Recommender models that reject a forced ``tool_choice``. The recommender
-# calls them with ``auto`` and a strict tool schema, relying on the prompt's
-# "respond by calling" line. The planner and reflector schemas can't be made
-# strict (``ToolCall.args`` is an open dict), so their models must accept a
-# forced tool choice.
+# asks them for the report through structured outputs instead of a tool. The
+# planner and reflector schemas can't be made strict (``ToolCall.args`` is an
+# open dict), so their models must accept a forced tool choice.
 NO_FORCED_TOOL_CHOICE = frozenset({"claude-sonnet-5-5"})
 
 # Hard cap on reflector → planner loops. With 3 iterations we make at most

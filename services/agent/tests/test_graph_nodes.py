@@ -324,16 +324,16 @@ async def test_recommender_records_first_token_time() -> None:
 
 
 @pytest.mark.asyncio
-async def test_recommender_decodes_a_comparison_sent_as_a_json_string() -> None:
-    payload = _valid_scout_report_payload()
-    payload["comparison"] = json.dumps(
-        {"players": payload["players"], "winner": "Salah", "reasoning": "form"}
-    )
-    client = _mock_client(_tool_use_response("record_scout_report", payload))
+async def test_recommender_reads_a_structured_output_text_report() -> None:
+    block = MagicMock()
+    block.type = "text"
+    block.text = json.dumps(_valid_scout_report_payload())
+    response = MagicMock(content=[block], usage=MagicMock(input_tokens=1, output_tokens=1))
+    client = _mock_client(response)
 
     update = await recommender_node(initial_state("Is Salah worth it?"), client=client)
 
-    assert update["final_response"].comparison.winner == "Salah"
+    assert update["final_response"].players[0].player_name == "Salah"
 
 
 def test_recommender_forces_the_tool_on_models_that_allow_it() -> None:
@@ -343,15 +343,14 @@ def test_recommender_forces_the_tool_on_models_that_allow_it() -> None:
     assert "thinking" not in kwargs
 
 
-def test_recommender_uses_auto_and_a_strict_schema_on_sonnet_5_5() -> None:
+def test_recommender_uses_structured_outputs_on_sonnet_5_5() -> None:
     kwargs = nodes._recommender_call_kwargs("claude-sonnet-5-5")
-    tool = kwargs["tools"][0]
+    schema = kwargs["output_config"]["format"]["schema"]
 
-    assert kwargs["tool_choice"] == {"type": "auto"}
+    assert "tools" not in kwargs and "tool_choice" not in kwargs
     assert kwargs["thinking"] == {"type": "between_tools"}
-    assert tool["strict"] is True
-    # Strict schemas reject numeric bounds such as PlayerAnalysis.confidence's.
-    assert '"minimum"' not in json.dumps(tool["input_schema"])
+    # Structured outputs reject numeric bounds such as PlayerAnalysis.confidence's.
+    assert '"minimum"' not in json.dumps(schema)
 
 
 @pytest.mark.asyncio
