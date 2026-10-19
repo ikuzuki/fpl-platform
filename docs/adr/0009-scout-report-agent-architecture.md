@@ -91,12 +91,12 @@ Same principle as ADR-0004 (model selection by task complexity), applied to agen
 
 | Node | Model | Why |
 |------|-------|-----|
-| Planner | claude-haiku-4-5 | Planning is structured and formulaic — "which tools for this question?" |
-| Reflector | claude-haiku-4-5 | Binary decision with brief reasoning — "sufficient or not?" |
-| Recommender | claude-sonnet-4-6 | Synthesising multiple data sources into coherent analysis needs stronger reasoning |
+| Planner | claude-haiku-5-5 | Planning is structured and formulaic — "which tools for this question?" |
+| Reflector | claude-haiku-5-5 | Binary decision with brief reasoning — "sufficient or not?" |
+| Recommender | claude-sonnet-5-5 | Synthesising multiple data sources into coherent analysis needs stronger reasoning |
 | Tool Executor | None | Pure function dispatch, no LLM |
 
-This keeps per-query cost to ~$0.03-0.08. Most tokens are spent in the recommender (one call), while the planner and reflector (which may loop 2-3 times) use the cheaper model.
+This keeps per-query cost to ~$0.03-0.08 (about $0.03 on the 5.5 models; see the revision below). Most tokens are spent in the recommender (one call), while the planner and reflector (which may loop 2-3 times) use the cheaper model.
 
 ### Cost controls
 
@@ -125,6 +125,22 @@ No authentication required. For a portfolio project, aggressive throttling plus 
 - Lambda's 60-second timeout bounds agent execution (up from the 29s API Gateway cliff after ADR-0010); 3-iteration cap keeps typical runs well under that
 - DynamoDB budget tracking adds a read + write per request — minor latency and another infrastructure component
 - Max 3 iterations means some complex questions may get incomplete analysis — acceptable trade-off for cost control
+
+## Revision — 2026-10-19: Haiku 5.5 and Sonnet 5.5
+
+The node models move from Haiku 4.5 / Sonnet 4.6 to Haiku 5.5 / Sonnet 5.5; the tiering itself is unchanged. Each node's model can be overridden by env var (`AGENT_PLANNER_MODEL`, `AGENT_REFLECTOR_MODEL`, `AGENT_RECOMMENDER_MODEL`), which is how the comparison below was run.
+
+| Pair (planner/reflector + recommender) | Full eval runs | Hard-check pass | Mean judge | Agent cost per run | Median case time |
+|---|---|---|---|---|---|
+| Haiku 4.5 + Sonnet 4.6 | 2 | 30, 35 of 36 | 4.45, 4.37 | $1.68, $1.71 | 36.6 s, 35.6 s |
+| Haiku 5.5 + Sonnet 4.6 | 2 | 32, 32 of 36 | 4.63, 4.51 | $1.31, $1.29 | 33.1 s, 31.4 s |
+| Haiku 5.5 + Sonnet 5.5 | 1 | 30 of 36 | 4.58 | $0.96 | 19.2 s |
+
+On five identical questions against a local server, median total time fell from 22.4 s to 13.5 s and median time to the report's first token from 6.2 s to 4.9 s.
+
+Hard-check pass rates sit inside the run-to-run noise: the unchanged pair alone scored 30 and 35. The changes outside that noise are cost (−43% per run) and speed (−40% per request); the judge score did not fall. The new pair also has consistent failures to keep watching: on squad questions the Haiku 5.5 planner skipped `query_player` for `squad-bench-strength` and `squad-gk-upgrade` in all three of its runs, and Sonnet 5.5 filled `comparison` on two non-comparison questions. Sonnet 5.5 also failed the indirect prompt-injection case's hard check by naming the planted player while explaining that it had ignored the planted instruction.
+
+Two API changes came with Sonnet 5.5. It rejects a forced `tool_choice`, and with `auto` plus a strict tool schema it wrote the nested `comparison` object as a truncated JSON string on all three comparison cases. The recommender therefore asks Sonnet 5.5 for the report through structured outputs (`output_config.format`) with thinking off (`between_tools`), and keeps the forced tool call on models that allow it. The planner and reflector keep forced tool calls, which Haiku 5.5 accepts.
 
 ## Related
 - ADR-0003: Direct API over LangChain — the agent is the explicit exception where LangGraph earns its place

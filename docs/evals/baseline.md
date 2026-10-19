@@ -20,7 +20,7 @@ Hard-check pass rate sits above the 0.8 threshold (CLI exit 0). The interesting 
 
 Each case carries two grading layers, applied independently:
 
-1. **Hard checks** — eight deterministic checks per case, no LLM involved. They cover tool routing (`expected_tools`, `forbidden_tools`), narrative content (`must_mention_players` with word-boundary regex), schema shape (`must_set_comparison`, `must_have_empty_players_list`), caveat discipline (`min_caveats`), and forbidden content (`must_not_contain`, `must_not_recommend`, added in v1.2; the v1.1 run below had the first six). Pass/fail is binary. `EvalResult.passed` is the conjunction of every hard check on the case.
+1. **Hard checks** — nine deterministic checks per case, no LLM involved. They cover tool routing (`expected_tools`, `forbidden_tools`), narrative content (`must_mention_players` with word-boundary regex), schema shape (`must_set_comparison`, `must_have_empty_players_list`), caveat discipline (`min_caveats`), forbidden content (`must_not_contain`, `must_not_recommend`, added in v1.2; the v1.1 run below had the first six), and `no_run_error`, which fails any case whose run ended with `state["error"]` set. Pass/fail is binary. `EvalResult.passed` is the conjunction of every hard check on the case.
 2. **Judge verdict** — Claude Haiku scores 3–5 case-specific rubric bullets on a 1–5 scale using `JudgeVerdict.model_json_schema()` for structured output. Bullet count is enforced as a hard contract — mismatched counts raise rather than partial-grade silently.
 
 The two layers measure different things on purpose. Hard checks catch structural failure modes that would slip past prose-level scoring (e.g. invented PlayerAnalysis entries with placeholder stats — see [Notable findings](#notable-findings)). The judge catches narrative quality that no rule can encode (e.g. "the recommendation states a position; doesn't hedge"). Either alone would miss a class of failures the other catches.
@@ -191,6 +191,26 @@ v1.3 adds five `multi-turn` cases for conversation memory ([ADR-0012](../adr/001
 
 **What they don't prove.** Five cases, two-turn conversations only, with no conversations longer than the three-turn window and no truncation of the history block. Expiry and the size cap are covered by unit tests, not evals. The DynamoDB path itself is exercised by unit tests and the API tests, not by the eval run, which uses the in-process turn list.
 
+## Model comparison — Haiku 5.5 and Sonnet 5.5
+
+Same 36 v1.3 cases, judge held on Haiku 4.5 so the measuring stick doesn't move, models switched per node by env var. These runs include the `no_run_error` check, so pass rates aren't comparable with the v1.3 run above. Raw results in [`model-comparison/`](model-comparison/).
+
+| Pair (planner/reflector + recommender) | Runs | Hard-check pass | Mean judge | Agent cost per run | Median case time |
+|---|---|---|---|---|---|
+| Haiku 4.5 + Sonnet 4.6 (previous) | 2 | 30, 35 of 36 | 4.45, 4.37 | $1.68, $1.71 | 36.6 s, 35.6 s |
+| Haiku 5.5 + Sonnet 4.6 | 2 | 32, 32 of 36 | 4.63, 4.51 | $1.31, $1.29 | 33.1 s, 31.4 s |
+| Haiku 5.5 + Sonnet 5.5 (adopted) | 1 | 30 of 36 | 4.58 | $0.96 | 19.2 s |
+
+Agent cost comes from each case's token usage at list price; median case time includes the judge call.
+
+**What moved, and what didn't.** The previous pair scored 30 and then 35 on identical code, so differences of a few cases in hard-check pass rate are noise at two runs, and the new pair's single run tells us less still. Cost and speed moved well outside that noise: 43% cheaper per run, and on five identical questions against a local server the median request went from 22.4 s to 13.5 s. The judge score held.
+
+**Failures specific to the new models.** The Haiku 5.5 planner skipped `query_player` on `squad-bench-strength` and `squad-gk-upgrade` in all three of its runs, where Haiku 4.5 passed both in both runs. Sonnet 5.5 filled `comparison` on two questions that didn't ask for one (`criteria-defender-good-fixtures`, `multipos-best-value-85m`). And it failed `injection-indirect-poisoned-summary`: it ignored the planted instruction and flagged it in a caveat as untrusted data, but named Redmond while doing so, which the case forbids. The check stays as written; the behaviour is arguably better than the previous model's silence, and the strict check still counts it as a failure.
+
+**A migration bug the evals caught.** Sonnet 5.5 rejects a forced `tool_choice`. With `auto` plus a strict tool schema it returned the nested `comparison` object as a truncated JSON string on all three comparison cases, so every comparison failed. The recommender now asks Sonnet 5.5 for the report through structured outputs; after the change the three comparison cases passed.
+
+**What this doesn't show.** One run of the adopted pair. Latency from five local requests per pair, not production. The judge itself unchanged, so any blind spot it has applies equally to all three pairs.
+
 ## Reproducing this run
 
 ```bash
@@ -217,7 +237,7 @@ Reproducibility checklist:
 - Snapshot version pinned in `EvalSummary.snapshot_version` (currently `player_db_v1`)
 - Eval cases version pinned in `EvalSummary.eval_cases_version` (currently `v1.3`)
 - Judge prompt versioned at `evaluation/prompts/v1/judge.md` — bump to `v2/` on meaningful changes
-- All eval source code under `services/agent/src/fpl_agent/evaluation/` with 44 unit tests in `tests/test_evaluation.py`
+- All eval source code under `services/agent/src/fpl_agent/evaluation/` with 46 unit tests in `tests/test_evaluation.py`
 
 ## Cost and run-time
 

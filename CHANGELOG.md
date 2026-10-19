@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Agent: Haiku 5.5 for the planner and reflector, Sonnet 5.5 for the recommender.** Each node's model can be overridden by env var (`AGENT_PLANNER_MODEL`, `AGENT_REFLECTOR_MODEL`, `AGENT_RECOMMENDER_MODEL`). Sonnet 5.5 rejects a forced `tool_choice`, and with a strict tool schema it returned the nested `comparison` as a truncated JSON string, so the recommender asks it for the report through structured outputs (`output_config.format`) with thinking off (`between_tools`); models that allow it keep the forced tool call. Budget rates added for both models. Compared over five full eval runs: 43% cheaper per run ($0.96 against $1.70), median local request 13.5 s against 22.4 s, judge score held; hard-check pass rates are within run-to-run noise. New-model failures and the comparison in [`docs/evals/baseline.md`](docs/evals/baseline.md#model-comparison--haiku-55-and-sonnet-55) and the ADR-0009 revision.
+
+### Added
+- **Evals: `no_run_error` hard check and per-case agent cost.** A case now fails when its run ended with `state["error"]` set, which previously could hard-pass. `EvalResult.cost_usd` and `EvalSummary.total_cost_usd` record agent spend at list price, earlier turns included and the judge excluded.
+
 ### Fixed
 - **CI: deploy authenticates to ECR Public before building images.** Agent image builds failed with `429 Too Many Requests` pulling `public.ecr.aws/awsguru/aws-lambda-adapter`, because anonymous pulls from shared GitHub runner IPs are rate-limited. A second `amazon-ecr-login` step with `registry-type: public` (us-east-1) makes the pull authenticated; the CI role already has the permissions.
 

@@ -74,10 +74,10 @@ The reflector's conditional edge is the loop-back: it looks at the `should_conti
 
 | Node | Model | Purpose | Output shape |
 |------|-------|---------|--------------|
-| Planner | claude-haiku-4-5 | Decide which tools to call this iteration | `list[ToolCall]` via `record_plan` tool-use |
+| Planner | claude-haiku-5-5 | Decide which tools to call this iteration | `list[ToolCall]` via `record_plan` tool-use |
 | Tool Executor | — (no LLM) | Dispatch the plan concurrently, capture errors | `dict[tool_name, result_or_error]` |
-| Reflector | claude-haiku-4-5 | Decide whether the data is sufficient to answer | `ReflectionResult` via `record_reflection` tool-use |
-| Recommender | claude-sonnet-4-6 | Synthesise the gathered data into a structured report | `ScoutReport` via `record_scout_report` tool-use |
+| Reflector | claude-haiku-5-5 | Decide whether the data is sufficient to answer | `ReflectionResult` via `record_reflection` tool-use |
+| Recommender | claude-sonnet-5-5 | Synthesise the gathered data into a structured report | `ScoutReport` via `record_scout_report` tool-use |
 
 Model selection follows [ADR-0004](../adr/0004-llm-cost-optimisation.md)'s principle (match model complexity to task complexity), applied per-node rather than per-enricher. Only the Recommender needs deep cross-source reasoning; the planner and reflector are structured-output decisions that Haiku handles well for 1/10th the cost.
 

@@ -126,6 +126,11 @@ class EvalResult(BaseModel):
         "continues to the next case — one broken case doesn't kill the run.",
     )
     duration_seconds: float = 0.0
+    cost_usd: float = Field(
+        default=0.0,
+        description="Agent LLM spend for the case, earlier turns included, at list prices. "
+        "Excludes the judge. Zero when the graph raised.",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -174,3 +179,4 @@ class EvalSummary(BaseModel):
     eval_cases_version: str = Field(
         description="EVAL_CASES_VERSION from eval_cases.py — bumped when the case set changes."
     )
+    total_cost_usd: float = Field(default=0.0, description="Sum of ``cost_usd`` over results.")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -52,7 +53,9 @@ def _mock_stream(response: MagicMock) -> MagicMock:
 
         def __aiter__(self) -> Any:
             async def events() -> Any:
-                yield MagicMock(type="content_block_delta")
+                yield MagicMock(
+                    type="content_block_delta", delta=MagicMock(type="input_json_delta")
+                )
 
             return events()
 
@@ -318,6 +321,36 @@ async def test_recommender_records_first_token_time() -> None:
     assert update["recommender_first_token_at"] == 10.75
     assert record.call_args.kwargs["metadata"]["time_to_first_token_ms"] == 750
     client.messages.create.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_recommender_reads_a_structured_output_text_report() -> None:
+    block = MagicMock()
+    block.type = "text"
+    block.text = json.dumps(_valid_scout_report_payload())
+    response = MagicMock(content=[block], usage=MagicMock(input_tokens=1, output_tokens=1))
+    client = _mock_client(response)
+
+    update = await recommender_node(initial_state("Is Salah worth it?"), client=client)
+
+    assert update["final_response"].players[0].player_name == "Salah"
+
+
+def test_recommender_forces_the_tool_on_models_that_allow_it() -> None:
+    kwargs = nodes._recommender_call_kwargs("claude-sonnet-4-6")
+
+    assert kwargs["tool_choice"] == {"type": "tool", "name": "record_scout_report"}
+    assert "thinking" not in kwargs
+
+
+def test_recommender_uses_structured_outputs_on_sonnet_5_5() -> None:
+    kwargs = nodes._recommender_call_kwargs("claude-sonnet-5-5")
+    schema = kwargs["output_config"]["format"]["schema"]
+
+    assert "tools" not in kwargs and "tool_choice" not in kwargs
+    assert kwargs["thinking"] == {"type": "between_tools"}
+    # Structured outputs reject numeric bounds such as PlayerAnalysis.confidence's.
+    assert '"minimum"' not in json.dumps(schema)
 
 
 @pytest.mark.asyncio

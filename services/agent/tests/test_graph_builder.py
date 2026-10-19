@@ -36,7 +36,9 @@ def _mock_stream(response: MagicMock) -> MagicMock:
 
         def __aiter__(self) -> Any:
             async def events() -> Any:
-                yield MagicMock(type="content_block_delta")
+                yield MagicMock(
+                    type="content_block_delta", delta=MagicMock(type="input_json_delta")
+                )
 
             return events()
 
