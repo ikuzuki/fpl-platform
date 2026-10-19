@@ -46,6 +46,7 @@ from collections.abc import Awaitable, Callable, Iterator, Sequence
 
 from langgraph.graph.state import CompiledStateGraph
 
+from fpl_agent.conversation_store import append_turn
 from fpl_agent.evaluation.eval_cases import EVAL_CASES, EVAL_CASES_VERSION, EvalCase
 from fpl_agent.evaluation.fixture_data import PlayerFixture, canned_user_squad
 from fpl_agent.evaluation.models import (
@@ -55,6 +56,7 @@ from fpl_agent.evaluation.models import (
     HardCheckResult,
     JudgeVerdict,
 )
+from fpl_agent.models.conversation import Turn
 from fpl_agent.models.responses import ScoutReport, UserSquad
 from fpl_agent.models.state import initial_state
 
@@ -397,7 +399,18 @@ class AgentEvaluator:
             )
         start = time.perf_counter()
         try:
-            state = await graph.ainvoke(initial_state(case.question, squad))
+            # Earlier turns run for real so the graded turn sees the agent's own
+            # answers, remembered the same way the API remembers them.
+            history: list[Turn] = []
+            for prior in case.prior_turns:
+                prior_state = await graph.ainvoke(initial_state(prior, squad, history))
+                prior_report = prior_state.get("final_response")
+                if prior_state.get("error") or not isinstance(prior_report, ScoutReport):
+                    raise RuntimeError(
+                        f"prior turn {prior!r} failed: {prior_state.get('error') or 'no report'}"
+                    )
+                history = append_turn(history, Turn.from_report(prior, prior_report))
+            state = await graph.ainvoke(initial_state(case.question, squad, history))
         except Exception as exc:  # noqa: BLE001 — capture and continue
             elapsed = time.perf_counter() - start
             logger.exception("Case %s raised during graph invocation", case.id)

@@ -125,6 +125,17 @@ def _render_squad_for_judge(squad: UserSquad | None) -> str:
     )
 
 
+def _render_question(case: EvalCase) -> str:
+    """The graded question, preceded by any earlier questions in the same conversation."""
+    if not case.prior_turns:
+        return case.question
+    earlier = "\n".join(f"- {q}" for q in case.prior_turns)
+    return (
+        f"Earlier questions in this conversation, oldest first:\n{earlier}\n\n"
+        f"Current question (the one being graded): {case.question}"
+    )
+
+
 def _format_rubric(bullets: tuple[str, ...]) -> str:
     """Number the rubric bullets so the judge can match BulletScores 1-to-1."""
     return "\n".join(f"{i}. {bullet}" for i, bullet in enumerate(bullets, start=1))
@@ -167,7 +178,7 @@ async def judge_case(
             without poisoning the hard-check pass rate.
     """
     prompt = _load_judge_prompt().format(
-        question=case.question,
+        question=_render_question(case),
         user_squad_block=_render_squad_for_judge(user_squad),
         scout_report_json=report.model_dump_json(indent=2),
         rubric_bullets=_format_rubric(case.judge_rubric),

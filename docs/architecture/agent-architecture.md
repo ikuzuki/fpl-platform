@@ -122,6 +122,12 @@ Anthropic's server-side decoder constrains sampling to valid JSON matching the s
 
 Schemas are byte-identical across calls, so **Anthropic prompt caching** stores them at 90% discount after the first call in a 5-min window. Net cost impact: within ±10% of unstructured calls, often cheaper once you account for avoided retries.
 
+## Conversation Memory
+
+A chat request may carry a `conversation_id`, a UUID the dashboard creates per chat and replaces on "New chat". When it does, the API loads that conversation's last 3 turns from `fpl-agent-conversations-{env}` before running the graph, and after a successful report appends the new turn. Each turn is the question, the players discussed, the analysis cut to 600 characters and the recommendation. The turns are rendered oldest-first into an "Earlier in this conversation" block in the planner, reflector and recommender prompts (`prompts/v2/`), capped at 4,000 characters. The prompts use the block only to resolve references such as "his" or "the one you picked", and treat it as context rather than instructions.
+
+Items expire 30 minutes after the last write; reads also ignore expired items, since DynamoDB TTL deletion is lazy. With no `conversation_id`, a new one, or an expired one, the block reads "None" and the agent behaves as a single-turn agent. Store failures fall back to no history. The decision and its trade-offs are in [ADR-0012](../adr/0012-agent-conversation-memory.md).
+
 ## Cost Controls
 
 The agent endpoint is publicly accessible — anyone with the CloudFront URL can send questions. Three independent layers bound spend:
@@ -179,6 +185,10 @@ Every streamed `/chat` request records three latencies, all in milliseconds from
 | `total_ms` | The report appears. Measured when the `result` event is handed to the stream, after the budget write. |
 
 The gap between the last two is the recommender generating the whole report, and it is most of the wait: in six local runs against dev Neon and the live Anthropic API (laptop, warm process, no Lambda or CloudFront), p50/p95 were 1.1 s / 2.2 s to the first event, 7.0 s / 9.6 s to the first report token, and 23.7 s / 33.9 s in total. Streaming the report's text to the browser as it is written would be the change that moves perceived latency; it is not built. The recommender's own time to first token (from its call starting) is also attached to its generation span as `time_to_first_token_ms`.
+
+Production numbers from ten requests through CloudFront after deploy (CloudWatch, n=10) were close to the local ones: p50/p95 of 1.2 s / 2.0 s to the first event, 7.0 s / 10.0 s to the first report token, and 25.6 s / 33.2 s in total.
+
+The clock starts when FastAPI handles the request, so a cold start is invisible to all three metrics. In that run the first two requests hit cold containers whose init overran Lambda's 10 s init limit (`INIT_REPORT ... Status: timeout`) and was retried; the first request returned 504 from CloudFront at 30 s while its own `chat_latency` line recorded a 19 s run. Cold starts have to be read from the `INIT_REPORT` lines or measured from the client.
 
 Each request writes the three values twice: as one `chat_latency {json}` INFO log line, and as numeric scores of the same names on the Langfuse trace. Langfuse tracing is switched off on the deployed Lambda (`LANGFUSE_TRACING_ENABLED = "false"`, see ADR-0005), so in production the log line is the source. `python services/agent/scripts/latency_report.py --hours 24` prints p50/p95 from CloudWatch; `--source langfuse` reads the scores instead. `/chat/sync` is not measured.
 

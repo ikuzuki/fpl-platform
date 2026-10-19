@@ -8,6 +8,7 @@ Neon / DynamoDB / Anthropic calls.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from types import SimpleNamespace
@@ -24,10 +25,12 @@ from fpl_agent.api import (
     check_budget,
     check_rate_limit,
     get_budget,
+    get_conversation_store,
     get_graph,
     get_neon,
     request_started_at,
 )
+from fpl_agent.conversation_store import InMemoryConversationStore
 from fpl_agent.models.responses import ScoutReport, SquadPick, UserSquad
 
 pytestmark = pytest.mark.unit
@@ -264,6 +267,56 @@ def test_chat_stream_error_event_on_graph_failure(fake_budget: _FakeBudget) -> N
 
     assert "event: error" in events
     assert "boom" in events
+
+
+def test_chat_sync_remembers_turns_per_conversation(fake_budget: _FakeBudget) -> None:
+    graph = _mock_graph_for_happy_path()
+    store = InMemoryConversationStore()
+    app.dependency_overrides[get_graph] = lambda: graph
+    app.dependency_overrides[check_budget] = lambda: fake_budget
+    app.dependency_overrides[check_rate_limit] = lambda: None
+    app.dependency_overrides[get_conversation_store] = lambda: store
+    conversation = "6f1c2a52-3b7e-4f7e-9d8e-0c1f2a3b4c5d"
+    try:
+        with TestClient(app) as tc:
+            tc.post(
+                "/chat/sync", json={"question": "How is Salah?", "conversation_id": conversation}
+            )
+            tc.post(
+                "/chat/sync", json={"question": "His fixtures?", "conversation_id": conversation}
+            )
+            tc.post("/chat/sync", json={"question": "Unrelated?"})
+    finally:
+        app.dependency_overrides.clear()
+
+    histories = [c.args[0]["history"] for c in graph.ainvoke.await_args_list]
+    assert histories[0] == []
+    assert [t.question for t in histories[1]] == ["How is Salah?"]
+    assert histories[2] == []
+    assert len(asyncio.run(store.load(conversation))) == 2
+
+
+def test_chat_sync_does_not_remember_failed_runs(fake_budget: _FakeBudget) -> None:
+    graph = _mock_graph_for_happy_path()
+    graph.ainvoke.return_value = {**graph.ainvoke.return_value, "error": "planner failed"}
+    store = InMemoryConversationStore()
+    app.dependency_overrides[get_graph] = lambda: graph
+    app.dependency_overrides[check_budget] = lambda: fake_budget
+    app.dependency_overrides[check_rate_limit] = lambda: None
+    app.dependency_overrides[get_conversation_store] = lambda: store
+    conversation = "6f1c2a52-3b7e-4f7e-9d8e-0c1f2a3b4c5d"
+    try:
+        with TestClient(app) as tc:
+            tc.post("/chat/sync", json={"question": "q", "conversation_id": conversation})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert asyncio.run(store.load(conversation)) == []
+
+
+def test_chat_request_rejects_malformed_conversation_id(client: TestClient) -> None:
+    resp = client.post("/chat/sync", json={"question": "q", "conversation_id": "abc"})
+    assert resp.status_code == 422
 
 
 def test_latency_ms_offsets_from_request_start() -> None:

@@ -154,6 +154,32 @@ describe("ChatPage", () => {
     expect(streamSpy.mock.calls[1][0].question).toBe("Captain pick?");
   });
 
+  it("sends one conversation id per chat and a new one after new chat", async () => {
+    const streamSpy = vi
+      .spyOn(agentApi, "streamChat")
+      .mockImplementation(() => mockStream([{ type: "result", payload: mockResponse }]));
+
+    renderPage();
+    const input = await screen.findByLabelText(/ask the scout agent/i);
+    for (const [i, text] of ["How is Saka?", "His fixtures?"].entries()) {
+      fireEvent.change(input, { target: { value: text } });
+      fireEvent.click(screen.getByRole("button", { name: /^send$/i }));
+      await waitFor(() => expect(streamSpy).toHaveBeenCalledTimes(i + 1));
+      await waitFor(() =>
+        expect(screen.getAllByText(/salah is in elite form/i)).toHaveLength(i + 1),
+      );
+    }
+    fireEvent.click(screen.getByRole("button", { name: /new chat/i }));
+    fireEvent.change(input, { target: { value: "Fresh question" } });
+    fireEvent.click(screen.getByRole("button", { name: /^send$/i }));
+    await waitFor(() => expect(streamSpy).toHaveBeenCalledTimes(3));
+
+    const ids = streamSpy.mock.calls.map(([req]) => req.conversation_id);
+    expect(ids[0]).toBeTruthy();
+    expect(ids[1]).toBe(ids[0]);
+    expect(ids[2]).not.toBe(ids[0]);
+  });
+
   it("new chat button clears messages and returns to the empty state", async () => {
     vi.spyOn(agentApi, "streamChat").mockReturnValue(
       mockStream([{ type: "result", payload: mockResponse }]),

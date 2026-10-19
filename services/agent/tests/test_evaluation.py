@@ -32,6 +32,7 @@ from fpl_agent.evaluation.judge import (
     JudgeError,
     _format_rubric,
     _load_judge_prompt,
+    _render_question,
     _render_squad_for_judge,
     judge_case,
 )
@@ -675,6 +676,54 @@ async def test_evaluator_builds_patched_graph_for_summary_injection_cases(
     assert result.passed
     shared_graph.ainvoke.assert_not_called()
     assert "CANARY-7Q4Z" in " ".join(seen[0].df["summary"].astype(str))
+
+
+@pytest.mark.asyncio
+async def test_evaluator_feeds_prior_turns_into_the_graded_turn(
+    synthetic_fixture: PlayerFixture,
+) -> None:
+    case = get_case_by_id("multiturn-pronoun-fixtures")
+    prior_state = {"final_response": _saka_report(), "error": None}
+    final_state = {
+        "final_response": _saka_report(caveats=["Single aggregate fixture score."]),
+        "tool_calls_made": ["get_fixture_outlook"],
+        "iteration_count": 1,
+        "error": None,
+    }
+    graph = AsyncMock()
+    graph.ainvoke = AsyncMock(side_effect=[prior_state, final_state])
+
+    result = await AgentEvaluator(graph=graph, fixture=synthetic_fixture).run_case(case)
+
+    first, second = (c.args[0] for c in graph.ainvoke.await_args_list)
+    assert first["question"] == case.prior_turns[0] and first["history"] == []
+    assert [t.question for t in second["history"]] == list(case.prior_turns)
+    assert result.passed
+
+
+@pytest.mark.asyncio
+async def test_evaluator_fails_case_when_a_prior_turn_errors(
+    synthetic_fixture: PlayerFixture,
+) -> None:
+    graph = AsyncMock()
+    graph.ainvoke = AsyncMock(return_value={"final_response": None, "error": "planner failed"})
+
+    result = await AgentEvaluator(graph=graph, fixture=synthetic_fixture).run_case(
+        get_case_by_id("multiturn-pronoun-fixtures")
+    )
+
+    assert not result.passed
+    assert "prior turn" in (result.error or "")
+    assert graph.ainvoke.await_count == 1
+
+
+def test_judge_question_lists_prior_turns_before_the_graded_one() -> None:
+    rendered = _render_question(get_case_by_id("multiturn-pronoun-fixtures"))
+
+    assert rendered.index("How is Saka doing") < rendered.index("What about his fixtures?")
+    assert _render_question(get_case_by_id("single-saka-season-view")) == (
+        "How is Saka doing this season?"
+    )
 
 
 @pytest.mark.asyncio

@@ -34,6 +34,7 @@ from typing import Any
 from anthropic import AsyncAnthropic
 from pydantic import TypeAdapter, ValidationError
 
+from fpl_agent.conversation_store import render_history
 from fpl_agent.graph.config import (
     MAX_ITERATIONS,
     PLANNER_MAX_TOKENS,
@@ -65,7 +66,7 @@ def _load_prompt(name: str) -> str:
 
     Cached because prompts don't change between calls within a Lambda's life.
     """
-    return (files("fpl_agent.graph.prompts.v1") / f"{name}.md").read_text(encoding="utf-8")
+    return (files("fpl_agent.graph.prompts.v2") / f"{name}.md").read_text(encoding="utf-8")
 
 
 # ----------------------------------------------------------------------------
@@ -262,6 +263,7 @@ async def planner_node(
         question=state["question"],
         gathered_data_json=json.dumps(state.get("gathered_data", {}), default=str),
         user_squad_block=_summarise_squad(state.get("user_squad")),
+        history_block=render_history(state.get("history") or []),
     )
 
     response = await client.messages.create(
@@ -376,6 +378,7 @@ async def reflector_node(
         gathered_data_json=json.dumps(state.get("gathered_data", {}), default=str),
         iteration_count=state.get("iteration_count", 0),
         max_iterations=MAX_ITERATIONS,
+        history_block=render_history(state.get("history") or []),
     )
 
     response = await client.messages.create(
@@ -437,6 +440,7 @@ async def recommender_node(
         question=state["question"],
         gathered_data_json=json.dumps(state.get("gathered_data", {}), default=str),
         user_squad_block=_render_squad_for_recommender(state.get("user_squad")),
+        history_block=render_history(state.get("history") or []),
     )
 
     # Streamed only to time the first token; the report is still read from the

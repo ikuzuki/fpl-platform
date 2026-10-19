@@ -46,5 +46,6 @@ where = ["src"]
 [tool.setuptools.package-data]
 fpl_agent = [
     "graph/prompts/v1/*.md",
+    "graph/prompts/v2/*.md",
     "evaluation/prompts/v1/*.md",
 ]
