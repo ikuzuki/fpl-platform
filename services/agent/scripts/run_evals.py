@@ -34,6 +34,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from anthropic import AsyncAnthropic
+from langgraph.graph.state import CompiledStateGraph
 from rich.console import Console
 from rich.table import Table
 
@@ -306,14 +307,17 @@ async def run(args: argparse.Namespace, *, console: Console | None = None) -> in
     fixture = _load_fixture(args)
 
     client = AsyncAnthropic()  # ANTHROPIC_API_KEY picked up from env
-    tools = make_fixture_tools(fixture)
-    graph = build_agent_graph(client=client, tools=tools)
+
+    def graph_factory(fx: PlayerFixture) -> CompiledStateGraph:
+        return build_agent_graph(client=client, tools=make_fixture_tools(fx))
+
     judge_fn = None if args.no_judge else make_judge(client)
 
     evaluator = AgentEvaluator(
-        graph=graph,
+        graph=graph_factory(fixture),
         fixture=fixture,
         judge=judge_fn,
+        graph_factory=graph_factory,
         snapshot_version=(
             "synthetic" if args.synthetic else _snapshot_version_from_path(args.snapshot)
         ),
