@@ -26,7 +26,7 @@ Eleven ADRs live in [`docs/adr/`](docs/adr/). The ones that changed the shape of
 
 ## How the agent is measured
 
-Scout ships with an eval set rather than "I tried it and it worked": 29 golden cases across 11 categories, from head-to-head comparisons and differential picks to vague prompts and questions about players who don't exist. Each case is graded twice. Deterministic hard checks cover tool routing, required player mentions, output schema and caveat discipline; a Claude Haiku judge scores a per-case rubric from 1 to 5.
+Scout ships with an eval set rather than "I tried it and it worked": 31 golden cases across 12 categories, from head-to-head comparisons and differential picks to vague prompts, questions about players who don't exist, and prompt injection planted in the question or in the data a tool returns. Each case is graded twice. Deterministic hard checks cover tool routing, required player mentions, output schema and caveat discipline; a Claude Haiku judge scores a per-case rubric from 1 to 5.
 
 The tools read from a parquet snapshot committed under [`services/agent/tests/fixtures/`](services/agent/tests/fixtures/), through a pandas-backed registry that mirrors the production pgvector SQL, so a new gameweek doesn't move the score and only changes to the agent do.
 
